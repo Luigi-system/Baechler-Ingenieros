@@ -1,0 +1,5 @@
+{
+  "name": "Report-AI",
+  "description": "An intelligent application for generating service and visit reports using AI. Features include dynamic forms, AI-powered data extraction from images and PDFs, a powerful AI assistant for data analysis, and comprehensive user, role, and system configuration.",
+  "requestFramePermissions": []
+}
