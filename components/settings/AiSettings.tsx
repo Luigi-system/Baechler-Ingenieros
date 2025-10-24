@@ -1,9 +1,38 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAiService } from '../../contexts/AiServiceContext';
-import { SparklesIcon, CpuChipIcon } from '../ui/Icons';
+import { SparklesIcon, CpuChipIcon, KeyIcon, SaveIcon } from '../ui/Icons';
+import Spinner from '../ui/Spinner';
 
 const AiSettings: React.FC = () => {
-    const { service, setService, isConfigured } = useAiService();
+    const { service, setService, isConfigured, apiKeys, updateApiKeys } = useAiService();
+    const [keys, setKeys] = useState({ gemini: '', openai: '' });
+    const [isSaving, setIsSaving] = useState(false);
+    const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+    useEffect(() => {
+        setKeys({
+            gemini: apiKeys.gemini || '',
+            openai: apiKeys.openai || '',
+        });
+    }, [apiKeys]);
+
+    const handleKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setKeys(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        setFeedback(null);
+        const { error } = await updateApiKeys(keys);
+        setIsSaving(false);
+        if (error) {
+            setFeedback({ type: 'error', message: `Error al guardar: ${error.message}` });
+        } else {
+            setFeedback({ type: 'success', message: '¡Claves de API guardadas exitosamente!' });
+        }
+    };
 
     return (
         <div className="space-y-8">
@@ -15,12 +44,13 @@ const AiSettings: React.FC = () => {
                     <div>
                         <h3 className="text-xl font-bold text-base-content">Configuración de Servicios de IA</h3>
                         <p className="mt-1 text-sm text-neutral">
-                            Selecciona el proveedor de inteligencia artificial que se utilizará en la aplicación. La API Key debe estar configurada en el entorno de la aplicación.
+                            Selecciona el proveedor de IA y configura las claves de API para la aplicación.
                         </p>
                     </div>
                 </div>
             </div>
             
+            {/* Provider Selection */}
             <div className="bg-base-200 p-6 rounded-xl shadow-lg transition-all duration-300 hover:shadow-2xl">
                 <h3 className="text-base font-semibold text-base-content mb-4 pb-4 border-b border-base-border">Proveedor de IA Activo</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -35,11 +65,9 @@ const AiSettings: React.FC = () => {
                         <label className="flex items-center cursor-pointer">
                             <SparklesIcon className="h-8 w-8 mr-3 text-blue-500" />
                             <div className="text-sm">
-                                <span className="font-medium text-base-content">
-                                    Google Gemini
-                                </span>
+                                <span className="font-medium text-base-content">Google Gemini</span>
                                 <p className={`text-neutral text-xs ${isConfigured('gemini') ? 'text-success' : 'text-warning'}`}>
-                                    {isConfigured('gemini') ? 'Configurado' : 'No Configurado'}
+                                    {isConfigured('gemini') ? 'Configurado' : 'Clave API Requerida'}
                                 </p>
                             </div>
                         </label>
@@ -56,11 +84,9 @@ const AiSettings: React.FC = () => {
                          <label className="flex items-center cursor-pointer">
                              <img src="https://jhhlrndxepowacrndhni.supabase.co/storage/v1/object/public/assets/openai-logo.png" alt="OpenAI Logo" className="h-8 w-8 mr-3"/>
                             <div className="text-sm">
-                                <span className="font-medium text-base-content">
-                                    OpenAI
-                                </span>
+                                <span className="font-medium text-base-content">OpenAI</span>
                                 <p className={`text-neutral text-xs ${isConfigured('openai') ? 'text-success' : 'text-warning'}`}>
-                                     {isConfigured('openai') ? 'Configurado' : 'No Configurado'}
+                                     {isConfigured('openai') ? 'Configurado' : 'Clave API Requerida'}
                                 </p>
                             </div>
                         </label>
@@ -70,6 +96,41 @@ const AiSettings: React.FC = () => {
                     La selección del proveedor se guarda localmente en tu navegador.
                 </p>
             </div>
+
+            {/* API Key Configuration */}
+            <form onSubmit={handleSave} className="bg-base-200 p-6 rounded-xl shadow-lg transition-all duration-300 hover:shadow-2xl">
+                <div className="flex items-start gap-4 border-b border-base-border pb-4 mb-6">
+                    <div className="bg-secondary/10 text-secondary p-3 rounded-lg"><KeyIcon className="h-8 w-8"/></div>
+                    <div>
+                        <h3 className="text-xl font-bold text-base-content">Claves de API</h3>
+                        <p className="mt-1 text-sm text-neutral">Introduce las claves de API para los servicios que desees utilizar. Esta es una configuración global.</p>
+                    </div>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="gemini-key" className="block text-sm font-medium">Clave de API de Google Gemini</label>
+                        <input type="password" id="gemini-key" name="gemini" value={keys.gemini} onChange={handleKeyChange} className="mt-1 block w-full input-style" placeholder="Pega tu clave aquí"/>
+                    </div>
+                     <div>
+                        <label htmlFor="openai-key" className="block text-sm font-medium">Clave de API de OpenAI</label>
+                        <input type="password" id="openai-key" name="openai" value={keys.openai} onChange={handleKeyChange} className="mt-1 block w-full input-style" placeholder="Pega tu clave aquí"/>
+                    </div>
+                </div>
+
+                {feedback && (
+                    <div className={`mt-4 p-3 rounded-md text-sm ${feedback.type === 'success' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
+                        {feedback.message}
+                    </div>
+                )}
+                
+                <div className="flex justify-end pt-6 mt-6 border-t border-base-border">
+                    <button type="submit" disabled={isSaving} className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-focus disabled:bg-primary/50">
+                        {isSaving ? <Spinner/> : <SaveIcon className="h-5 w-5"/>}
+                        {isSaving ? 'Guardando...' : 'Guardar Claves'}
+                    </button>
+                </div>
+            </form>
         </div>
     );
 };

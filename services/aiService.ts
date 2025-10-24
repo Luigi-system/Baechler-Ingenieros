@@ -1,19 +1,5 @@
-import { GoogleGenAI, Type, FunctionDeclaration, Chat } from "@google/genai";
+import { Type, FunctionDeclaration } from "@google/genai";
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { AIResponse } from '../types';
-
-// Per guidelines, API key is expected to be in environment variables.
-const GEMINI_API_KEY = process.env.API_KEY;
-
-let ai: GoogleGenAI | null = null;
-if (GEMINI_API_KEY) {
-    try {
-        ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-    } catch (e) {
-        console.error("Failed to initialize GoogleGenAI:", e);
-    }
-}
-
 
 const allTables = [
     'Reporte_Servicio', 'Reporte_Visita', 'Empresa', 'Planta', 'Maquinas', 'Encargado',
@@ -30,7 +16,7 @@ const DATABASE_SCHEMA = `
   - Roles (id, nombre)
 `;
 
-const executeQueryOnDatabase: FunctionDeclaration = {
+export const executeQueryOnDatabase: FunctionDeclaration = {
   name: 'executeQueryOnDatabase',
   description: "Realiza consultas SELECT simples en la base de datos para obtener listas de registros. Ideal para 'listar', 'mostrar' o 'buscar' datos.",
   parameters: {
@@ -57,7 +43,7 @@ const executeQueryOnDatabase: FunctionDeclaration = {
   },
 };
 
-const getAggregateData: FunctionDeclaration = {
+export const getAggregateData: FunctionDeclaration = {
     name: 'getAggregateData',
     description: "Realiza consultas de agregación para contar registros, sumar valores o agrupar datos. Ideal para preguntas como 'cuántos', 'total de', o 'agrupado por'.",
     parameters: {
@@ -83,7 +69,7 @@ const getAggregateData: FunctionDeclaration = {
     }
 };
 
-const performAction: FunctionDeclaration = {
+export const performAction: FunctionDeclaration = {
     name: 'performAction',
     description: "Ejecuta una acción específica como actualizar ('UPDATE') o crear ('INSERT') un registro. Usar solo cuando el usuario explícitamente lo pida o después de que complete un formulario.",
     parameters: {
@@ -103,16 +89,15 @@ const performAction: FunctionDeclaration = {
                 }
             },
             updates: {
-                type: Type.OBJECT,
-                description: "Un objeto con los pares columna-valor a actualizar (para UPDATE) o el objeto completo del nuevo registro (para INSERT).",
-                properties: {}
+                type: Type.STRING,
+                description: "Un string JSON con los pares columna-valor a actualizar (para UPDATE) o el objeto completo del nuevo registro (para INSERT). Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"facturado\": true}'"
             }
         },
         required: ["tableName", "actionType", "updates"]
     }
 };
 
-const responseSchema = {
+export const responseSchema = {
     type: Type.OBJECT,
     properties: {
         displayText: { type: Type.STRING, description: "El texto principal de la respuesta para el usuario. Debe ser amigable, en español y conversacional." },
@@ -166,7 +151,7 @@ const responseSchema = {
     required: ["displayText"]
 };
 
-const systemInstruction = `
+export const systemInstruction = `
   Eres un asistente experto y analista de datos para una aplicación de gestión de reportes de servicio.
   Tu misión es responder preguntas y ejecutar acciones consultando la base de datos y DEVOLVER SIEMPRE UN OBJETO JSON estructurado según el schema.
   La fecha de hoy es ${new Date().toISOString().split('T')[0]}.
@@ -187,7 +172,7 @@ const systemInstruction = `
 
   **FLUJO PARA CREAR DATOS:**
   - Si el usuario pide crear algo (ej. "crea una nueva empresa"), PRIMERO solicita la información necesaria devolviendo un objeto \`form\` en tu respuesta JSON. NO intentes adivinar los datos.
-  - Una vez que el usuario envíe el formulario, recibirás sus datos y DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` y los datos del formulario en el campo \`updates\`.
+  - Una vez que el usuario envíe el formulario, recibirás sus datos y DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` y los datos del formulario en el campo \`updates\` (como un string JSON).
 
   **ESQUEMA DE DATOS:** ${DATABASE_SCHEMA}
 
@@ -196,118 +181,93 @@ const systemInstruction = `
   - **ERES UN ANALISTA, NO UN OPERADOR POR DEFECTO.** No modifiques datos a menos que el usuario te lo ordene explícitamente. Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
 `;
 
-let chat: Chat | null = null;
-
-export const getAIInsight = async (prompt: string, supabase: SupabaseClient): Promise<AIResponse> => {
-    if (!ai) {
-        return { displayText: "El servicio de IA (Gemini) no está inicializado. Asegúrate de que la API Key esté configurada correctamente." };
-    }
-    
-    if (!chat) {
-        chat = ai.chats.create({
-            model: 'gemini-2.5-pro',
-            config: {
-                tools: [{ functionDeclarations: [executeQueryOnDatabase, getAggregateData, performAction] }],
-                systemInstruction: systemInstruction,
-                temperature: 0.1,
-                responseMimeType: "application/json",
-                responseSchema: responseSchema,
-            }
-        });
-    }
+export const handleFunctionExecution = async (call: any, supabase: SupabaseClient) => {
+    const args = call.args;
+    let callResponsePayload;
 
     try {
-        let result = await chat.sendMessage({ message: prompt });
+        if (typeof args.tableName !== 'string' || !allTables.includes(args.tableName)) {
+            throw new Error(`Acceso denegado o tabla inválida: '${args.tableName}'.`);
+        }
 
-        while (result.functionCalls && result.functionCalls.length > 0) {
-            const functionCalls = result.functionCalls;
+        if (call.name === 'executeQueryOnDatabase') {
+            let query = supabase.from(args.tableName).select(args.select as string || '*');
+            if (args.filters && Array.isArray(args.filters)) {
+                args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
+            }
+            if (args.orderBy) query = query.order(args.orderBy as string, { ascending: args.ascending !== false });
+            query = query.limit(args.limit as number || 10);
+            const { data, error } = await query;
+            if (error) throw error;
+            callResponsePayload = { results: data };
+        } else if (call.name === 'getAggregateData') {
+            let query: any;
+            if(args.aggregationType === 'COUNT') {
+                query = supabase.from(args.tableName).select(`${args.groupByColumn}, count:count()`, { count: 'exact' });
+            } else if(args.aggregationType === 'SUM') {
+                 let initialQuery = supabase.from(args.tableName).select(`${args.groupByColumn}, ${args.valueColumn}`);
+                 if (args.filters && Array.isArray(args.filters)) {
+                    args.filters.forEach((filter: any) => initialQuery = initialQuery.filter(filter.column, filter.operator, filter.value));
+                 }
+                 const { data, error } = await initialQuery;
+                 if (error) throw error;
+
+                 const groupedSums = data.reduce((acc, item) => {
+                     const group = item[args.groupByColumn];
+                     const value = item[args.valueColumn];
+                     if (group && typeof value === 'number') {
+                         acc[group] = (acc[group] || 0) + value;
+                     }
+                     return acc;
+                 }, {} as Record<string, number>);
+
+                 const results = Object.entries(groupedSums).map(([group, total]) => ({ [args.groupByColumn]: group, total }));
+                 callResponsePayload = { results };
+                 return { functionResponse: { name: call.name, response: { result: JSON.stringify(callResponsePayload) } } };
+            } else {
+                throw new Error(`Tipo de agregación no soportado: ${args.aggregationType}`);
+            }
+
+            if (args.filters && Array.isArray(args.filters)) {
+                args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
+            }
+            if (args.groupByColumn) query = query.group(args.groupByColumn as string);
             
-            const toolExecutionPromises = functionCalls.map(async (call) => {
-                const args = call.args;
-                let callResponsePayload;
+            const { data, error } = await query;
+            if (error) throw error;
+            callResponsePayload = { results: data };
+        } else if (call.name === 'performAction') {
+             const updatesObject = JSON.parse(args.updates);
+             if (typeof updatesObject !== 'object' || updatesObject === null) {
+                throw new Error("El campo 'updates' debe ser un string JSON que represente un objeto válido.");
+             }
 
-                try {
-                     if (typeof args.tableName !== 'string' || !allTables.includes(args.tableName)) {
-                        throw new Error(`Acceso denegado o tabla inválida: '${args.tableName}'.`);
-                    }
-
-                    if (call.name === 'executeQueryOnDatabase') {
-                        let query = supabase.from(args.tableName).select(args.select as string || '*');
-                        if (args.filters && Array.isArray(args.filters)) {
-                            args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
-                        }
-                        if (args.orderBy) query = query.order(args.orderBy as string, { ascending: args.ascending !== false });
-                        query = query.limit(args.limit as number || 10);
-                        const { data, error } = await query;
-                        if (error) throw error;
-                        callResponsePayload = { results: data };
-                    } else if (call.name === 'getAggregateData') {
-                        let query: any;
-                        if(args.aggregationType === 'COUNT') {
-                            query = supabase.from(args.tableName).select(`${args.groupByColumn}, count:count()`, { count: 'exact' });
-                        } else if(args.aggregationType === 'SUM') {
-                             query = supabase.from(args.tableName).select(`${args.groupByColumn}, total:${args.valueColumn}`);
-                        } else {
-                            throw new Error(`Tipo de agregación no soportado: ${args.aggregationType}`);
-                        }
-
-                        if (args.filters && Array.isArray(args.filters)) {
-                            args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
-                        }
-                        if (args.groupByColumn) query = query.group(args.groupByColumn as string);
-                        
-                        const { data, error } = await query;
-                        if (error) throw error;
-                        callResponsePayload = { results: data };
-                    } else if (call.name === 'performAction') {
-                         if (args.actionType === 'UPDATE') {
-                            let query = supabase.from(args.tableName).update(args.updates as object);
-                             if (args.filters && Array.isArray(args.filters)) {
-                                args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
-                            }
-                            const { data, error } = await query.select(); // .select() to get back the updated rows
-                            if (error) throw error;
-                            callResponsePayload = { results: data, message: `Se actualizaron ${data?.length || 0} registro(s).` };
-                         } else if (args.actionType === 'INSERT') {
-                            const { data, error } = await supabase.from(args.tableName).insert(args.updates as object).select();
-                            if(error) throw error;
-                            callResponsePayload = { results: data, message: `Se creó ${data?.length || 0} nuevo registro(s) exitosamente.`};
-                         } else {
-                            throw new Error(`Acción no soportada: ${args.actionType}. Solo se permiten 'UPDATE' e 'INSERT'.`);
-                         }
-                    } else {
-                        throw new Error("Función no soportada.");
-                    }
-                } catch(e: any) {
-                    callResponsePayload = { error: e.message };
+             if (args.actionType === 'UPDATE') {
+                let query = supabase.from(args.tableName).update(updatesObject);
+                 if (args.filters && Array.isArray(args.filters)) {
+                    args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
                 }
-
-                return {
-                    functionResponse: {
-                        name: call.name,
-                        response: { result: JSON.stringify(callResponsePayload) },
-                    },
-                };
-            });
-
-            const toolResponseParts = await Promise.all(toolExecutionPromises);
-            result = await chat.sendMessage({ message: toolResponseParts });
+                const { data, error } = await query.select();
+                if (error) throw error;
+                callResponsePayload = { results: data, message: `Se actualizaron ${data?.length || 0} registro(s).` };
+             } else if (args.actionType === 'INSERT') {
+                const { data, error } = await supabase.from(args.tableName).insert(updatesObject).select();
+                if(error) throw error;
+                callResponsePayload = { results: data, message: `Se creó ${data?.length || 0} nuevo registro(s) exitosamente.`};
+             } else {
+                throw new Error(`Acción no soportada: ${args.actionType}. Solo se permiten 'UPDATE' e 'INSERT'.`);
+             }
+        } else {
+            throw new Error("Función no soportada.");
         }
-
-        const responseText = result.text;
-        if (!responseText) {
-            throw new Error("La IA no generó una respuesta de texto.");
-        }
-        
-        const parsedJson = JSON.parse(responseText);
-        return parsedJson as AIResponse;
-
-    } catch (error) {
-        console.error("Error en getAIInsight:", error);
-        const chatError = error as any;
-        if (chatError.message?.includes('SAFETY')) {
-            return { displayText: "Tu consulta fue bloqueada por políticas de seguridad. Por favor, reformula tu pregunta."};
-        }
-        return { displayText: `Lo siento, ocurrió un error al procesar tu solicitud con la IA: ${chatError.message}` };
+    } catch(e: any) {
+        callResponsePayload = { error: e.message };
     }
+
+    return {
+        functionResponse: {
+            name: call.name,
+            response: { result: JSON.stringify(callResponsePayload) },
+        },
+    };
 };

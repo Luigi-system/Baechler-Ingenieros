@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { Type } from "@google/genai";
 import { UploadIcon, SparklesIcon, BackIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
@@ -34,7 +33,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const { supabase } = useSupabase();
     const auth = useContext(AuthContext);
     const { logoUrl } = useTheme();
-    const { aiClient, service, isConfigured } = useAiService();
+    const { service, geminiClient, openaiClient, isConfigured } = useAiService();
 
     const [formData, setFormData] = useState<Partial<ServiceReport>>({ fecha: new Date().toISOString().split('T')[0], estado: false });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -286,7 +285,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setIsAiLoading(true);
         setAiError(null);
 
-        if (!isConfigured(service) || !aiClient) {
+        if (!isConfigured(service)) {
             setAiError(`El servicio de IA (${service}) no está configurado.`);
             setIsAiLoading(false);
             return;
@@ -296,10 +295,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             const base64Data = await fileToBase64(file);
             const textPrompt = "Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa, serie_maquina, modelo_maquina, problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON.";
             
-            let response;
+            let parsed: any;
 
-            if (service === 'gemini') {
-                 response = await aiClient.models.generateContent({
+            if (service === 'gemini' && geminiClient) {
+                 const response = await geminiClient.models.generateContent({
                     model: "gemini-2.5-flash",
                     contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
                     config: {
@@ -321,22 +320,33 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         }
                     },
                 });
-            } else { // OpenAI
-                response = await aiClient.models.generateContent({
-                    contents: [{
-                        parts: [
-                            { text: textPrompt },
-                            { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }
-                        ]
-                    }],
-                    config: {
-                        // The client implementation will use response_format: { type: "json_object" }
-                        responseSchema: {} // Dummy schema to trigger JSON mode in our client
-                    }
+                parsed = JSON.parse(response.text);
+            } else if (service === 'openai' && openaiClient) {
+                const response = await openaiClient.chat.completions.create({
+                    model: "gpt-4o",
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                { type: "text", text: textPrompt },
+                                { 
+                                    type: "image_url",
+                                    image_url: {
+                                        url: base64Data, // Full data URI with prefix
+                                        detail: "low"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    response_format: { type: "json_object" }
                 });
+                const content = response.choices[0]?.message?.content;
+                if (!content) throw new Error("OpenAI returned an empty response.");
+                parsed = JSON.parse(content);
+            } else {
+                 throw new Error(`Servicio de IA desconocido o no configurado: ${service}`);
             }
-
-            const parsed = JSON.parse(response.text);
             
             if (parsed.nombre_empresa) {
                 const companyNameToFind = parsed.nombre_empresa.toLowerCase();
