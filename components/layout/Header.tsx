@@ -1,4 +1,3 @@
-
 import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import ThemeToggle from '../ui/ThemeToggle';
@@ -17,18 +16,18 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile }) => {
   }
 
   return (
-    <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+    <header className="flex items-center justify-between p-4 bg-base-200 border-b border-base-border shadow-sm">
       <div>
-        <h1 className="text-xl font-semibold text-gray-800 dark:text-white">Bienvenido, {auth.user.nombres}</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400">Rol: {auth.user.roleName}</p>
+        <h1 className="text-xl font-semibold text-base-content">Bienvenido, {auth.user.nombres}</h1>
+        <p className="text-sm text-neutral">Rol: {auth.user.roleName}</p>
       </div>
 
       <div className="flex items-center space-x-4">
         <div className="relative">
-            <BellIcon className="h-6 w-6 text-gray-500 dark:text-gray-400 cursor-pointer hover:text-primary"/>
+            <BellIcon className="h-6 w-6 text-neutral cursor-pointer hover:text-primary"/>
             <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-error"></span>
             </span>
         </div>
         
@@ -42,26 +41,26 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile }) => {
                   alt="User avatar" 
                 />
                 <div>
-                  <p className="font-medium text-gray-800 dark:text-white">{auth.user.nombres}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{auth.user.email}</p>
+                  <p className="font-medium text-base-content">{auth.user.nombres}</p>
+                  <p className="text-xs text-neutral">{auth.user.email}</p>
                 </div>
             </div>
             
             {isProfileMenuOpen && (
                  <div 
-                    className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg py-1 z-50 border dark:border-gray-700"
+                    className="absolute right-0 mt-2 w-48 bg-base-200 rounded-md shadow-lg py-1 z-50 border border-base-border"
                     onMouseLeave={() => setIsProfileMenuOpen(false)}
                 >
                     <button
                         onClick={() => { onNavigateToProfile(); setIsProfileMenuOpen(false); }}
-                        className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="w-full text-left flex items-center px-4 py-2 text-sm text-base-content hover:bg-base-300"
                     >
                         <UserIcon className="h-5 w-5 mr-2" />
                         Mi Perfil
                     </button>
                     <button
                       onClick={() => { auth.logout(); setIsProfileMenuOpen(false); }}
-                      className="w-full text-left flex items-center px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="w-full text-left flex items-center px-4 py-2 text-sm text-error hover:bg-base-300"
                     >
                       <LogoutIcon className="h-5 w-5 mr-2" />
                       Cerrar sesión

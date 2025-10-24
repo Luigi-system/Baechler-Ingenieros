@@ -128,7 +128,7 @@ const AppContent: React.FC = () => {
 
     return (
         <AuthContext.Provider value={authContextValue}>
-          <div className="bg-gray-100 dark:bg-gray-900 min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-300">
+          <div className="bg-base-100 text-base-content min-h-screen">
             {user ? <Layout /> : <Login />}
           </div>
         </AuthContext.Provider>

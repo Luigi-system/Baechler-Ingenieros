@@ -1,4 +1,3 @@
-
 import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { 
@@ -77,10 +76,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
 
   return (
     <aside className={`
-      relative flex flex-col bg-white dark:bg-gray-800 shadow-xl transition-all duration-300 ease-in-out
+      relative flex flex-col bg-base-200 shadow-xl transition-all duration-300 ease-in-out
       ${isCollapsed ? 'w-20' : 'w-64'}
     `}>
-      <div className={`flex items-center border-b border-gray-200 dark:border-gray-700 ${isCollapsed ? 'h-20 justify-center' : 'h-20 p-4'}`}>
+      <div className={`flex items-center border-b border-base-border ${isCollapsed ? 'h-20 justify-center' : 'h-20 p-4'}`}>
         <img src={logoUrl} alt="App Logo" className={`transition-all duration-300 ${isCollapsed ? 'h-10 w-10' : 'h-10'}`} />
         {!isCollapsed && <span className="ml-3 text-2xl font-bold text-primary">{appTitle}</span>}
       </div>
@@ -94,8 +93,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
                     className={`
                         flex items-center p-3 my-1 rounded-lg cursor-pointer transition-all duration-200 ease-in-out
                         ${activePage.startsWith(item.id) 
-                        ? 'bg-primary/20 text-primary dark:bg-primary/30' 
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        ? 'bg-primary-lighter text-primary' 
+                        : 'text-base-content hover:bg-base-300'
                         }
                         ${isCollapsed ? 'justify-center' : ''}
                     `}
@@ -108,7 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
                     )}
                 </div>
                 {!isCollapsed && openMenus.has(item.id) && item.subItems && (
-                    <ul className="pl-8 border-l-2 border-gray-200 dark:border-gray-600 ml-5">
+                    <ul className="pl-8 border-l-2 border-base-300 ml-5">
                         {item.subItems.map(subItem => (
                            <li
                              key={subItem.id}
@@ -117,7 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
                                 flex items-center p-2 my-1 rounded-md cursor-pointer transition-all duration-200 ease-in-out text-sm
                                 ${activePage === subItem.id
                                   ? 'text-primary font-semibold'
-                                  : 'text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                  : 'text-neutral hover:bg-base-300'
                                 }
                              `}
                            >
@@ -132,12 +131,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
         </ul>
       </nav>
       
-      <div className="px-2 py-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="px-2 py-4 border-t border-base-border">
          <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
           className={`
             flex items-center p-3 w-full rounded-lg cursor-pointer transition-all duration-200 ease-in-out
-            text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700
+            text-base-content hover:bg-base-300
             ${isCollapsed ? 'justify-center' : ''}
           `}
         >

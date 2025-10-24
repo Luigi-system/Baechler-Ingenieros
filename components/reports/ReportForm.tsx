@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { UploadIcon, SparklesIcon, BackIcon, ImageIcon, CameraIcon, XIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
+import { UploadIcon, SparklesIcon, BackIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import Modal from '../ui/Modal';
 import CompanyForm from '../management/companies/CompanyForm';
 import MachineForm from '../management/machines/MachineForm';
 import PlantForm from '../management/plants/PlantForm';
 import SupervisorForm from '../management/supervisors/SupervisorForm';
+import ImageUpload from '../ui/ImageUpload'; // Import the new reusable component
 import { useSupabase } from '../../contexts/SupabaseContext';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -18,40 +19,12 @@ interface ReportFormProps {
   onBack: () => void;
 }
 
-// Helper: Reusable Image Upload Component
-const ImageUpload: React.FC<{ id: string; label: string; files: File[]; onFilesChange: (files: File[]) => void; multiple?: boolean; }> = ({ id, label, files, onFilesChange, multiple = true }) => {
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const newFiles = Array.from(e.target.files);
-            onFilesChange(multiple ? [...files, ...newFiles] : newFiles);
-        }
-    };
-    const removeFile = (index: number) => {
-        onFilesChange(files.filter((_, i) => i !== index));
-    };
-    return (
-        <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
-            <div className="flex items-center gap-4">
-                <label htmlFor={id} className="relative cursor-pointer bg-white dark:bg-gray-700 rounded-md font-medium text-primary hover:text-primary-dark p-2 border border-gray-300 dark:border-gray-600">
-                    <div className="flex items-center gap-2 px-2">
-                        <ImageIcon className="h-5 w-5" />
-                        <span>{multiple ? 'Añadir Fotos' : 'Subir Foto'}</span>
-                    </div>
-                    <input id={id} name={id} type="file" className="sr-only" onChange={handleFileChange} accept="image/*" multiple={multiple} />
-                </label>
-                 <div className="flex flex-wrap gap-2">
-                    {files.map((file, index) => (
-                        <div key={index} className="relative">
-                            <img src={URL.createObjectURL(file)} alt="preview" className="h-16 w-16 rounded-md object-cover" />
-                            <button onClick={() => removeFile(index)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5"><XIcon className="h-3 w-3" /></button>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-};
+const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = error => reject(error);
+});
 
 // Main Form Component
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
@@ -194,11 +167,28 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setIsPdfLoading(true);
         debounceTimeout.current = window.setTimeout(async () => {
             try {
+                // Convert files to base64 for the PDF generator
+                const [
+                    fotosProblemasBase64,
+                    fotosAccionesBase64,
+                    fotosObservacionesBase64,
+                    fotoFirmaBase64,
+                ] = await Promise.all([
+                    Promise.all(fotosProblemas.map(fileToBase64)),
+                    Promise.all(fotosAcciones.map(fileToBase64)),
+                    Promise.all(fotosObservaciones.map(fileToBase64)),
+                    fotoFirma[0] ? fileToBase64(fotoFirma[0]) : Promise.resolve(undefined),
+                ]);
+
                 const enrichedData: ServiceReport = {
                     ...formData,
                     empresa: companies.find(c => c.id === formData.id_empresa) ?? null,
                     encargado: supervisors.find(s => s.id === formData.id_encargado) ?? null,
-                    usuario: { nombres: auth?.user?.nombres ?? 'N/A' }
+                    usuario: { nombres: auth?.user?.nombres ?? 'N/A' },
+                    fotosProblemasBase64,
+                    fotosAccionesBase64,
+                    fotosObservacionesBase64,
+                    fotoFirmaBase64,
                 };
                 const uri = await generateServiceReport(enrichedData, logoUrl, 'datauristring');
                 setPdfPreviewUri(uri as string);
@@ -209,7 +199,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                  setIsPdfLoading(false);
             }
         }, 500);
-    }, [formData, companies, supervisors, logoUrl, auth?.user]);
+    }, [formData, companies, supervisors, logoUrl, auth?.user, fotosProblemas, fotosAcciones, fotosObservaciones, fotoFirma]);
 
 
     // Memoized lists for dependent dropdowns and suggestions
@@ -284,13 +274,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         await fetchDropdownData(); handleSelectSupervisor(newSupervisor); setIsNewSupervisorModalOpen(false);
     }, [fetchDropdownData, handleSelectSupervisor]);
 
-    const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = error => reject(error);
-    });
-
     const handleAiFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -303,7 +286,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
             const response = await ai.models.generateContent({
                 model: "gemini-2.5-flash",
-                contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data } }, { text: "Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa, serie_maquina, modelo_maquina, problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON." } ] }],
+                contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }, { text: "Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa, serie_maquina, modelo_maquina, problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON." } ] }],
                 config: {
                     responseMimeType: "application/json",
                     responseSchema: {
@@ -425,24 +408,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         {/* Form Section */}
         <div className="flex-1 overflow-y-auto pr-2">
             <div className="flex items-center mb-6">
-                <button onClick={onBack} className="p-2 mr-4 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition"><BackIcon className="h-6 w-6" /></button>
-                <h2 className="text-3xl font-bold text-gray-800 dark:text-white">{reportId ? `Editar Reporte` : 'Crear Reporte'}</h2>
+                <button onClick={onBack} className="p-2 mr-4 rounded-full hover:bg-base-300 transition"><BackIcon className="h-6 w-6" /></button>
+                <h2 className="text-3xl font-bold">{reportId ? `Editar Reporte` : 'Crear Reporte'}</h2>
             </div>
             <form onSubmit={handleSubmit} className="space-y-8">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-                    <div className="flex items-start"><SparklesIcon className="h-8 w-8 text-primary mr-3 shrink-0"/><div><h3 className="font-bold text-lg text-primary">Autocompletado con IA</h3><p className="text-sm text-gray-600 dark:text-gray-300">Sube una orden de trabajo para rellenar campos automáticamente.</p></div></div>
+                <div className="bg-base-200 p-6 rounded-xl shadow-lg">
+                    <div className="flex items-start"><SparklesIcon className="h-8 w-8 text-primary mr-3 shrink-0"/><div><h3 className="font-bold text-lg text-primary">Autocompletado con IA</h3><p className="text-sm text-neutral">Sube una orden de trabajo para rellenar campos automáticamente.</p></div></div>
                     <div className="mt-4">
-                    <label htmlFor="file-upload" className="relative cursor-pointer bg-white dark:bg-gray-700 rounded-md font-medium text-primary hover:text-primary-dark focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
-                        <div className="flex items-center justify-center w-full px-6 py-4 border-2 border-gray-300 dark:border-gray-600 border-dashed rounded-md"><UploadIcon className="h-8 w-8 text-gray-400 mr-3" /><span className="text-gray-600 dark:text-gray-300">{fileName || "Haz clic para subir un documento"}</span></div>
+                    <label htmlFor="file-upload" className="relative cursor-pointer bg-base-200 rounded-md font-medium text-primary hover:text-primary-focus focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
+                        <div className="flex items-center justify-center w-full px-6 py-4 border-2 border-base-border border-dashed rounded-md"><UploadIcon className="h-8 w-8 text-neutral mr-3" /><span className="text-neutral">{fileName || "Haz clic para subir un documento"}</span></div>
                         <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleAiFileChange} accept="image/*,application/pdf" disabled={isAiLoading}/>
                     </label>
                     {isAiLoading && <div className="mt-2 flex items-center"><Spinner /><span className="ml-2">La IA está analizando tu documento...</span></div>}
-                    {aiError && <p className="mt-2 text-sm text-red-600">{aiError}</p>}
+                    {aiError && <p className="mt-2 text-sm text-error">{aiError}</p>}
                     </div>
                 </div>
                 
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
-                    <h3 className="text-xl font-semibold border-b border-gray-200 dark:border-gray-700 pb-2">Información General</h3>
+                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                    <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información General</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div><label htmlFor="codigo_reporte" className="block text-sm font-medium">Código Reporte</label><input type="text" name="codigo_reporte" value={formData.codigo_reporte || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} required className="mt-1 block w-full input-style" /></div>
@@ -453,8 +436,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
-                    <h3 className="text-xl font-semibold border-b border-gray-200 dark:border-gray-700 pb-2">Cliente y Equipo</h3>
+                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                    <h3 className="text-xl font-semibold border-b border-base-border pb-2">Cliente y Equipo</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Empresa */}
                         <div>
@@ -464,13 +447,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="company-search" type="text" value={companySearchText} onChange={(e) => setCompanySearchText(e.target.value)} onFocus={() => setShowCompanySuggestions(true)} placeholder="Escribir o buscar empresa..." className="w-full input-style" autoComplete="off" />
                                         {showCompanySuggestions && companySuggestions.length > 0 && (
-                                            <ul className="absolute z-20 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
-                                                {companySuggestions.map(c => <li key={c.id} onMouseDown={() => handleSelectCompany(c)} className="px-3 py-2 cursor-pointer hover:bg-primary/10">{c.nombre}</li>)}
+                                            <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                                {companySuggestions.map(c => <li key={c.id} onMouseDown={() => handleSelectCompany(c)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}
                                             </ul>
                                         )}
                                     </div>
-                                    <button type="button" onClick={() => setIsNewCompanyModalOpen(true)} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition" title="Crear Nueva Empresa"><UserPlusIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
-                                    <button type="button" onClick={() => setIsCompanySearchModalOpen(true)} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition" title="Buscar Empresa"><SearchIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
+                                    <button type="button" onClick={() => setIsNewCompanyModalOpen(true)} className="p-2.5 rounded-md hover:bg-base-300 transition" title="Crear Nueva Empresa"><UserPlusIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsCompanySearchModalOpen(true)} className="p-2.5 rounded-md hover:bg-base-300 transition" title="Buscar Empresa"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                         </div>
@@ -482,13 +465,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => setPlantSearchText(e.target.value)} onFocus={() => setShowPlantSuggestions(true)} disabled={!formData.id_empresa} placeholder="Seleccionar Planta" className="w-full input-style" autoComplete="off" />
                                         {showPlantSuggestions && plantSuggestions.length > 0 && (
-                                            <ul className="absolute z-20 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
-                                                {plantSuggestions.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="px-3 py-2 cursor-pointer hover:bg-primary/10">{p.nombre}</li>)}
+                                            <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                                {plantSuggestions.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}
                                             </ul>
                                         )}
                                     </div>
-                                    <button type="button" onClick={() => setIsNewPlantModalOpen(true)} disabled={!formData.id_empresa} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50" title="Crear Nueva Planta"><PlusIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
-                                    <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formData.id_empresa} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50" title="Buscar Planta"><SearchIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
+                                    <button type="button" onClick={() => setIsNewPlantModalOpen(true)} disabled={!formData.id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Planta"><PlusIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formData.id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Planta"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                         </div>
@@ -500,13 +483,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="machine-search" type="text" value={machineSearchText} onChange={(e) => setMachineSearchText(e.target.value)} onFocus={() => setShowMachineSuggestions(true)} disabled={!formData.id_planta} placeholder="Escribir o buscar N° Serie..." className="w-full input-style" autoComplete="off" />
                                         {showMachineSuggestions && machineSuggestions.length > 0 && (
-                                            <ul className="absolute z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
-                                                {machineSuggestions.map(m => <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-primary/10">{m.serie}</li>)}
+                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                                {machineSuggestions.map(m => <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{m.serie}</li>)}
                                             </ul>
                                         )}
                                     </div>
-                                    <button type="button" onClick={() => setIsNewMachineModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50" title="Crear Nueva Máquina"><PlusIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
-                                    <button type="button" onClick={() => setIsMachineSearchModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50" title="Buscar Máquina"><SearchIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
+                                    <button type="button" onClick={() => setIsNewMachineModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Máquina"><PlusIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsMachineSearchModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Máquina"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                         </div>
@@ -518,40 +501,40 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formData.id_planta} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
                                         {showSupervisorSuggestions && supervisorSuggestions.length > 0 && (
-                                            <ul className="absolute z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
-                                                {supervisorSuggestions.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="px-3 py-2 cursor-pointer hover:bg-primary/10">{s.nombre} {s.apellido}</li>)}
+                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                                {supervisorSuggestions.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}
                                             </ul>
                                         )}
                                     </div>
-                                    <button type="button" onClick={() => setIsNewSupervisorModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50" title="Crear Nuevo Encargado"><UserPlusIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
-                                    <button type="button" onClick={() => setIsSupervisorSearchModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50" title="Buscar Encargado"><SearchIcon className="h-5 w-5 text-gray-600 dark:text-gray-300"/></button>
+                                    <button type="button" onClick={() => setIsNewSupervisorModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nuevo Encargado"><UserPlusIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsSupervisorSearchModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Encargado"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                         </div>
-                        <input type="text" readOnly value={`Modelo: ${formData.modelo_maquina || 'N/A'}`} className="mt-1 block w-full input-style bg-gray-100 dark:bg-gray-700/50" />
-                        <input type="text" readOnly value={`Marca: ${formData.marca_maquina || 'N/A'}`} className="mt-1 block w-full input-style bg-gray-100 dark:bg-gray-700/50" />
+                        <input type="text" readOnly value={`Modelo: ${formData.modelo_maquina || 'N/A'}`} className="mt-1 block w-full input-style bg-base-300" />
+                        <input type="text" readOnly value={`Marca: ${formData.marca_maquina || 'N/A'}`} className="mt-1 block w-full input-style bg-base-300" />
                     </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
-                    <h3 className="text-xl font-semibold border-b border-gray-200 dark:border-gray-700 pb-2">Detalles del Servicio</h3>
+                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                    <h3 className="text-xl font-semibold border-b border-base-border pb-2">Detalles del Servicio</h3>
                     <div><label htmlFor="problemas_encontrados" className="block text-sm font-medium">Problemas Encontrados</label><textarea name="problemas_encontrados" rows={4} value={formData.problemas_encontrados || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-problemas" label="" files={fotosProblemas} onFilesChange={setFotosProblemas} /></div>
                     <div><label htmlFor="acciones_realizadas" className="block text-sm font-medium">Acciones Realizadas</label><textarea name="acciones_realizadas" rows={4} value={formData.acciones_realizadas || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-acciones" label="" files={fotosAcciones} onFilesChange={setFotosAcciones} /></div>
                     <div><label htmlFor="observaciones" className="block text-sm font-medium">Observaciones</label><textarea name="observaciones" rows={3} value={formData.observaciones || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-observaciones" label="" files={fotosObservaciones} onFilesChange={setFotosObservaciones} /></div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
-                    <h3 className="text-xl font-semibold border-b border-gray-200 dark:border-gray-700 pb-2">Estado Final</h3>
+                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                    <h3 className="text-xl font-semibold border-b border-base-border pb-2">Estado Final</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        <fieldset><legend className="text-sm font-medium">Estado de la Máquina</legend><div className="mt-2 space-y-2">{['operativo', 'inoperativo', 'en_prueba'].map(opt => (<div key={opt} className="flex items-center"><input id={`maq_${opt}`} name="estado_maquina" type="radio" value={opt} checked={formData.estado_maquina === opt} onChange={() => handleRadioChange('estado_maquina', opt)} className="h-4 w-4 text-primary focus:ring-primary border-gray-300" /><label htmlFor={`maq_${opt}`} className="ml-3 block text-sm capitalize">{opt.replace('_', ' ')}</label></div>))}</div></fieldset>
-                        <fieldset><legend className="text-sm font-medium">Garantía</legend><div className="mt-2 space-y-2">{['con_garantia', 'sin_garantia'].map(opt => (<div key={opt} className="flex items-center"><input id={`gar_${opt}`} name="estado_garantia" type="radio" value={opt} checked={formData.estado_garantia === opt} onChange={() => handleRadioChange('estado_garantia', opt)} className="h-4 w-4 text-primary focus:ring-primary border-gray-300" /><label htmlFor={`gar_${opt}`} className="ml-3 block text-sm capitalize">{opt.replace('_', ' ')}</label></div>))}</div></fieldset>
-                        <fieldset><legend className="text-sm font-medium">Facturación</legend><div className="mt-2 space-y-2">{['facturado', 'no_facturado'].map(opt => (<div key={opt} className="flex items-center"><input id={`fac_${opt}`} name="estado_facturacion" type="radio" value={opt} checked={formData.estado_facturacion === opt} onChange={() => handleRadioChange('estado_facturacion', opt)} className="h-4 w-4 text-primary focus:ring-primary border-gray-300" /><label htmlFor={`fac_${opt}`} className="ml-3 block text-sm capitalize">{opt.replace('_', ' ')}</label></div>))}</div></fieldset>
-                        <fieldset><legend className="text-sm font-medium">Estado del Reporte</legend><div className="mt-2 space-y-2"><div className="flex items-center"><input id="estado" name="estado" type="checkbox" checked={!!formData.estado} onChange={handleChange} className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded" /><label htmlFor="estado" className="ml-3 block text-sm">Finalizado</label></div></div></fieldset>
+                        <fieldset><legend className="text-sm font-medium">Estado de la Máquina</legend><div className="mt-2 space-y-2">{['operativo', 'inoperativo', 'en_prueba'].map(opt => (<div key={opt} className="flex items-center"><input id={`maq_${opt}`} name="estado_maquina" type="radio" value={opt} checked={formData.estado_maquina === opt} onChange={() => handleRadioChange('estado_maquina', opt)} className="h-4 w-4 text-primary focus:ring-primary border-base-border" /><label htmlFor={`maq_${opt}`} className="ml-3 block text-sm capitalize">{opt.replace('_', ' ')}</label></div>))}</div></fieldset>
+                        <fieldset><legend className="text-sm font-medium">Garantía</legend><div className="mt-2 space-y-2">{['con_garantia', 'sin_garantia'].map(opt => (<div key={opt} className="flex items-center"><input id={`gar_${opt}`} name="estado_garantia" type="radio" value={opt} checked={formData.estado_garantia === opt} onChange={() => handleRadioChange('estado_garantia', opt)} className="h-4 w-4 text-primary focus:ring-primary border-base-border" /><label htmlFor={`gar_${opt}`} className="ml-3 block text-sm capitalize">{opt.replace('_', ' ')}</label></div>))}</div></fieldset>
+                        <fieldset><legend className="text-sm font-medium">Facturación</legend><div className="mt-2 space-y-2">{['facturado', 'no_facturado'].map(opt => (<div key={opt} className="flex items-center"><input id={`fac_${opt}`} name="estado_facturacion" type="radio" value={opt} checked={formData.estado_facturacion === opt} onChange={() => handleRadioChange('estado_facturacion', opt)} className="h-4 w-4 text-primary focus:ring-primary border-base-border" /><label htmlFor={`fac_${opt}`} className="ml-3 block text-sm capitalize">{opt.replace('_', ' ')}</label></div>))}</div></fieldset>
+                        <fieldset><legend className="text-sm font-medium">Estado del Reporte</legend><div className="mt-2 space-y-2"><div className="flex items-center"><input id="estado" name="estado" type="checkbox" checked={!!formData.estado} onChange={handleChange} className="h-4 w-4 text-primary focus:ring-primary border-base-border rounded" /><label htmlFor="estado" className="ml-3 block text-sm">Finalizado</label></div></div></fieldset>
                     </div>
                 </div>
 
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
-                    <h3 className="text-xl font-semibold border-b border-gray-200 dark:border-gray-700 pb-2">Conformidad del Cliente</h3>
+                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                    <h3 className="text-xl font-semibold border-b border-base-border pb-2">Conformidad del Cliente</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div><label htmlFor="nombre_firmante" className="block text-sm font-medium">Nombre del Receptor</label><input type="text" name="nombre_firmante" value={formData.nombre_firmante || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div><label htmlFor="celular_firmante" className="block text-sm font-medium">Celular del Receptor</label><input type="text" name="celular_firmante" value={formData.celular_firmante || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
@@ -569,8 +552,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         )}
                     </div>
                     <div className="flex gap-4">
-                        <button type="button" onClick={onBack} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Cancelar</button>
-                        <button type="submit" disabled={isSubmitting} className="bg-primary text-white py-2 px-6 rounded-lg hover:bg-primary-dark transition-colors disabled:bg-primary/50 flex items-center gap-2">{isSubmitting && <Spinner />}{isSubmitting ? 'Guardando...' : 'Guardar Reporte'}</button>
+                        <button type="button" onClick={onBack} className="bg-base-300 py-2 px-4 rounded-lg hover:bg-neutral/20 transition-colors">Cancelar</button>
+                        <button type="submit" disabled={isSubmitting} className="bg-primary text-white py-2 px-6 rounded-lg hover:bg-primary-focus transition-colors disabled:bg-primary/50 flex items-center gap-2">{isSubmitting && <Spinner />}{isSubmitting ? 'Guardando...' : 'Guardar Reporte'}</button>
                     </div>
                 </div>
             </form>
@@ -578,9 +561,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         
         {/* Simulator Section */}
         <div className={`relative transition-all duration-300 ease-in-out ${isSimulatorVisible ? 'w-1/2' : 'w-12'}`}>
-            <div className="sticky top-0 h-full flex flex-col bg-gray-200 dark:bg-gray-900 rounded-lg shadow-inner">
-                 <div className="flex-shrink-0 p-2 bg-white dark:bg-gray-800 rounded-t-lg border-b border-gray-300 dark:border-gray-700">
-                     <button onClick={() => setIsSimulatorVisible(!isSimulatorVisible)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title={isSimulatorVisible ? "Ocultar Previsualización" : "Mostrar Previsualización"}>
+            <div className="sticky top-0 h-full flex flex-col bg-base-300/50 rounded-lg shadow-inner">
+                 <div className="flex-shrink-0 p-2 bg-base-200 rounded-t-lg border-b border-base-border">
+                     <button onClick={() => setIsSimulatorVisible(!isSimulatorVisible)} className="p-2 rounded-full hover:bg-base-300" title={isSimulatorVisible ? "Ocultar Previsualización" : "Mostrar Previsualización"}>
                         {isSimulatorVisible ? <EyeOffIcon className="h-5 w-5" /> : <ViewIcon className="h-5 w-5" />}
                     </button>
                 </div>
@@ -590,7 +573,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         {pdfPreviewUri ? (
                              <iframe src={pdfPreviewUri} title="PDF Preview" className="w-full h-full border-0 rounded-b-lg"/>
                         ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-500">
+                            <div className="w-full h-full flex items-center justify-center text-neutral">
                                 <p>La previsualización aparecerá aquí.</p>
                             </div>
                         )}
@@ -601,16 +584,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
       
       {/* Modals */}
       <Modal isOpen={isNewCompanyModalOpen} onClose={() => setIsNewCompanyModalOpen(false)} title="Añadir Nueva Empresa"><CompanyForm company={null} onSave={handleCompanySaved} onCancel={() => setIsNewCompanyModalOpen(false)}/></Modal>
-      <Modal isOpen={isCompanySearchModalOpen} onClose={() => setIsCompanySearchModalOpen(false)} title="Buscar Empresa"><ul className="max-h-80 overflow-y-auto divide-y dark:divide-gray-600">{companies.map(c => <li key={c.id} onClick={() => handleSelectCompany(c)} className="p-3 cursor-pointer hover:bg-primary/10">{c.nombre}</li>)}</ul></Modal>
+      <Modal isOpen={isCompanySearchModalOpen} onClose={() => setIsCompanySearchModalOpen(false)} title="Buscar Empresa"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{companies.map(c => <li key={c.id} onClick={() => handleSelectCompany(c)} className="p-3 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}</ul></Modal>
       
       <Modal isOpen={isNewPlantModalOpen} onClose={() => setIsNewPlantModalOpen(false)} title="Añadir Nueva Planta"><PlantForm plant={null} onSave={handlePlantSaved} onCancel={() => setIsNewPlantModalOpen(false)}/></Modal>
-      <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta"><ul className="max-h-80 overflow-y-auto divide-y dark:divide-gray-600">{filteredPlants.map(p => <li key={p.id} onClick={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-primary/10">{p.nombre}</li>)}</ul></Modal>
+      <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{filteredPlants.map(p => <li key={p.id} onClick={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}</ul></Modal>
       
       <Modal isOpen={isNewMachineModalOpen} onClose={() => setIsNewMachineModalOpen(false)} title="Añadir Nueva Máquina"><MachineForm machine={null} onSave={handleMachineSaved} onCancel={() => setIsNewMachineModalOpen(false)}/></Modal>
-      <Modal isOpen={isMachineSearchModalOpen} onClose={() => setIsMachineSearchModalOpen(false)} title="Buscar Máquina"><ul className="max-h-80 overflow-y-auto divide-y dark:divide-gray-600">{filteredMachines.map(m => <li key={m.id} onClick={() => handleSelectMachine(m)} className="p-3 cursor-pointer hover:bg-primary/10">{m.serie} - {m.modelo}</li>)}</ul></Modal>
+      <Modal isOpen={isMachineSearchModalOpen} onClose={() => setIsMachineSearchModalOpen(false)} title="Buscar Máquina"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{filteredMachines.map(m => <li key={m.id} onClick={() => handleSelectMachine(m)} className="p-3 cursor-pointer hover:bg-base-300">{m.serie} - {m.modelo}</li>)}</ul></Modal>
 
       <Modal isOpen={isNewSupervisorModalOpen} onClose={() => setIsNewSupervisorModalOpen(false)} title="Añadir Nuevo Encargado"><SupervisorForm supervisor={null} onSave={handleSupervisorSaved} onCancel={() => setIsNewSupervisorModalOpen(false)}/></Modal>
-      <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y dark:divide-gray-600">{filteredSupervisors.map(s => <li key={s.id} onClick={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-primary/10">{s.nombre} {s.apellido}</li>)}</ul></Modal>
+      <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{filteredSupervisors.map(s => <li key={s.id} onClick={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}</ul></Modal>
     </div>
   );
 };

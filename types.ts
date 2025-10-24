@@ -75,10 +75,16 @@ export interface ServiceReport {
   estado?: boolean;
 
   // Files - will handle URLs from storage
-  fotos_problemas_encontrados?: string[];
-  fotos_acciones_realizadas?: string[];
-  fotos_observaciones?: string[];
-  foto_firma?: string;
+  fotos_problemas_encontrados_url?: string[];
+  fotos_acciones_realizadas_url?: string[];
+  fotos_observaciones_url?: string[];
+  foto_firma_url?: string;
+  
+  // For passing base64 to PDF generator
+  fotosProblemasBase64?: string[];
+  fotosAccionesBase64?: string[];
+  fotosObservacionesBase64?: string[];
+  fotoFirmaBase64?: string;
   
   // Sign-off (maps to nombre_usuario, celular_usuario in db)
   nombre_firmante?: string; 
@@ -115,7 +121,7 @@ export interface VisitReport {
 
   // Sign-off
   nombre_firmante?: string;
-  foto_firma?: string;
+  fotoFirmaBase64?: string; // for PDF generator
 
   // Meta
   id_usuario?: string;
@@ -131,18 +137,32 @@ export interface VisitReport {
 
 export type ThemeMode = 'light' | 'dark';
 
+interface ColorSet {
+  primary: string;
+  'primary-focus': string; // Darker shade for hover/active
+  'primary-light': string;
+  'primary-lighter': string;
+  secondary: string;
+  accent: string;
+  neutral: string;
+  'base-100': string; // Main background
+  'base-200': string; // Cards, modals
+  'base-300': string; // Subtle bg, hover
+  'base-content': string; // Main text color
+  'base-border': string;
+  info: string;
+  success: string;
+  warning: string;
+  error: string;
+}
+
 export interface ColorPalette {
   name: string;
   category: string;
-  colors: {
-    primary: string;
-    secondary: string;
-    accent: string;
-    'base-100': string;
-    // FIX: Added missing 'neutral' color property to match theme definitions.
-    neutral: string;
-  };
+  light: ColorSet;
+  dark: ColorSet;
 }
+
 
 export interface Role {
     id: number;

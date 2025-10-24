@@ -7,15 +7,64 @@
     <title>Report-AI</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Set theme on initial load to prevent flash of unstyled content
-      if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark');
-        document.documentElement.style.setProperty('color-scheme', 'dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.style.setProperty('color-scheme', 'light');
-      }
+      // Configure Tailwind CSS to use CSS variables for theming
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: 'var(--color-primary)',
+              'primary-focus': 'var(--color-primary-focus)',
+              'primary-light': 'var(--color-primary-light)',
+              'primary-lighter': 'var(--color-primary-lighter)',
+              secondary: 'var(--color-secondary)',
+              accent: 'var(--color-accent)',
+              neutral: 'var(--color-neutral)',
+              'base-100': 'var(--color-base-100)', // Main background
+              'base-200': 'var(--color-base-200)', // Cards, modals
+              'base-300': 'var(--color-base-300)', // Hover, subtle backgrounds
+              'base-content': 'var(--color-base-content)', // Main text color
+              'base-border': 'var(--color-base-border)', // Borders
+              'info': 'var(--color-info)',
+              'success': 'var(--color-success)',
+              'warning': 'var(--color-warning)',
+              'error': 'var(--color-error)',
+            }
+          }
+        }
+      };
     </script>
+    <style>
+      /* Apply base theme colors to the body */
+      body {
+        background-color: var(--color-base-100);
+        color: var(--color-base-content);
+        transition: background-color 0.3s, color 0.3s;
+      }
+      /* Define a reusable style for form inputs that respects themes */
+      .input-style {
+        background-color: var(--color-base-100);
+        border: 1px solid var(--color-base-border);
+        color: var(--color-base-content);
+        border-radius: 0.375rem; /* rounded-md */
+      }
+      .input-style:focus {
+        --tw-ring-color: var(--color-primary);
+        --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+        --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);
+        box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+        border-color: var(--color-primary);
+      }
+      .input-style::placeholder {
+        color: var(--color-neutral);
+        opacity: 0.7;
+      }
+       .input-style:disabled {
+        background-color: var(--color-base-300);
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+    </style>
   <script type="importmap">
 {
   "imports": {

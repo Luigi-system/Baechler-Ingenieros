@@ -1,4 +1,3 @@
-
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { EmailIcon, LockIcon, LoginIcon, AlertTriangleIcon } from '../ui/Icons';
@@ -21,7 +20,6 @@ const Login: React.FC = () => {
     try {
       await auth.login(email, password);
       // On success, the onAuthStateChange listener in App.tsx will handle navigation.
-      // The loading state will persist until the component unmounts for a smoother UX.
     } catch (err: any) {
       const message = err.message;
       if (message === 'Invalid login credentials') {
@@ -41,27 +39,27 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
-      <div className="w-full max-w-md p-8 space-y-8 bg-white dark:bg-gray-800 rounded-2xl shadow-2xl transform transition-all">
+    <div className="flex items-center justify-center min-h-screen bg-base-100">
+      <div className="w-full max-w-md p-8 space-y-8 bg-base-200 rounded-2xl shadow-2xl transform transition-all">
         <div className="text-center">
             <img src={logoUrl} alt="Report-AI Logo" className="mx-auto h-16 w-auto" />
-            <h2 className="mt-6 text-3xl font-extrabold text-gray-900 dark:text-white">
+            <h2 className="mt-6 text-3xl font-extrabold text-base-content">
                 Inicia sesión en Report-AI
             </h2>
-            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+            <p className="mt-2 text-sm text-neutral">
                 Ingresa tus credenciales para acceder a tu cuenta.
             </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
-            <div className="flex items-start text-sm text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 p-3 rounded-md">
+            <div className="flex items-start text-sm text-error bg-error/10 p-3 rounded-md">
                 <AlertTriangleIcon className="h-5 w-5 mr-2 shrink-0" aria-hidden="true" />
                 <span className="text-left">{error}</span>
             </div>
           )}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <EmailIcon className="h-5 w-5 text-gray-400" />
+              <EmailIcon className="h-5 w-5 text-neutral" />
             </div>
             <input
               id="email-address"
@@ -69,7 +67,7 @@ const Login: React.FC = () => {
               type="email"
               autoComplete="email"
               required
-              className="appearance-none rounded-md relative block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+              className="appearance-none relative block w-full pl-10 pr-3 py-3 sm:text-sm input-style"
               placeholder="Correo electrónico"
               value={email}
               onChange={handleInputChange(setEmail)}
@@ -77,7 +75,7 @@ const Login: React.FC = () => {
           </div>
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <LockIcon className="h-5 w-5 text-gray-400" />
+              <LockIcon className="h-5 w-5 text-neutral" />
             </div>
             <input
               id="password"
@@ -85,7 +83,7 @@ const Login: React.FC = () => {
               type="password"
               autoComplete="current-password"
               required
-              className="appearance-none rounded-md relative block w-full pl-10 pr-3 py-3 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+              className="appearance-none relative block w-full pl-10 pr-3 py-3 sm:text-sm input-style"
               placeholder="Contraseña"
               value={password}
               onChange={handleInputChange(setPassword)}
@@ -96,7 +94,7 @@ const Login: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading || !email || !password}
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-dark disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-focus disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? (
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

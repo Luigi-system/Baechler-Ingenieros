@@ -75,13 +75,13 @@ const Layout: React.FC = () => {
         return <MachineList />;
       case 'management-supervisors':
         return <SupervisorList />;
-
+        
       // Settings Pages
       case 'settings-customization':
         return <CustomizationSettings />;
       case 'settings-database':
         return <DatabaseSettings />;
-      case 'settings-mcp':
+       case 'settings-mcp':
         return <MCPSettings />;
       case 'settings-users':
         return <UserManagement />;
@@ -91,9 +91,7 @@ const Layout: React.FC = () => {
         return <AccessManagement />;
       case 'settings-import':
         return <DataImporter />;
-
-      // User Profile Page
-      case 'profile':
+      case 'settings-profile':
         return <ProfileSettings />;
         
       default:
@@ -102,35 +100,29 @@ const Layout: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="flex h-screen bg-base-100">
       <Sidebar activePage={activePage} setActivePage={navigateTo} />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <Header onNavigateToProfile={() => navigateTo('profile')} />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <Header onNavigateToProfile={() => navigateTo('settings-profile')} />
+        <div className="flex-1 p-6 overflow-y-auto">
           {renderContent()}
-        </main>
-      </div>
+        </div>
+      </main>
       
-      {/* Floating Action Button for AI Assistant */}
-      <button
+      <button 
         onClick={() => setIsAssistantOpen(true)}
-        className="fixed bottom-8 right-8 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary-dark transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-dark z-40"
-        aria-label="Abrir Asistente IA"
+        className="fixed bottom-6 right-6 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary-focus transition-transform hover:scale-110"
+        title="Asistente IA"
       >
         <AssistantIcon className="h-8 w-8" />
       </button>
 
-      {/* AI Assistant Modal */}
-      <Modal 
-        isOpen={isAssistantOpen} 
-        onClose={() => setIsAssistantOpen(false)} 
-        maxWidth="max-w-4xl" 
-        hasPadding={false}
-      >
+      <Modal isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} maxWidth="max-w-3xl" hasPadding={false}>
         <Assistant />
       </Modal>
     </div>
   );
 };
 
+// FIX: Added default export to the Layout component.
 export default Layout;

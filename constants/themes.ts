@@ -1,16 +1,27 @@
 
 import type { ColorPalette } from '../types';
 
+const professionalBaseLight = {
+  primary: '#3b82f6', 'primary-focus': '#2563eb', 'primary-light': '#60a5fa', 'primary-lighter': '#dbeafe',
+  secondary: '#10b981', accent: '#f97316', neutral: '#6b7280',
+  'base-100': '#f3f4f6', 'base-200': '#ffffff', 'base-300': '#e5e7eb',
+  'base-content': '#1f2937', 'base-border': '#d1d5db',
+  info: '#0ea5e9', success: '#22c55e', warning: '#f59e0b', error: '#ef4444',
+};
+
+const professionalBaseDark = {
+  primary: '#3b82f6', 'primary-focus': '#60a5fa', 'primary-light': '#2563eb', 'primary-lighter': '#1e3a8a',
+  secondary: '#10b981', accent: '#f97316', neutral: '#9ca3af',
+  'base-100': '#111827', 'base-200': '#1f2937', 'base-300': '#374151',
+  'base-content': '#f9fafb', 'base-border': '#4b5563',
+  info: '#0ea5e9', success: '#22c55e', warning: '#f59e0b', error: '#ef4444',
+};
+
 export const DEFAULT_PALETTE: ColorPalette = {
   name: 'Azul Corporativo',
   category: 'Profesional',
-  colors: {
-    primary: '#3b82f6', // blue-500
-    secondary: '#10b981', // emerald-500
-    accent: '#f97316', // orange-500
-    neutral: '#6b7280', // gray-500
-    'base-100': '#ffffff', // white
-  },
+  light: professionalBaseLight,
+  dark: professionalBaseDark,
 };
 
 export const COLOR_PALETTES: ColorPalette[] = [
@@ -18,41 +29,19 @@ export const COLOR_PALETTES: ColorPalette[] = [
   {
     name: 'Verde Bosque',
     category: 'Profesional',
-    colors: { primary: '#22c55e', secondary: '#06b6d4', accent: '#eab308', neutral: '#4b5563', 'base-100': '#ffffff' },
+    light: { ...professionalBaseLight, primary: '#22c55e', 'primary-focus': '#16a34a', 'primary-light': '#4ade80', 'primary-lighter': '#dcfce7', secondary: '#06b6d4', accent: '#eab308' },
+    dark: { ...professionalBaseDark, primary: '#22c55e', 'primary-focus': '#4ade80', 'primary-light': '#16a34a', 'primary-lighter': '#14532d', secondary: '#06b6d4', accent: '#eab308' },
   },
   {
     name: 'Púrpura Real',
     category: 'Profesional',
-    colors: { primary: '#8b5cf6', secondary: '#ec4899', accent: '#f59e0b', neutral: '#4b5563', 'base-100': '#ffffff' },
+    light: { ...professionalBaseLight, primary: '#8b5cf6', 'primary-focus': '#7c3aed', 'primary-light': '#a78bfa', 'primary-lighter': '#ede9fe', secondary: '#ec4899', accent: '#f59e0b' },
+    dark: { ...professionalBaseDark, primary: '#8b5cf6', 'primary-focus': '#a78bfa', 'primary-light': '#7c3aed', 'primary-lighter': '#4c1d95', secondary: '#ec4899', accent: '#f59e0b' },
   },
   {
     name: 'Rojo Carmesí',
     category: 'Profesional',
-    colors: { primary: '#ef4444', secondary: '#6366f1', accent: '#14b8a6', neutral: '#4b5563', 'base-100': '#ffffff' },
-  },
-  {
-    name: 'Onda Marina',
-    category: 'Moderno',
-    colors: { primary: '#0ea5e9', secondary: '#a3e635', accent: '#f43f5e', neutral: '#71717a', 'base-100': '#f8fafc' },
-  },
-  {
-    name: 'Brillo del Atardecer',
-    category: 'Moderno',
-    colors: { primary: '#f97316', secondary: '#d946ef', accent: '#22d3ee', neutral: '#71717a', 'base-100': '#f8fafc' },
-  },
-   {
-    name: 'Menta Fresca',
-    category: 'Moderno',
-    colors: { primary: '#10b981', secondary: '#60a5fa', accent: '#fbbf24', neutral: '#71717a', 'base-100': '#f8fafc' },
-  },
-  {
-    name: 'Cyberpunk',
-    category: 'Vibrante',
-    colors: { primary: '#d946ef', secondary: '#22d3ee', accent: '#bef264', neutral: '#e5e7eb', 'base-100': '#111827' },
-  },
-  {
-    name: 'Ritmo Retro',
-    category: 'Vibrante',
-    colors: { primary: '#fb923c', secondary: '#4ade80', accent: '#c084fc', neutral: '#94a3b8', 'base-100': '#f1f5f9' },
+    light: { ...professionalBaseLight, primary: '#ef4444', 'primary-focus': '#dc2626', 'primary-light': '#f87171', 'primary-lighter': '#fee2e2', secondary: '#6366f1', accent: '#14b8a6' },
+    dark: { ...professionalBaseDark, primary: '#ef4444', 'primary-focus': '#f87171', 'primary-light': '#dc2626', 'primary-lighter': '#7f1d1d', secondary: '#6366f1', accent: '#14b8a6' },
   },
 ];

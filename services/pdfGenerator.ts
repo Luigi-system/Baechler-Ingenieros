@@ -1,177 +1,187 @@
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ServiceReport, VisitReport } from '../types';
 
-// A helper to draw a checkbox
-const drawCheckbox = (doc: jsPDF, x: number, y: number, text: string, checked: boolean) => {
-    doc.text(`(${checked ? 'X' : ' '})`, x, y);
-    doc.text(text, x + 6, y);
-};
+type OutputType = 'save' | 'datauristring';
 
-const loadLogo = async (doc: jsPDF, logoUrl: string) => {
-    if (!logoUrl) return;
-    try {
-        if (logoUrl.startsWith('data:image')) {
-            const mimeTypeMatch = logoUrl.match(/data:(image\/[a-z]+);/);
-            const format = mimeTypeMatch ? mimeTypeMatch[1].split('/')[1].toUpperCase() : 'PNG';
-            doc.addImage(logoUrl, format, 160, 10, 30, 15);
-        } else {
-            const response = await fetch(logoUrl);
-            if (!response.ok) throw new Error(`Failed to fetch logo: ${response.statusText}`);
-            const blob = await response.blob();
-            const reader = new FileReader();
-            await new Promise<void>((resolve, reject) => {
-                reader.onload = () => {
-                    try {
-                        const urlPart = logoUrl.split('?')[0];
-                        const extension = urlPart.split('.').pop()?.toUpperCase() ?? 'PNG';
-                        const format = ['PNG', 'JPG', 'JPEG', 'WEBP'].includes(extension) ? extension : 'PNG';
-                        doc.addImage(reader.result as string, format, 160, 10, 30, 15);
-                        resolve();
-                    } catch (imgError) {
-                        reject(imgError);
-                    }
-                };
-                reader.onerror = (error) => reject(error);
-                reader.readAsDataURL(blob);
-            });
+// --- HELPER FUNCTIONS ---
+
+const addHeaderAndFooter = (doc: jsPDF, logoUrl: string, title: string) => {
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        
+        // HEADER
+        try {
+            // A default or placeholder could be used if logoUrl is invalid
+            if (logoUrl) {
+                const imgFormat = logoUrl.substring(logoUrl.lastIndexOf('.') + 1).toUpperCase();
+                 doc.addImage(logoUrl, imgFormat, 15, 10, 30, 15, undefined, 'FAST');
+            }
+        } catch (e) {
+            console.error("Could not add logo to PDF header:", e);
+             doc.text("Logo", 15, 15);
         }
-    } catch (e) {
-        console.error("Could not load or add logo to PDF, skipping.", e);
+       
+        doc.setFontSize(14).setFont(undefined, 'bold');
+        doc.text(title, doc.internal.pageSize.getWidth() / 2, 20, { align: 'center' });
+
+        // FOOTER
+        doc.setFontSize(8);
+        const pageStr = `Página ${i} de ${pageCount}`;
+        doc.text(pageStr, doc.internal.pageSize.getWidth() / 2, 287, { align: 'center' });
     }
 };
 
+const addImageGallery = (doc: jsPDF, images: string[] | undefined, startY: number): number => {
+    if (!images || images.length === 0) return startY;
+
+    const margin = 15;
+    const padding = 5;
+    const imgWidth = (doc.internal.pageSize.width - (2 * margin) - (2 * padding)) / 3;
+    const imgHeight = 40;
+    const pageHeight = doc.internal.pageSize.height;
+    let x = margin;
+    let y = startY;
+
+    images.forEach((imgData, index) => {
+        if (y + imgHeight + padding > pageHeight - 20) { // Check for footer space
+            doc.addPage();
+            y = 20;
+            x = margin;
+        }
+
+        try {
+            // Extract format from base64 string, default to JPEG
+            const format = (imgData.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
+            doc.addImage(imgData, format, x, y, imgWidth, imgHeight, undefined, 'FAST');
+        } catch (e) {
+            doc.text('Error al cargar imagen', x + 5, y + 20);
+            console.error("Error adding image to PDF", e);
+        }
+        
+        x += imgWidth + padding;
+        if ((index + 1) % 3 === 0 && index < images.length - 1) {
+            x = margin;
+            y += imgHeight + padding;
+        }
+    });
+    
+    // Return the Y position after the last row of images
+    return y + imgHeight + padding;
+};
+
+// --- MAIN PDF GENERATORS ---
 
 export const generateServiceReport = async (
     report: Partial<ServiceReport>, 
     logoUrl: string, 
-    outputType: 'save' | 'datauristring' = 'save'
+    outputType: OutputType = 'save'
 ): Promise<string | void> => {
     const doc = new jsPDF();
-
-    // --- HEADER ---
-    await loadLogo(doc, logoUrl);
-    
-    doc.setFontSize(10);
-    doc.text('L.+J. BAECHLER INGENIEROS S.A.', 15, 15);
-    doc.text('TELF. OFICINA: (51 1) 271 8900', 15, 20);
-    doc.text('E-mail: info@baechleringenieros.com', 15, 25);
-    doc.text('TELF. ALMACEN: (51 1) 326 1416', 100, 20);
-    
-    doc.setFontSize(14).setFont(undefined, 'bold');
-    doc.text('REPORTES DE SERVICIO', 75, 35);
-    doc.text(`N° ${report.codigo_reporte ?? 'N/A'}`, 160, 35);
-    doc.setFont(undefined, 'normal');
+    const pageContentStartY = 30;
+    let finalY = pageContentStartY;
 
     // --- DETAILS TABLE ---
-    const tableData = [
-        ['CLIENTE:', report.empresa?.nombre ?? '', 'FECHA:', report.fecha ? new Date(report.fecha + 'T00:00:00').toLocaleDateString('es-ES') : ''],
-        ['RESPONSABLE:', [report.encargado?.nombre, report.encargado?.apellido].filter(Boolean).join(' ') || '', 'MARCA:', report.marca_maquina ?? ''],
-        ['EQUIPO: EN GARANTIA ( ) SIN GARANTIA ( )', '', 'MODELO:', report.modelo_maquina ?? ''],
-        ['SERVICIO: FACTURADO ( ) NO FACTURADO ( )', '', 'N° DE SERIE:', report.serie_maquina ?? ''],
-        ['UBICACION SERVICIO: CLIENTE (X) L.+J. ( )', '', 'LINEA:', report.linea_maquina ?? '']
-    ];
     autoTable(doc, {
-        startY: 40,
-        body: tableData,
+        startY: finalY,
+        body: [
+            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa?.nombre ?? 'N/A', { content: 'CÓDIGO', styles: { fontStyle: 'bold' } }, report.codigo_reporte ?? 'N/A'],
+            [{ content: 'RESPONSABLE', styles: { fontStyle: 'bold' } }, `${report.encargado?.nombre ?? ''} ${report.encargado?.apellido ?? ''}`.trim() || 'N/A', { content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
+            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.nombre_planta ?? 'N/A', { content: 'HORAS', styles: { fontStyle: 'bold' } }, `E: ${report.entrada ?? '--:--'} - S: ${report.salida ?? '--:--'}`],
+        ],
         theme: 'grid',
-        styles: {
-            fontSize: 9,
-            cellPadding: 1.5,
-            valign: 'middle'
-        },
-        columnStyles: {
-            0: { fontStyle: 'bold', cellWidth: 50 },
-            1: { cellWidth: 50 },
-            2: { fontStyle: 'bold', cellWidth: 20 },
-            3: { cellWidth: 'auto' },
-        },
+        styles: { fontSize: 9, cellPadding: 1.5, valign: 'middle' },
+    });
+    finalY = (doc as any).lastAutoTable.finalY;
+    
+    autoTable(doc, {
+        startY: finalY + 2,
+        body: [
+            [{ content: 'N° SERIE', styles: { fontStyle: 'bold' } }, report.serie_maquina ?? 'N/A', { content: 'MODELO', styles: { fontStyle: 'bold' } }, report.modelo_maquina ?? 'N/A'],
+            [{ content: 'MARCA', styles: { fontStyle: 'bold' } }, report.marca_maquina ?? 'N/A', { content: 'LINEA', styles: { fontStyle: 'bold' } }, report.linea_maquina ?? 'N/A'],
+        ],
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 1.5, valign: 'middle' },
+    });
+
+    finalY = (doc as any).lastAutoTable.finalY;
+
+    // --- DYNAMIC SECTIONS HELPER ---
+    const drawSection = (title: string, content: string | undefined, images: string[] | undefined) => {
+        // Check if there is enough space, otherwise add a new page.
+        // 20 for header, 20 for footer, 10 for table header, 10 for text, 45 for one row of images
+        if (finalY > doc.internal.pageSize.height - 105) { doc.addPage(); finalY = pageContentStartY; }
+        
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [[title]],
+            headStyles: { fontStyle: 'bold', fillColor: '#EAEAEA', textColor: '#333' },
+            body: [[content || 'N/A']],
+            theme: 'grid',
+            didDrawPage: (data) => { finalY = data.cursor?.y ?? finalY; }
+        });
+        finalY = (doc as any).lastAutoTable.finalY;
+
+        if (images && images.length > 0) {
+            finalY = addImageGallery(doc, images, finalY + 3);
+        }
+    };
+
+    drawSection('PROBLEMAS ENCONTRADOS', report.problemas_encontrados, report.fotosProblemasBase64);
+    drawSection('ACCIONES REALIZADAS', report.acciones_realizadas, report.fotosAccionesBase64);
+    drawSection('OBSERVACIONES', report.observaciones, report.fotosObservacionesBase64);
+    
+    // --- FINAL STATUS TABLE ---
+    if (finalY > doc.internal.pageSize.height - 50) { doc.addPage(); finalY = pageContentStartY; }
+    autoTable(doc, {
+        startY: finalY + 5,
+        head: [[{ content: 'ESTADO FINAL', colSpan: 6, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
+        body: [
+            [
+                'OPERATIVO', `(${report.operativo || report.estado_maquina === 'operativo' ? 'X' : ' '})`,
+                'INOPERATIVO', `(${report.inoperativo || report.estado_maquina === 'inoperativo' ? 'X' : ' '})`,
+                'EN PRUEBA', `(${report.en_prueba || report.estado_maquina === 'en_prueba' ? 'X' : ' '})`,
+            ]
+        ],
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 1.5, halign: 'center' },
+        didDrawPage: (data) => { finalY = data.cursor?.y ?? finalY; }
+    });
+    finalY = (doc as any).lastAutoTable.finalY;
+
+    // --- SIGNATURES ---
+    if (finalY > doc.internal.pageSize.height - 60) { doc.addPage(); finalY = pageContentStartY; }
+    
+    // Add signature image first to get its position
+    if (report.fotoFirmaBase64) {
+        try {
+            const format = (report.fotoFirmaBase64.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
+            doc.addImage(report.fotoFirmaBase64, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
+        } catch(e) { console.error("Could not add signature image", e); }
+    }
+
+    autoTable(doc, {
+        startY: finalY + 5,
+        body: [
+            [{ content: `REALIZADO POR:\n${report.usuario?.nombres ?? 'N/A'}`, styles: { halign: 'center', } }, { content: `CONFORMIDAD CLIENTE:\n${report.nombre_firmante ?? 'N/A'}`, styles: { halign: 'center' } }],
+        ],
+        theme: 'grid',
+        styles: { minCellHeight: 35, valign: 'bottom', fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { lineWidth: 0.1, lineColor: '#fff' }, // hide all but top line
         didParseCell: (data) => {
-            if (data.row.index === 2 && data.column.index === 0) data.cell.text = ['EQUIPO: EN GARANTIA         SIN GARANTIA'];
-            if (data.row.index === 3 && data.column.index === 0) data.cell.text = ['SERVICIO: FACTURADO         NO FACTURADO'];
-            if (data.row.index === 4 && data.column.index === 0) data.cell.text = ['UBICACION SERVICIO: CLIENTE      L.+J.'];
-        },
-        didDrawCell: (data) => {
-             if (data.row.index === 2 && data.column.index === 0) {
-                const x = data.cell.x + 40; const y = data.cell.y + 4;
-                doc.text(report.con_garantia ? '(X)' : '( )', x, y);
-                doc.text(report.sin_garantia ? '(X)' : '( )', x + 27, y);
-            }
-            if (data.row.index === 3 && data.column.index === 0) {
-                const x = data.cell.x + 35; const y = data.cell.y + 4;
-                doc.text(report.facturado ? '(X)' : '( )', x, y);
-                doc.text(report.no_facturado ? '(X)' : '( )', x + 29, y);
-            }
-             if (data.row.index === 4 && data.column.index === 0) {
-                const x = data.cell.x + 48; const y = data.cell.y + 4;
-                doc.text('(X)', x, y); doc.text('( )', x + 16, y);
+            if (data.row.index === 0) {
+                data.cell.styles.lineColor = '#000';
             }
         }
     });
 
-    let finalY = (doc as any).lastAutoTable.finalY;
-
-    // --- TEXT SECTIONS ---
-    const drawSection = (title: string, content: string | undefined, startY: number): number => {
-        doc.setFillColor(230, 230, 230);
-        doc.rect(14, startY, 182, 7, 'F');
-        doc.setFontSize(9).setFont(undefined, 'bold');
-        doc.text(title, 15, startY + 5);
-        doc.setFontSize(9).setFont(undefined, 'normal');
-        const textLines = doc.splitTextToSize(content || '', 180);
-        const textHeight = (doc.getTextDimensions(textLines).h) + 8;
-        doc.rect(14, startY + 7, 182, textHeight, 'S');
-        doc.text(textLines, 15, startY + 12);
-        return startY + 7 + textHeight;
-    };
-    
-    finalY = drawSection('PROBLEMA ENCONTRADO:', report.problemas_encontrados, finalY + 5);
-    finalY = drawSection('ACCIÓN REALIZADA:', report.acciones_realizadas, finalY + 2);
-    
-    // --- CONDITION AFTER SERVICE ---
-    finalY += 5;
-    doc.setFillColor(230, 230, 230);
-    doc.rect(14, finalY, 182, 7, 'F');
-    doc.setFontSize(9).setFont(undefined, 'bold');
-    doc.text('CONDICIÓN DESPUES DEL SERVICIO:', 15, finalY + 5);
-    doc.setFont(undefined, 'normal');
-    drawCheckbox(doc, 70, finalY + 5, 'OPERATIVO', !!report.operativo);
-    drawCheckbox(doc, 110, finalY + 5, 'INOPERATIVO', !!report.inoperativo);
-    drawCheckbox(doc, 155, finalY + 5, 'EN PRUEBA', !!report.en_prueba);
-    
-    finalY += 7;
-    finalY = drawSection('OBSERVACIONES / SUGERENCIAS:', report.observaciones, finalY);
-
-    // --- SIGNATURES ---
-    finalY += 5;
-    const tableBottomData = [
-        [
-            `RESPONSABLE: ${report.nombre_firmante ?? ''}`, 
-            `HORA\nLLEGADA: ${report.entrada ?? ''}\nSALIDA: ${report.salida ?? ''}`,
-            `SERVICIO REALIZADO POR: ${report.usuario?.nombres ?? ''}`
-        ],
-        ['FIRMA:', '', '']
-    ];
-    autoTable(doc, {
-        startY: finalY,
-        body: tableBottomData,
-        theme: 'grid',
-        styles: { fontSize: 9, cellPadding: 1.5, valign: 'top' },
-        columnStyles: {
-            0: { cellWidth: 70, minCellHeight: 30 },
-            1: { cellWidth: 42 },
-            2: { cellWidth: 'auto' },
-        },
-    });
-    finalY = (doc as any).lastAutoTable.finalY;
-
-    // --- FOOTER ---
-    doc.setFontSize(8);
-    doc.text('OFICINA ADMINISTRATIVA: CALLE LOS ANTARES N° 320 OF. 301 - TORRE A - SANTIAGO DE SURCO', 15, 280);
-    doc.text('OFICINA TALLER: AV. SANTA ROSA 450 - ATE', 15, 284);
+    // --- ADD HEADERS AND FOOTERS TO ALL PAGES ---
+    addHeaderAndFooter(doc, logoUrl, 'REPORTE DE SERVICIO');
     
     if (outputType === 'save') {
-        doc.save(`reporte-${report.codigo_reporte || report.id}.pdf`);
+        doc.save(`reporte-servicio-${report.codigo_reporte || 'NUEVO'}.pdf`);
     } else {
         return doc.output('datauristring');
     }
@@ -180,81 +190,78 @@ export const generateServiceReport = async (
 export const generateVisitReport = async (
     report: Partial<VisitReport>,
     logoUrl: string,
-    outputType: 'save' | 'datauristring' = 'save'
+    outputType: OutputType = 'save'
 ): Promise<string | void> => {
     const doc = new jsPDF();
-    let finalY = 10;
-
-    // --- HEADER ---
-    await loadLogo(doc, logoUrl);
-
-    doc.setFontSize(10);
-    doc.text('L.+J. BAECHLER INGENIEROS S.A.', 15, 15);
-    
-    doc.setFontSize(14).setFont(undefined, 'bold');
-    doc.text('REPORTE DE VISITA', 80, 35);
-    doc.text(`N° ${report.codigo_reporte ?? 'N/A'}`, 160, 35);
-    doc.setFont(undefined, 'normal');
-    finalY = 40;
+    const pageContentStartY = 30;
+    let finalY = pageContentStartY;
 
     // --- DETAILS TABLE ---
-    const tableData = [
-        ['CLIENTE:', report.empresa?.nombre ?? ''],
-        ['PLANTA / SEDE:', report.planta?.nombre ?? ''],
-        ['RESPONSABLE:', [report.encargado?.nombre, report.encargado?.apellido].filter(Boolean).join(' ') || ''],
-        ['FECHA:', report.fecha ? new Date(report.fecha + 'T00:00:00').toLocaleDateString('es-ES') : ''],
-        ['REALIZADO POR:', report.usuario?.nombres ?? '']
-    ];
-    autoTable(doc, {
+     autoTable(doc, {
         startY: finalY,
-        body: tableData,
+        body: [
+            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa?.nombre ?? 'N/A'],
+            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.planta?.nombre ?? 'N/A'],
+            [{ content: 'RESPONSABLE', styles: { fontStyle: 'bold' } }, `${report.encargado?.nombre ?? ''} ${report.encargado?.apellido ?? ''}`.trim() || 'N/A'],
+            [{ content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
+            [{ content: 'REALIZADO POR', styles: { fontStyle: 'bold' } }, report.usuario?.nombres ?? 'N/A']
+        ],
         theme: 'grid',
         styles: { fontSize: 9, cellPadding: 2 },
-        columnStyles: { 0: { fontStyle: 'bold', cellWidth: 40 } },
+        columnStyles: { 0: { cellWidth: 40 } },
     });
     finalY = (doc as any).lastAutoTable.finalY;
 
-    // --- TEXT SECTIONS HELPER ---
-    const drawSection = (title: string, content: string | undefined, startY: number): number => {
-        if (startY > 240) {
-            doc.addPage();
-            startY = 20;
-        }
-        doc.setFillColor(230, 230, 230);
-        doc.rect(14, startY, 182, 7, 'F');
-        doc.setFontSize(10).setFont(undefined, 'bold');
-        doc.text(title.toUpperCase(), 15, startY + 5);
-
-        doc.setFontSize(9).setFont(undefined, 'normal');
-        const textLines = doc.splitTextToSize(content || '', 180);
-        const textHeight = (doc.getTextDimensions(textLines).h) + 8;
-        doc.rect(14, startY + 7, 182, textHeight, 'S');
-        doc.text(textLines, 15, startY + 12);
-        return startY + 7 + textHeight;
+    // --- DYNAMIC SECTIONS HELPER ---
+    const drawSection = (title: string, content: string | undefined) => {
+         if (finalY > doc.internal.pageSize.height - 60) { doc.addPage(); finalY = pageContentStartY; }
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [[title]],
+            headStyles: { fontStyle: 'bold', fillColor: '#EAEAEA', textColor: '#333' },
+            body: [[content || 'N/A']],
+            theme: 'grid',
+            didDrawPage: (data) => { finalY = data.cursor?.y ?? finalY; }
+        });
+        finalY = (doc as any).lastAutoTable.finalY;
     };
-
-    finalY = drawSection('Motivo de la Visita', report.motivo_visita, finalY + 5);
-    finalY = drawSection('Temas Tratados', report.temas_tratados, finalY + 2);
-    finalY = drawSection('Acuerdos', report.acuerdos, finalY + 2);
-    finalY = drawSection('Pendientes', report.pendientes, finalY + 2);
-    finalY = drawSection('Observaciones', report.observaciones, finalY + 2);
+    
+    drawSection('MOTIVO DE LA VISITA', report.motivo_visita);
+    drawSection('TEMAS TRATADOS', report.temas_tratados);
+    drawSection('ACUERDOS', report.acuerdos);
+    drawSection('PENDIENTES', report.pendientes);
+    drawSection('OBSERVACIONES', report.observaciones);
 
     // --- SIGNATURES ---
-    let signatureY = finalY + 15 > 250 ? 20 : 250;
-    if (finalY + 15 > 250) {
-        doc.addPage();
-    }
+    if (finalY > doc.internal.pageSize.height - 60) { doc.addPage(); finalY = pageContentStartY; }
     
-    doc.line(30, signatureY, 90, signatureY);
-    doc.text('Firma del Cliente', 45, signatureY + 5);
-    doc.text(report.nombre_firmante ?? '', 30, signatureY - 2);
+    if (report.fotoFirmaBase64) {
+        try {
+            const format = (report.fotoFirmaBase64.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
+            doc.addImage(report.fotoFirmaBase64, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
+        } catch(e) { console.error("Could not add signature image", e); }
+    }
 
-    doc.line(120, signatureY, 180, signatureY);
-    doc.text('Firma L.+J. Baechler', 130, signatureY + 5);
-    doc.text(report.usuario?.nombres ?? '', 120, signatureY - 2);
+     autoTable(doc, {
+        startY: finalY + 5,
+        body: [
+            [{ content: `REALIZADO POR:\n${report.usuario?.nombres ?? 'N/A'}`, styles: { halign: 'center' } }, { content: `CONFORMIDAD CLIENTE:\n${report.nombre_firmante ?? 'N/A'}`, styles: { halign: 'center' } }],
+        ],
+        theme: 'grid',
+        styles: { minCellHeight: 35, valign: 'bottom', fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { lineWidth: 0.1, lineColor: '#fff' },
+        didParseCell: (data) => {
+            if (data.row.index === 0) {
+                data.cell.styles.lineColor = '#000';
+            }
+        }
+    });
+    
+    // --- ADD HEADERS AND FOOTERS TO ALL PAGES ---
+    addHeaderAndFooter(doc, logoUrl, 'REPORTE DE VISITA');
 
     if (outputType === 'save') {
-        doc.save(`reporte-visita-${report.codigo_reporte || report.id}.pdf`);
+        doc.save(`reporte-visita-${report.codigo_reporte || 'NUEVO'}.pdf`);
     } else {
         return doc.output('datauristring');
     }

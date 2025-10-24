@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Dashboard</h2>
+      <h2 className="text-3xl font-bold text-base-content">Dashboard</h2>
       
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -79,49 +79,48 @@ const Dashboard: React.FC = () => {
           title="Reportes Totales" 
           value={stats?.totalReports.toLocaleString() ?? '0'} 
           icon={<ReportsIcon className="h-8 w-8 text-white"/>} 
-          color="bg-blue-500"
+          color="bg-info"
         />
         <StatCard 
           title="Usuarios Activos" 
           value={stats?.activeUsers.toLocaleString() ?? '0'} 
           icon={<UsersIcon className="h-8 w-8 text-white"/>}
-          color="bg-green-500"
+          color="bg-success"
         />
         <StatCard 
           title="Servicios Completados" 
           value={stats?.completedServices.toLocaleString() ?? '0'}
           icon={<CheckCircleIcon className="h-8 w-8 text-white"/>}
-          color="bg-indigo-500"
+          color="bg-primary"
         />
         <StatCard 
           title="Reportes Pendientes" 
           value={stats?.pendingReports.toLocaleString() ?? '0'}
           icon={<ClockIcon className="h-8 w-8 text-white"/>}
-          color="bg-yellow-500"
+          color="bg-warning"
         />
       </div>
 
       {/* Charts and other widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Resumen de Reportes (Últimos 6 meses)</h3>
+        <div className="lg:col-span-2 bg-base-200 p-6 rounded-xl shadow-lg">
+          <h3 className="text-xl font-semibold mb-4 text-base-content">Resumen de Reportes (Últimos 6 meses)</h3>
           <div className="h-80">
             <ReportsChart />
           </div>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
-           <h3 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white">Actividad Reciente</h3>
+        <div className="bg-base-200 p-6 rounded-xl shadow-lg">
+           <h3 className="text-xl font-semibold mb-4 text-base-content">Actividad Reciente</h3>
            {recentReports.length > 0 ? (
             <ul className="space-y-4">
               {recentReports.map(report => (
                   <li key={report.id} className="flex items-start">
-                      <div className="flex-shrink-0"><CheckCircleIcon className="h-5 w-5 text-green-500 mt-1"/></div>
+                      <div className="flex-shrink-0"><CheckCircleIcon className="h-5 w-5 text-success mt-1"/></div>
                       <div className="ml-3">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {/* FIX: Removed 'as any' type assertion for 'report.usuario' as the 'ServiceReport' type has been updated with the correct property definition. */}
+                          <p className="text-sm font-medium text-base-content">
                             {report.usuario?.nombres ?? 'Usuario desconocido'} creó el reporte #{report.codigo_reporte}.
                           </p>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                          <p className="text-sm text-neutral">
                             {new Date(report.created_at ?? '').toLocaleDateString()}
                           </p>
                       </div>
@@ -129,7 +128,7 @@ const Dashboard: React.FC = () => {
               ))}
            </ul>
            ) : (
-             <p className="text-sm text-gray-500 dark:text-gray-400">No hay actividad reciente.</p>
+             <p className="text-sm text-neutral">No hay actividad reciente.</p>
            )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 
+
 import React, { useContext, useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AuthContext } from '../../contexts/AuthContext';
@@ -139,9 +140,12 @@ const CustomizationSettings: React.FC = () => {
                   }`}
                 >
                   <div className="flex space-x-2">
-                    <div style={{ backgroundColor: palette.colors.primary }} className="h-8 w-8 rounded-full"></div>
-                    <div style={{ backgroundColor: palette.colors.secondary }} className="h-8 w-8 rounded-full"></div>
-                    <div style={{ backgroundColor: palette.colors.accent }} className="h-8 w-8 rounded-full"></div>
+                    {/* FIX: Changed palette.colors to palette.light to correctly access the ColorSet properties for the preview. */}
+                    <div style={{ backgroundColor: palette.light.primary }} className="h-8 w-8 rounded-full"></div>
+                    {/* FIX: Changed palette.colors to palette.light to correctly access the ColorSet properties for the preview. */}
+                    <div style={{ backgroundColor: palette.light.secondary }} className="h-8 w-8 rounded-full"></div>
+                    {/* FIX: Changed palette.colors to palette.light to correctly access the ColorSet properties for the preview. */}
+                    <div style={{ backgroundColor: palette.light.accent }} className="h-8 w-8 rounded-full"></div>
                   </div>
                   <p className="mt-2 text-sm font-medium text-center">{palette.name}</p>
                 </div>
