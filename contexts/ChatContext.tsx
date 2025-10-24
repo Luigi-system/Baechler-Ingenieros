@@ -4,7 +4,8 @@ import { useSupabase } from './SupabaseContext';
 import { useAiService } from './AiServiceContext';
 import { 
     systemInstruction, responseSchema, 
-    executeQueryOnDatabase, getAggregateData, performAction,
+    executeQueryOnDatabase_Gemini, getAggregateData_Gemini, performAction_Gemini,
+    executeQueryOnDatabase_OpenAI, getAggregateData_OpenAI, performAction_OpenAI,
     handleFunctionExecution
 } from '../services/aiService';
 import type { AIResponse } from '../types';
@@ -36,6 +37,30 @@ const WELCOME_MESSAGE: Message = {
     } 
 };
 
+/**
+ * Extracts and parses a JSON object from a string.
+ * It first tries to parse the string directly. If that fails, it looks for a JSON
+ * object wrapped in markdown code fences (```json ... ```) and attempts to parse that.
+ * @param text The string that may contain a JSON object.
+ * @returns The parsed AIResponse object, or null if no valid JSON is found.
+ */
+const extractAndParseJson = (text: string): AIResponse | null => {
+    try {
+        return JSON.parse(text) as AIResponse;
+    } catch (e) {
+        const jsonMatch = text.match(/```(json)?\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[2]) {
+            try {
+                return JSON.parse(jsonMatch[2]) as AIResponse;
+            } catch (innerError) {
+                console.error("Failed to parse extracted JSON block:", innerError);
+                return null;
+            }
+        }
+    }
+    return null;
+};
+
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { supabase } = useSupabase();
     const { service, geminiClient, openaiClient, isConfigured } = useAiService();
@@ -48,7 +73,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         if (service === 'gemini' && geminiClient) {
             try {
-                const geminiTools = [{ functionDeclarations: [executeQueryOnDatabase, getAggregateData, performAction] }];
+                const geminiTools = [{ functionDeclarations: [executeQueryOnDatabase_Gemini, getAggregateData_Gemini, performAction_Gemini] }];
                 const geminiConfig = {
                     tools: geminiTools,
                     systemInstruction: systemInstruction,
@@ -100,7 +125,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             } else if (service === 'openai' && openaiClient) {
                 // 1. Convert tools and history to OpenAI format
-                const openaiTools = [executeQueryOnDatabase, getAggregateData, performAction].map(tool => ({ type: 'function', function: tool }));
+                const openaiTools = [
+                    { type: 'function', function: executeQueryOnDatabase_OpenAI },
+                    { type: 'function', function: getAggregateData_OpenAI },
+                    { type: 'function', function: performAction_OpenAI }
+                ];
                 const history = messages.map(msg => {
                     if (msg.sender === 'user') return { role: 'user', content: msg.content as string };
                     // For AI, just send the text response for history context.
@@ -157,9 +186,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 throw new Error("La IA no generó una respuesta de texto.");
             }
         
-            const parsedJson = JSON.parse(finalResponse);
-            const aiMessage: Message = { sender: 'ai', content: parsedJson as AIResponse };
-            setMessages(prev => [...prev, aiMessage]);
+            const parsedJson = extractAndParseJson(finalResponse);
+
+            if (parsedJson) {
+                const aiMessage: Message = { sender: 'ai', content: parsedJson };
+                setMessages(prev => [...prev, aiMessage]);
+            } else {
+                console.warn("AI response was not valid JSON. Displaying as text. Response:", finalResponse);
+                const fallbackMessage: Message = {
+                    sender: 'ai',
+                    content: {
+                        displayText: `He recibido una respuesta, pero no tiene el formato JSON esperado. Aquí está el texto original:\n\n---\n\n${finalResponse}`
+                    }
+                };
+                setMessages(prev => [...prev, fallbackMessage]);
+            }
 
         } catch (error: any) {
             console.error("Error getting AI response:", error);

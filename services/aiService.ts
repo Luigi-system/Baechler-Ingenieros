@@ -16,7 +16,9 @@ const DATABASE_SCHEMA = `
   - Roles (id, nombre)
 `;
 
-export const executeQueryOnDatabase: FunctionDeclaration = {
+// --- GEMINI FUNCTION DECLARATIONS ---
+
+export const executeQueryOnDatabase_Gemini: FunctionDeclaration = {
   name: 'executeQueryOnDatabase',
   description: "Realiza consultas SELECT simples en la base de datos para obtener listas de registros. Ideal para 'listar', 'mostrar' o 'buscar' datos.",
   parameters: {
@@ -36,14 +38,14 @@ export const executeQueryOnDatabase: FunctionDeclaration = {
         }
       },
       orderBy: { type: Type.STRING, description: "Columna para ordenar los resultados." },
-      ascending: { type: Type.BOOLEAN, description: "Orden: true para ascendente, false para descendente." },
+      ascending: { type: Type.STRING, description: "Orden: 'true' para ascendente (defecto), 'false' para descendente." },
       limit: { type: Type.INTEGER, description: "Máximo de resultados a devolver (def: 10)." }
     },
     required: ["tableName"]
   },
 };
 
-export const getAggregateData: FunctionDeclaration = {
+export const getAggregateData_Gemini: FunctionDeclaration = {
     name: 'getAggregateData',
     description: "Realiza consultas de agregación para contar registros, sumar valores o agrupar datos. Ideal para preguntas como 'cuántos', 'total de', o 'agrupado por'.",
     parameters: {
@@ -69,7 +71,7 @@ export const getAggregateData: FunctionDeclaration = {
     }
 };
 
-export const performAction: FunctionDeclaration = {
+export const performAction_Gemini: FunctionDeclaration = {
     name: 'performAction',
     description: "Ejecuta una acción específica como actualizar ('UPDATE') o crear ('INSERT') un registro. Usar solo cuando el usuario explícitamente lo pida o después de que complete un formulario.",
     parameters: {
@@ -96,6 +98,90 @@ export const performAction: FunctionDeclaration = {
         required: ["tableName", "actionType", "updates"]
     }
 };
+
+// --- OPENAI FUNCTION DECLARATIONS ---
+
+export const executeQueryOnDatabase_OpenAI = {
+  name: 'executeQueryOnDatabase',
+  description: "Realiza consultas SELECT simples en la base de datos para obtener listas de registros. Ideal para 'listar', 'mostrar' o 'buscar' datos.",
+  parameters: {
+    type: "object",
+    properties: {
+      tableName: { type: "string", description: `La tabla a consultar. Tablas disponibles: ${allTables.join(', ')}.` },
+      select: { type: "string", description: "Campos a seleccionar, separados por comas (ej. 'nombre, ruc'). Defecto: '*'." },
+      filters: {
+        type: "array", description: "Array de filtros. Cada filtro es un objeto {column, operator, value}.",
+        items: {
+          type: "object",
+          properties: {
+            column: { type: "string" },
+            operator: { type: "string", description: "Operador de Supabase (ej. 'eq', 'gt', 'gte', 'lt', 'lte', 'ilike')." },
+            value: { type: "string" }
+          }
+        }
+      },
+      orderBy: { type: "string", description: "Columna para ordenar los resultados." },
+      ascending: { type: "boolean", description: "Orden: true para ascendente (defecto), false para descendente." },
+      limit: { type: "integer", description: "Máximo de resultados a devolver (def: 10)." }
+    },
+    required: ["tableName"]
+  },
+};
+
+export const getAggregateData_OpenAI = {
+    name: 'getAggregateData',
+    description: "Realiza consultas de agregación para contar registros, sumar valores o agrupar datos. Ideal para preguntas como 'cuántos', 'total de', o 'agrupado por'.",
+    parameters: {
+        type: "object",
+        properties: {
+            tableName: { type: "string", description: `La tabla a consultar. Tablas disponibles: ${allTables.join(', ')}.` },
+            aggregationType: { type: "string", "enum": ["COUNT", "SUM"], description: "Tipo de agregación: 'COUNT' o 'SUM'."},
+            groupByColumn: { type: "string", description: "Columna por la cual agrupar los resultados (ej. 'id_empresa')." },
+            valueColumn: { type: "string", description: "La columna a sumar si el tipo es 'SUM' (ej. 'total_facturado')." },
+            filters: {
+                type: "array", description: "Array de filtros a aplicar ANTES de la agregación.",
+                items: {
+                    type: "object",
+                    properties: {
+                        column: { type: "string" },
+                        operator: { type: "string" },
+                        value: { type: "string" }
+                    }
+                }
+            }
+        },
+        required: ["tableName", "aggregationType"]
+    }
+};
+
+export const performAction_OpenAI = {
+    name: 'performAction',
+    description: "Ejecuta una acción específica como actualizar ('UPDATE') o crear ('INSERT') un registro. Usar solo cuando el usuario explícitamente lo pida o después de que complete un formulario.",
+    parameters: {
+        type: "object",
+        properties: {
+            tableName: { type: "string", description: `La tabla a modificar. Tablas disponibles: ${allTables.join(', ')}.` },
+            actionType: { type: "string", "enum": ["UPDATE", "INSERT"], description: "La acción a realizar: 'UPDATE' o 'INSERT'." },
+            filters: {
+                type: "array", description: "Filtros para identificar el/los registro(s) a actualizar (solo para UPDATE).",
+                items: {
+                    type: "object",
+                    properties: {
+                        column: { type: "string" },
+                        operator: { type: "string" },
+                        value: { type: "string" }
+                    }
+                }
+            },
+            updates: {
+                type: "string",
+                description: "Un string JSON con los pares columna-valor a actualizar (para UPDATE) o el objeto completo del nuevo registro (para INSERT). Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"facturado\": true}'"
+            }
+        },
+        required: ["tableName", "actionType", "updates"]
+    }
+};
+
 
 export const responseSchema = {
     type: Type.OBJECT,
@@ -195,7 +281,11 @@ export const handleFunctionExecution = async (call: any, supabase: SupabaseClien
             if (args.filters && Array.isArray(args.filters)) {
                 args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
             }
-            if (args.orderBy) query = query.order(args.orderBy as string, { ascending: args.ascending !== false });
+            if (args.orderBy) {
+                // This logic handles both boolean (from OpenAI) and string 'false' (from Gemini)
+                const ascending = args.ascending !== false && args.ascending !== 'false';
+                query = query.order(args.orderBy as string, { ascending });
+            }
             query = query.limit(args.limit as number || 10);
             const { data, error } = await query;
             if (error) throw error;
