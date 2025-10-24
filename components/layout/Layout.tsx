@@ -1,6 +1,7 @@
 
 
-import React, { useState } from 'react';
+
+import React, { useState, useContext } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Dashboard from '../dashboard/Dashboard';
@@ -9,6 +10,7 @@ import Assistant from '../assistant/Assistant';
 import ReportForm from '../reports/ReportForm';
 import VisitReportForm from '../reports/VisitReportForm';
 import { AssistantIcon } from '../ui/Icons';
+import { useChat } from '../../contexts/ChatContext';
 
 // Management Components
 import CompanyList from '../management/companies/CompanyList';
@@ -30,6 +32,16 @@ const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
   const [editingReportId, setEditingReportId] = useState<number | null>(null);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const { hasUnreadMessage, clearUnread } = useChat();
+
+  const handleOpenAssistant = () => {
+    setIsAssistantOpen(true);
+    clearUnread();
+  };
+  
+  const handleCloseAssistant = () => {
+    setIsAssistantOpen(false);
+  };
 
   const navigateTo = (page: string) => {
     setActivePage(page);
@@ -110,14 +122,17 @@ const Layout: React.FC = () => {
       </main>
       
       <button 
-        onClick={() => setIsAssistantOpen(true)}
+        onClick={handleOpenAssistant}
         className="fixed bottom-6 right-6 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary-focus transition-transform hover:scale-110 z-40"
         title="Asistente IA"
       >
         <AssistantIcon className="h-8 w-8" />
+         {hasUnreadMessage && (
+            <span className="absolute top-0 right-0 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />
+        )}
       </button>
 
-      <Assistant isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
+      <Assistant isOpen={isAssistantOpen} onClose={handleCloseAssistant} />
     </div>
   );
 };

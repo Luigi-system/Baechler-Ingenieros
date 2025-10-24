@@ -1,16 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { BarChart, Bar, PieChart, Pie, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { SendIcon, AssistantIcon, XIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
-import { useSupabase } from '../../contexts/SupabaseContext';
+import { useChat, Message } from '../../contexts/ChatContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { useAiService } from '../../contexts/AiServiceContext';
-import { getAIInsight } from '../../services/aiService';
-import type { AIResponse, TableData } from '../../types';
-
-interface Message {
-  sender: 'user' | 'ai';
-  content: string | AIResponse;
-}
+import type { AIResponse, TableData, ChartData, Action, FormField } from '../../types';
 
 interface AssistantProps {
   isOpen: boolean;
@@ -43,26 +39,83 @@ const SimpleTable: React.FC<{ data: TableData }> = ({ data }) => {
     );
 };
 
+const BarChartComponent: React.FC<{ data: any[] }> = ({ data }) => {
+    const { themeMode } = useTheme();
+    const tickColor = themeMode === 'dark' ? '#9CA3AF' : '#6B7280';
+    return (
+        <div className="mt-3 h-60">
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                    <XAxis dataKey="name" stroke={tickColor} fontSize={12} />
+                    <YAxis stroke={tickColor} fontSize={12}/>
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--color-base-200)', border: '1px solid var(--color-base-border)' }}/>
+                    <Bar dataKey="value" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+            </ResponsiveContainer>
+        </div>
+    );
+};
+
+const PieChartComponent: React.FC<{ data: any[] }> = ({ data }) => {
+    const COLORS = ['var(--color-primary)', 'var(--color-secondary)', 'var(--color-accent)', '#34d399', '#f9a8d4'];
+    return (
+        <div className="mt-3 h-60">
+            <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                    <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label>
+                         {data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--color-base-200)', border: '1px solid var(--color-base-border)' }}/>
+                    <Legend />
+                </PieChart>
+            </ResponsiveContainer>
+        </div>
+    );
+};
 
 const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
-  const { supabase } = useSupabase();
   const { service, isConfigured } = useAiService();
-  const [messages, setMessages] = useState<Message[]>([
-    { 
-        sender: 'ai', 
-        content: { 
-            displayText: '¡Hola! Soy tu asistente de datos. ¿En qué puedo ayudarte hoy?',
-            suggestions: ["Muéstrame los 5 reportes de servicio más recientes", "¿Cuántas empresas hay en total?", "Crea un listado de máquinas y sus modelos"]
-        } 
-    }
-  ]);
+  const { messages, isLoading, sendMessage, setHasUnreadMessage } = useChat();
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  
+  const [activeForm, setActiveForm] = useState<{ messageIndex: number; fields: FormField[] } | null>(null);
+  const [formValues, setFormValues] = useState<Record<string, any>>({});
+
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  useEffect(scrollToBottom, [messages]);
   
+  useEffect(() => {
+    scrollToBottom();
+    // Find the last message from the AI that contains a form
+    const lastAiMessageWithForm = [...messages].reverse().find(msg => msg.sender === 'ai' && (msg.content as AIResponse).form);
+    
+    if (lastAiMessageWithForm) {
+        const messageIndex = messages.indexOf(lastAiMessageWithForm);
+        const fields = (lastAiMessageWithForm.content as AIResponse).form!;
+        
+        // Only update if the form is different from the current active one
+        if (activeForm?.messageIndex !== messageIndex) {
+            setActiveForm({ messageIndex, fields });
+            const initialValues = fields.reduce((acc, field) => {
+                acc[field.name] = field.type === 'checkbox' ? false : '';
+                return acc;
+            }, {} as Record<string, any>);
+            setFormValues(initialValues);
+        }
+    } else {
+        if (activeForm) {
+            setActiveForm(null); // Clear form if no longer present in last message
+        }
+    }
+  }, [messages]);
+  
+  useEffect(() => {
+    if (messages.length > 0 && messages[messages.length - 1].sender === 'ai' && !isOpen) {
+        setHasUnreadMessage(true);
+    }
+  }, [messages, isOpen, setHasUnreadMessage]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -77,32 +130,30 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
 
   const handleSend = useCallback(async (prompt: string) => {
     if (prompt.trim() === '' || isLoading) return;
-
-    const userMessage: Message = { sender: 'user', content: prompt };
-    setMessages(prev => [...prev, userMessage]);
     setInput('');
-    setIsLoading(true);
+    await sendMessage(prompt);
+  }, [isLoading, sendMessage]);
 
-    try {
-      if (!supabase) throw new Error("La conexión a Supabase no está disponible.");
+  const handleActionClick = (actionPrompt: string) => {
+    handleSend(actionPrompt);
+  };
+  
+  const handleFormInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value, type } = e.target;
+      const isCheckbox = type === 'checkbox';
+      const checked = (e.target as HTMLInputElement).checked;
+      setFormValues(prev => ({ ...prev, [name]: isCheckbox ? checked : value }));
+  };
+
+  const handleFormSubmit = async () => {
+      if (!activeForm) return;
+
+      const submissionPrompt = `El usuario ha completado el formulario con los siguientes datos: ${JSON.stringify(formValues)}. Procede a crear el registro en la base de datos.`;
       
-      const aiResponse = await getAIInsight(prompt, supabase);
-      const aiMessage: Message = { sender: 'ai', content: aiResponse };
-      setMessages(prev => [...prev, aiMessage]);
-
-    } catch (error: any) {
-        console.error("Error getting AI response:", error);
-        const errorMessage: Message = { 
-            sender: 'ai', 
-            content: {
-                displayText: `Lo siento, ocurrió un error: ${error.message}`
-            } 
-        };
-        setMessages(prev => [...prev, errorMessage]);
-    } finally {
-        setIsLoading(false);
-    }
-  }, [isLoading, supabase]);
+      setActiveForm(null);
+      setFormValues({});
+      await sendMessage(submissionPrompt);
+  };
 
   if (!isOpen) return null;
 
@@ -128,7 +179,7 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                     if (isUser && typeof content === 'string') {
                         return (
                           <div key={index} className="flex justify-end">
-                            <div className="max-w-sm px-4 py-2 rounded-2xl bg-primary text-white rounded-br-none">{content}</div>
+                            <div className="max-w-lg px-4 py-2 rounded-2xl bg-primary text-white rounded-br-none">{content}</div>
                           </div>
                         );
                     }
@@ -137,9 +188,41 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                         return (
                           <div key={index} className="flex items-start gap-3 justify-start">
                              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><AssistantIcon className="h-5 w-5 text-white"/></div>
-                            <div className="max-w-sm p-3 rounded-2xl bg-base-300 rounded-bl-none w-full">
+                            <div className="max-w-lg p-3 rounded-2xl bg-base-300 rounded-bl-none w-full">
                                 <div className="prose prose-sm max-w-none prose-zinc dark:prose-invert text-base-content"><ReactMarkdown>{aiContent.displayText}</ReactMarkdown></div>
                                 {aiContent.table && <SimpleTable data={aiContent.table} />}
+                                {aiContent.chart && aiContent.chart.type === 'bar' && <BarChartComponent data={aiContent.chart.data} />}
+                                {aiContent.chart && aiContent.chart.type === 'pie' && <PieChartComponent data={aiContent.chart.data} />}
+                                {aiContent.actions && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        {aiContent.actions.map((action, i) => (
+                                            <button key={i} onClick={() => handleActionClick(action.prompt)} className="px-3 py-1.5 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary-focus transition-colors">
+                                                {action.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                {aiContent.form && activeForm?.messageIndex === index && (
+                                    <form onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }} className="mt-4 space-y-3 p-3 bg-base-100/50 rounded-lg">
+                                        <p className="text-sm font-semibold text-base-content">Por favor, completa el formulario:</p>
+                                        {activeForm.fields.map(field => (
+                                            <div key={field.name}>
+                                                <label htmlFor={field.name} className="block text-xs font-medium mb-1">{field.label}</label>
+                                                {field.type === 'text' && <input type="text" id={field.name} name={field.name} value={formValues[field.name] || ''} onChange={handleFormInputChange} className="w-full text-sm input-style" required />}
+                                                {field.type === 'select' && (
+                                                    <select id={field.name} name={field.name} value={formValues[field.name] || ''} onChange={handleFormInputChange} className="w-full text-sm input-style" required>
+                                                        <option value="" disabled>Selecciona...</option>
+                                                        {field.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                    </select>
+                                                )}
+                                                {field.type === 'checkbox' && <input type="checkbox" id={field.name} name={field.name} checked={formValues[field.name] || false} onChange={handleFormInputChange} className="rounded text-primary focus:ring-primary"/>}
+                                            </div>
+                                        ))}
+                                        <button type="submit" className="w-full text-sm font-semibold bg-primary text-white rounded-md py-2 hover:bg-primary-focus transition-colors">
+                                            Enviar Datos
+                                        </button>
+                                    </form>
+                                )}
                                 {aiContent.suggestions && (
                                 <div className="mt-3 flex flex-wrap gap-1.5">
                                     {aiContent.suggestions.map((s, i) => (
@@ -192,7 +275,7 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-end p-4" onClick={onClose}>
         <div 
-            className="bg-base-200 rounded-xl shadow-2xl w-full max-w-md h-[85vh] flex flex-col animate-slide-in-up" 
+            className="bg-base-200 rounded-xl shadow-2xl w-full max-w-2xl h-[85vh] flex flex-col animate-slide-in-up" 
             onClick={e => e.stopPropagation()}
         >
             <div className="flex items-center justify-between p-4 border-b border-base-border shrink-0">

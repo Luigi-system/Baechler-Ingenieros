@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useCallback } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import Login from './components/auth/Login';
@@ -8,6 +9,7 @@ import { AuthContext } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from './contexts/SupabaseContext';
 import { AiServiceProvider } from './contexts/AiServiceContext';
+import { ChatProvider } from './contexts/ChatContext';
 import type { User } from './types';
 
 const AppContent: React.FC = () => {
@@ -142,7 +144,9 @@ const App: React.FC = () => {
     <SupabaseProvider>
       <AiServiceProvider>
         <ThemeProvider>
-          <AppContent />
+          <ChatProvider>
+            <AppContent />
+          </ChatProvider>
         </ThemeProvider>
       </AiServiceProvider>
     </SupabaseProvider>

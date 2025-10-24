@@ -220,11 +220,32 @@ export interface Supervisor {
 // Types for AI Assistant
 export interface TableData {
   headers: string[];
-  rows: string[][];
+  rows: (string | number | null)[][];
+}
+
+export interface ChartData {
+  type: 'bar' | 'pie';
+  data: { name: string; value: number }[];
+}
+
+export interface Action {
+  label: string;
+  prompt: string;
+  style?: 'primary' | 'secondary' | 'danger';
+}
+
+export interface FormField {
+    type: 'text' | 'select' | 'checkbox';
+    name: string;
+    label: string;
+    options?: string[];
 }
 
 export interface AIResponse {
   displayText: string;
   table?: TableData;
+  chart?: ChartData;
+  actions?: Action[];
+  form?: FormField[];
   suggestions?: string[];
 }
