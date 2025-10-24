@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSupabase } from '../../contexts/SupabaseContext';
 import type { Role } from '../../types';
@@ -115,7 +116,7 @@ const AccessManagement: React.FC = () => {
             </div>
 
             <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
-                <div className="overflow-y-auto">
+                <div className="overflow-y-auto custom-scrollbar">
                     <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700">
                             <tr>

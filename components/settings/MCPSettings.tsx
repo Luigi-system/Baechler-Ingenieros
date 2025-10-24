@@ -1,9 +1,10 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { SaveIcon } from '../ui/Icons';
+import { SaveIcon, LinkIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 
-const DEFAULT_MCP_URL = 'https://mcp.supabase.com/mcp?project_ref=jhhlrndxepowacrndhni&read_only=true';
+const DEFAULT_MCP_URL = 'https://jhhlrndxepowacrndhni.supabase.co/functions/v1/mcp';
 
 const MCPSettings: React.FC = () => {
     const [mcpUrl, setMcpUrl] = useState('');
@@ -45,23 +46,28 @@ const MCPSettings: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white">Configuración de MCP</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Gestiona la URL de conexión para el MCP (Multi-Cloud Project). Esta configuración es global para la aplicación.
-                </p>
+        <div className="bg-base-200 p-6 sm:p-8 rounded-xl shadow-lg transition-all duration-300 hover:shadow-2xl">
+            <div className="flex items-start gap-4 border-b border-base-border pb-4 mb-6">
+                <div className="bg-primary/10 text-primary p-3 rounded-lg">
+                    <LinkIcon className="h-8 w-8" />
+                </div>
+                <div>
+                    <h3 className="text-xl font-bold text-base-content">Configuración de MCP</h3>
+                    <p className="mt-1 text-sm text-neutral">
+                        Gestiona la URL de conexión para el MCP (Multi-Cloud Project). Esta configuración es global.
+                    </p>
+                </div>
             </div>
             
             <div className="space-y-4">
                 <div>
-                    <label htmlFor="mcp-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">URL del MCP</label>
+                    <label htmlFor="mcp-url" className="block text-sm font-medium">URL del MCP</label>
                     <input 
                         type="text" 
                         id="mcp-url" 
                         value={mcpUrl}
                         onChange={(e) => setMcpUrl(e.target.value)}
-                        className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600"
+                        className="mt-1 block w-full input-style"
                         placeholder="https://mcp.supabase.com/..."
                         disabled={isSaving}
                     />
@@ -69,20 +75,20 @@ const MCPSettings: React.FC = () => {
             </div>
 
             {feedback && (
-                <div className={`p-3 rounded-md text-sm ${
-                    feedback.type === 'success' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' :
-                    feedback.type === 'error' ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' :
-                    'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
+                <div className={`mt-6 p-3 rounded-md text-sm transition-opacity duration-300 ${
+                    feedback.type === 'success' ? 'bg-success/10 text-success' :
+                    feedback.type === 'error' ? 'bg-error/10 text-error' :
+                    'bg-info/10 text-info'
                 }`}>
                     {feedback.message}
                 </div>
             )}
 
-            <div className="flex justify-end pt-2">
+            <div className="flex justify-end pt-6 mt-6 border-t border-base-border">
                 <button 
                     onClick={handleSave} 
                     disabled={isSaving}
-                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 transition-colors disabled:bg-primary/50 disabled:cursor-not-allowed"
+                    className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-focus focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-opacity-75 transition-colors disabled:bg-primary/50 disabled:cursor-not-allowed"
                 >
                     {isSaving ? <Spinner /> : <SaveIcon className="h-5 w-5" />}
                     {isSaving ? 'Guardando...' : 'Guardar Configuración'}

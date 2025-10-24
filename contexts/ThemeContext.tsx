@@ -1,8 +1,10 @@
 
+
 import React, { createContext, useState, useContext, useEffect, useMemo } from 'react';
 import type { ThemeMode, ColorPalette } from '../types';
 import { COLOR_PALETTES, DEFAULT_PALETTE } from '../constants/themes';
 import { AuthContext } from './AuthContext';
+import { useSupabase } from './SupabaseContext';
 
 interface ThemeContextType {
   themeMode: ThemeMode;
@@ -21,21 +23,46 @@ const DEFAULT_LOGO_URL = 'https://jhhlrndxepowacrndhni.supabase.co/storage/v1/ob
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useContext(AuthContext);
+  const { supabase } = useSupabase();
 
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [currentPalette, setCurrentPalette] = useState<ColorPalette>(DEFAULT_PALETTE);
   const [logoUrl, setLogoUrl] = useState<string>(DEFAULT_LOGO_URL);
   const [appTitle, setAppTitle] = useState<string>('Report-AI');
 
-  // Initialize theme from user profile on login
+  // Effect to fetch global branding settings once on app load
+  useEffect(() => {
+    const fetchGeneralBranding = async () => {
+        if (!supabase) return;
+
+        const { data, error } = await supabase
+            .from('Configuracion')
+            .select('value')
+            .eq('key', 'general_branding')
+            .is('id_usuario', null)
+            .maybeSingle();
+        
+        if (error) {
+            console.warn(`Could not fetch general branding settings: ${error.message}`);
+        } else if (data && data.value) {
+            try {
+                const settings = JSON.parse(data.value);
+                if (settings.app_title) setAppTitle(settings.app_title);
+                if (settings.logo_url) setLogoUrl(settings.logo_url);
+            } catch (e) {
+                console.error("Failed to parse general branding JSON:", e);
+            }
+        }
+    };
+    fetchGeneralBranding();
+  }, [supabase]);
+
+  // Effect to load user-specific theme palette on login
   useEffect(() => {
     if (auth?.user) {
       const userPaletteName = auth.user.color_palette_name;
       const userPalette = COLOR_PALETTES.find(p => p.name === userPaletteName) || DEFAULT_PALETTE;
       setCurrentPalette(userPalette);
-
-      setLogoUrl(auth.user.logo_url || DEFAULT_LOGO_URL);
-      setAppTitle(auth.user.app_title || 'Report-AI');
     }
   }, [auth?.user]);
   
@@ -56,7 +83,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const colorsToApply = themeMode === 'dark' ? currentPalette.dark : currentPalette.light;
     
     for (const [name, value] of Object.entries(colorsToApply)) {
-      // FIX: Cast `value` to string, as Object.entries types it as `unknown` but our ColorSet guarantees a string.
       root.style.setProperty(`--color-${name}`, value as string);
     }
   }, [currentPalette, themeMode]);

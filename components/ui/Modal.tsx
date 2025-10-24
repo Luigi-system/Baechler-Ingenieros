@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { XIcon } from './Icons';
 
@@ -38,7 +39,7 @@ const Modal: React.FC<ModalProps> = ({
             </button>
           </div>
         )}
-        <div className={hasPadding ? "p-6 overflow-y-auto" : "overflow-y-auto"}>
+        <div className={`${hasPadding ? "p-6" : ""} overflow-y-auto custom-scrollbar`}>
           {children}
         </div>
       </div>

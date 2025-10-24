@@ -216,3 +216,15 @@ export interface Supervisor {
     id_empresa: number;
     empresa_nombre?: string;
 }
+
+// Types for AI Assistant
+export interface TableData {
+  headers: string[];
+  rows: string[][];
+}
+
+export interface AIResponse {
+  displayText: string;
+  table?: TableData;
+  suggestions?: string[];
+}

@@ -1,10 +1,12 @@
+
+
 import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { 
     DashboardIcon, ReportsIcon, SettingsIcon, 
     ChevronLeftIcon, MenuIcon, BuildingIcon, IndustryIcon, 
     CogIcon, UserCircleIcon, PaletteIcon, DatabaseIcon, 
-    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, LinkIcon
+    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon
 } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 
@@ -44,8 +46,8 @@ const navItems = [
       permission: 'settings',
       subItems: [
         { id: 'settings-customization', label: 'Personalización', icon: PaletteIcon, permission: 'settings' },
+        { id: 'settings-ai', label: 'Servicios de IA', icon: CpuChipIcon, permission: 'settings' },
         { id: 'settings-database', label: 'Base de Datos', icon: DatabaseIcon, permission: 'settings' },
-        { id: 'settings-mcp', label: 'MCP', icon: LinkIcon, permission: 'settings' },
         { id: 'settings-users', label: 'Usuarios', icon: UsersIcon, permission: 'settings' },
         { id: 'settings-roles', label: 'Roles', icon: ShieldCheckIcon, permission: 'settings' },
         { id: 'settings-access', label: 'Accesos', icon: KeyIcon, permission: 'settings' },
@@ -58,7 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   const auth = useContext(AuthContext);
   const { logoUrl, appTitle } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set(['reports', 'management']));
+  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set(['reports', 'management', 'settings']));
 
   const toggleMenu = (id: string) => {
     setOpenMenus(prev => {
@@ -84,7 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
         {!isCollapsed && <span className="ml-3 text-2xl font-bold text-primary">{appTitle}</span>}
       </div>
 
-      <nav className="flex-1 px-2 py-4 overflow-y-auto">
+      <nav className="flex-1 px-2 py-4 overflow-y-auto custom-scrollbar">
         <ul>
           {filteredNavItems.map(item => (
             <li key={item.id}>

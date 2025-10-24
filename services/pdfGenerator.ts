@@ -1,4 +1,5 @@
 
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ServiceReport, VisitReport } from '../types';
@@ -7,21 +8,70 @@ type OutputType = 'save' | 'datauristring';
 
 // --- HELPER FUNCTIONS ---
 
-const addHeaderAndFooter = (doc: jsPDF, logoUrl: string, title: string) => {
-    const pageCount = doc.internal.getNumberOfPages();
+/**
+ * Fetches an image from a URL and converts it to a base64 data string.
+ * This method uses the `fetch` API to avoid CORS issues that can occur
+ * when loading images directly onto a canvas from a different origin.
+ * @param url The URL of the image to fetch.
+ * @returns A Promise that resolves with the base64 data URL.
+ */
+const getBase64ImageFromUrl = async (url: string): Promise<string> => {
+  try {
+    // Use fetch to get the image data, which is more robust with CORS.
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Network response was not ok: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    
+    // Use FileReader to convert the blob to a base64 data URL.
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (reader.result) {
+          resolve(reader.result as string);
+        } else {
+          reject(new Error('FileReader failed to produce a result.'));
+        }
+      };
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error(`Error in getBase64ImageFromUrl for URL: ${url}`, error);
+    // Rethrow to be caught by the caller
+    throw error;
+  }
+};
+
+
+const addHeaderAndFooter = async (doc: jsPDF, logoUrl: string, title: string) => {
+    let logoDataUrl: string | null = null;
+    if (logoUrl) {
+        try {
+            // Fetch the image and convert it to base64
+            logoDataUrl = await getBase64ImageFromUrl(logoUrl);
+        } catch (e) {
+            console.error("Failed to fetch or convert logo URL to base64:", e);
+        }
+    }
+
+    // FIX: Property 'getNumberOfPages' does not exist on type '{...}'. Cast to 'any' to bypass inaccurate type definitions.
+    const pageCount = (doc as any).internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         
         // HEADER
-        try {
-            // A default or placeholder could be used if logoUrl is invalid
-            if (logoUrl) {
-                const imgFormat = logoUrl.substring(logoUrl.lastIndexOf('.') + 1).toUpperCase();
-                 doc.addImage(logoUrl, imgFormat, 15, 10, 30, 15, undefined, 'FAST');
+        if (logoDataUrl) {
+            try {
+                 // Use the fetched base64 data URL
+                 doc.addImage(logoDataUrl, 'PNG', 15, 10, 30, 15, undefined, 'FAST');
+            } catch (e) {
+                console.error("Could not add logo to PDF header:", e);
+                doc.text("Logo", 15, 15); // Fallback text
             }
-        } catch (e) {
-            console.error("Could not add logo to PDF header:", e);
-             doc.text("Logo", 15, 15);
+        } else {
+            doc.text("Logo", 15, 15); // Fallback if no logoUrl or fetch failed
         }
        
         doc.setFontSize(14).setFont(undefined, 'bold');
@@ -178,7 +228,7 @@ export const generateServiceReport = async (
     });
 
     // --- ADD HEADERS AND FOOTERS TO ALL PAGES ---
-    addHeaderAndFooter(doc, logoUrl, 'REPORTE DE SERVICIO');
+    await addHeaderAndFooter(doc, logoUrl, 'REPORTE DE SERVICIO');
     
     if (outputType === 'save') {
         doc.save(`reporte-servicio-${report.codigo_reporte || 'NUEVO'}.pdf`);
@@ -258,7 +308,7 @@ export const generateVisitReport = async (
     });
     
     // --- ADD HEADERS AND FOOTERS TO ALL PAGES ---
-    addHeaderAndFooter(doc, logoUrl, 'REPORTE DE VISITA');
+    await addHeaderAndFooter(doc, logoUrl, 'REPORTE DE VISITA');
 
     if (outputType === 'save') {
         doc.save(`reporte-visita-${report.codigo_reporte || 'NUEVO'}.pdf`);

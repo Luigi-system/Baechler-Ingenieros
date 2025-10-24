@@ -1,5 +1,7 @@
+
+
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { UploadIcon, SparklesIcon, BackIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import Modal from '../ui/Modal';
@@ -11,6 +13,7 @@ import ImageUpload from '../ui/ImageUpload'; // Import the new reusable componen
 import { useSupabase } from '../../contexts/SupabaseContext';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAiService } from '../../contexts/AiServiceContext';
 import { generateServiceReport } from '../../services/pdfGenerator';
 import type { ServiceReport, Company, Plant, Machine, Supervisor } from '../../types';
 
@@ -31,6 +34,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const { supabase } = useSupabase();
     const auth = useContext(AuthContext);
     const { logoUrl } = useTheme();
+    const { aiClient, service, isConfigured } = useAiService();
 
     const [formData, setFormData] = useState<Partial<ServiceReport>>({ fecha: new Date().toISOString().split('T')[0], estado: false });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -281,31 +285,57 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setFileName(file.name);
         setIsAiLoading(true);
         setAiError(null);
+
+        if (!isConfigured(service) || !aiClient) {
+            setAiError(`El servicio de IA (${service}) no está configurado.`);
+            setIsAiLoading(false);
+            return;
+        }
+
         try {
             const base64Data = await fileToBase64(file);
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }, { text: "Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa, serie_maquina, modelo_maquina, problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON." } ] }],
-                config: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: Type.OBJECT,
-                        properties: {
-                            codigo_reporte: { type: Type.STRING },
-                            fecha: { type: Type.STRING },
-                            entrada: { type: Type.STRING },
-                            salida: { type: Type.STRING },
-                            nombre_empresa: { type: Type.STRING },
-                            serie_maquina: { type: Type.STRING },
-                            modelo_maquina: { type: Type.STRING },
-                            problemas_encontrados: { type: Type.STRING },
-                            acciones_realizadas: { type: Type.STRING },
-                            observaciones: { type: Type.STRING },
+            const textPrompt = "Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa, serie_maquina, modelo_maquina, problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON.";
+            
+            let response;
+
+            if (service === 'gemini') {
+                 response = await aiClient.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                codigo_reporte: { type: Type.STRING },
+                                fecha: { type: Type.STRING },
+                                entrada: { type: Type.STRING },
+                                salida: { type: Type.STRING },
+                                nombre_empresa: { type: Type.STRING },
+                                serie_maquina: { type: Type.STRING },
+                                modelo_maquina: { type: Type.STRING },
+                                problemas_encontrados: { type: Type.STRING },
+                                acciones_realizadas: { type: Type.STRING },
+                                observaciones: { type: Type.STRING },
+                            }
                         }
+                    },
+                });
+            } else { // OpenAI
+                response = await aiClient.models.generateContent({
+                    contents: [{
+                        parts: [
+                            { text: textPrompt },
+                            { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }
+                        ]
+                    }],
+                    config: {
+                        // The client implementation will use response_format: { type: "json_object" }
+                        responseSchema: {} // Dummy schema to trigger JSON mode in our client
                     }
-                },
-            });
+                });
+            }
+
             const parsed = JSON.parse(response.text);
             
             if (parsed.nombre_empresa) {
@@ -330,9 +360,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             delete parsed.nombre_empresa;
             setFormData(prev => ({ ...prev, ...parsed }));
 
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            setAiError("Error al procesar el documento con IA. Por favor, inténtalo de nuevo.");
+            setAiError(`Error al procesar con ${service}: ${e.message || "Por favor, inténtalo de nuevo."}`);
         } finally {
             setIsAiLoading(false);
         }
@@ -406,7 +436,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
   return (
     <div className="flex h-full gap-4">
         {/* Form Section */}
-        <div className="flex-1 overflow-y-auto pr-2">
+        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <div className="flex items-center mb-6">
                 <button onClick={onBack} className="p-2 mr-4 rounded-full hover:bg-base-300 transition"><BackIcon className="h-6 w-6" /></button>
                 <h2 className="text-3xl font-bold">{reportId ? `Editar Reporte` : 'Crear Reporte'}</h2>
@@ -417,7 +447,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     <div className="mt-4">
                     <label htmlFor="file-upload" className="relative cursor-pointer bg-base-200 rounded-md font-medium text-primary hover:text-primary-focus focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
                         <div className="flex items-center justify-center w-full px-6 py-4 border-2 border-base-border border-dashed rounded-md"><UploadIcon className="h-8 w-8 text-neutral mr-3" /><span className="text-neutral">{fileName || "Haz clic para subir un documento"}</span></div>
-                        <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleAiFileChange} accept="image/*,application/pdf" disabled={isAiLoading}/>
+                        <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleAiFileChange} accept="image/*,application/pdf" disabled={isAiLoading || !isConfigured(service)}/>
                     </label>
                     {isAiLoading && <div className="mt-2 flex items-center"><Spinner /><span className="ml-2">La IA está analizando tu documento...</span></div>}
                     {aiError && <p className="mt-2 text-sm text-error">{aiError}</p>}
@@ -447,7 +477,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="company-search" type="text" value={companySearchText} onChange={(e) => setCompanySearchText(e.target.value)} onFocus={() => setShowCompanySuggestions(true)} placeholder="Escribir o buscar empresa..." className="w-full input-style" autoComplete="off" />
                                         {showCompanySuggestions && companySuggestions.length > 0 && (
-                                            <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                            <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {companySuggestions.map(c => <li key={c.id} onMouseDown={() => handleSelectCompany(c)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}
                                             </ul>
                                         )}
@@ -465,7 +495,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => setPlantSearchText(e.target.value)} onFocus={() => setShowPlantSuggestions(true)} disabled={!formData.id_empresa} placeholder="Seleccionar Planta" className="w-full input-style" autoComplete="off" />
                                         {showPlantSuggestions && plantSuggestions.length > 0 && (
-                                            <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                            <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {plantSuggestions.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}
                                             </ul>
                                         )}
@@ -483,7 +513,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="machine-search" type="text" value={machineSearchText} onChange={(e) => setMachineSearchText(e.target.value)} onFocus={() => setShowMachineSuggestions(true)} disabled={!formData.id_planta} placeholder="Escribir o buscar N° Serie..." className="w-full input-style" autoComplete="off" />
                                         {showMachineSuggestions && machineSuggestions.length > 0 && (
-                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {machineSuggestions.map(m => <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{m.serie}</li>)}
                                             </ul>
                                         )}
@@ -501,7 +531,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                     <div className="relative flex-grow">
                                         <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formData.id_planta} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
                                         {showSupervisorSuggestions && supervisorSuggestions.length > 0 && (
-                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {supervisorSuggestions.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}
                                             </ul>
                                         )}
@@ -584,16 +614,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
       
       {/* Modals */}
       <Modal isOpen={isNewCompanyModalOpen} onClose={() => setIsNewCompanyModalOpen(false)} title="Añadir Nueva Empresa"><CompanyForm company={null} onSave={handleCompanySaved} onCancel={() => setIsNewCompanyModalOpen(false)}/></Modal>
-      <Modal isOpen={isCompanySearchModalOpen} onClose={() => setIsCompanySearchModalOpen(false)} title="Buscar Empresa"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{companies.map(c => <li key={c.id} onClick={() => handleSelectCompany(c)} className="p-3 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}</ul></Modal>
+      <Modal isOpen={isCompanySearchModalOpen} onClose={() => setIsCompanySearchModalOpen(false)} title="Buscar Empresa"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{companies.map(c => <li key={c.id} onClick={() => handleSelectCompany(c)} className="p-3 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}</ul></Modal>
       
       <Modal isOpen={isNewPlantModalOpen} onClose={() => setIsNewPlantModalOpen(false)} title="Añadir Nueva Planta"><PlantForm plant={null} onSave={handlePlantSaved} onCancel={() => setIsNewPlantModalOpen(false)}/></Modal>
-      <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{filteredPlants.map(p => <li key={p.id} onClick={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}</ul></Modal>
+      <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredPlants.map(p => <li key={p.id} onClick={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}</ul></Modal>
       
       <Modal isOpen={isNewMachineModalOpen} onClose={() => setIsNewMachineModalOpen(false)} title="Añadir Nueva Máquina"><MachineForm machine={null} onSave={handleMachineSaved} onCancel={() => setIsNewMachineModalOpen(false)}/></Modal>
-      <Modal isOpen={isMachineSearchModalOpen} onClose={() => setIsMachineSearchModalOpen(false)} title="Buscar Máquina"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{filteredMachines.map(m => <li key={m.id} onClick={() => handleSelectMachine(m)} className="p-3 cursor-pointer hover:bg-base-300">{m.serie} - {m.modelo}</li>)}</ul></Modal>
+      <Modal isOpen={isMachineSearchModalOpen} onClose={() => setIsMachineSearchModalOpen(false)} title="Buscar Máquina"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredMachines.map(m => <li key={m.id} onClick={() => handleSelectMachine(m)} className="p-3 cursor-pointer hover:bg-base-300">{m.serie} - {m.modelo}</li>)}</ul></Modal>
 
       <Modal isOpen={isNewSupervisorModalOpen} onClose={() => setIsNewSupervisorModalOpen(false)} title="Añadir Nuevo Encargado"><SupervisorForm supervisor={null} onSave={handleSupervisorSaved} onCancel={() => setIsNewSupervisorModalOpen(false)}/></Modal>
-      <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border">{filteredSupervisors.map(s => <li key={s.id} onClick={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}</ul></Modal>
+      <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredSupervisors.map(s => <li key={s.id} onClick={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}</ul></Modal>
     </div>
   );
 };

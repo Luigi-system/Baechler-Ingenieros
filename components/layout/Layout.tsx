@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -7,7 +8,6 @@ import ReportList from '../reports/ReportList';
 import Assistant from '../assistant/Assistant';
 import ReportForm from '../reports/ReportForm';
 import VisitReportForm from '../reports/VisitReportForm';
-import Modal from '../ui/Modal';
 import { AssistantIcon } from '../ui/Icons';
 
 // Management Components
@@ -18,13 +18,13 @@ import SupervisorList from '../management/supervisors/SupervisorList';
 
 // Settings Components
 import CustomizationSettings from '../settings/CustomizationSettings';
+import AiSettings from '../settings/AiSettings';
 import DatabaseSettings from '../settings/DatabaseSettings';
 import UserManagement from '../settings/UserManagement';
 import RoleManagement from '../settings/RoleManagement';
 import DataImporter from '../settings/DataImporter';
 import AccessManagement from '../settings/AccessManagement';
 import ProfileSettings from '../settings/ProfileSettings';
-import MCPSettings from '../settings/MCPSettings';
 
 const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
@@ -79,10 +79,10 @@ const Layout: React.FC = () => {
       // Settings Pages
       case 'settings-customization':
         return <CustomizationSettings />;
+      case 'settings-ai':
+        return <AiSettings />;
       case 'settings-database':
         return <DatabaseSettings />;
-       case 'settings-mcp':
-        return <MCPSettings />;
       case 'settings-users':
         return <UserManagement />;
       case 'settings-roles':
@@ -104,22 +104,20 @@ const Layout: React.FC = () => {
       <Sidebar activePage={activePage} setActivePage={navigateTo} />
       <main className="flex-1 flex flex-col overflow-hidden">
         <Header onNavigateToProfile={() => navigateTo('settings-profile')} />
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
           {renderContent()}
         </div>
       </main>
       
       <button 
         onClick={() => setIsAssistantOpen(true)}
-        className="fixed bottom-6 right-6 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary-focus transition-transform hover:scale-110"
+        className="fixed bottom-6 right-6 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary-focus transition-transform hover:scale-110 z-40"
         title="Asistente IA"
       >
         <AssistantIcon className="h-8 w-8" />
       </button>
 
-      <Modal isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} maxWidth="max-w-3xl" hasPadding={false}>
-        <Assistant />
-      </Modal>
+      <Assistant isOpen={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
     </div>
   );
 };

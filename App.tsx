@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import Login from './components/auth/Login';
@@ -6,6 +7,7 @@ import Layout from './components/layout/Layout';
 import { AuthContext } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from './contexts/SupabaseContext';
+import { AiServiceProvider } from './contexts/AiServiceContext';
 import type { User } from './types';
 
 const AppContent: React.FC = () => {
@@ -47,27 +49,28 @@ const AppContent: React.FC = () => {
                     }
                 }
                 
-                // Step 3: Fetch branding settings from 'Configuracion'
+                // Step 3: Fetch user-specific theme settings from 'Configuracion'
                 const { data: configData, error: configError } = await supabase
                     .from('Configuracion')
                     .select('value')
                     .eq('id_usuario', userData.id)
-                    .eq('key', 'branding_settings')
-                    .maybeSingle(); // FIX: Changed from .single() to avoid errors when no config exists
+                    .eq('key', 'user_theme_settings') // Use the new user-specific key
+                    .maybeSingle(); 
 
-                let brandingSettings: Partial<User> = {};
+                let themeSettings: { color_palette_name?: string } = {};
                 if (configError) {
-                    console.warn(`Could not fetch branding settings for user ${userData.id}: ${configError.message}. Using defaults.`);
+                    console.warn(`Could not fetch theme settings for user ${userData.id}: ${configError.message}. Using defaults.`);
                 } else if (configData && configData.value) {
                     try {
                         // The value is stored as a JSON string, so it needs to be parsed.
-                        brandingSettings = JSON.parse(configData.value);
+                        themeSettings = JSON.parse(configData.value);
                     } catch(e) {
-                         console.error("Failed to parse branding settings JSON:", e);
+                         console.error("Failed to parse theme settings JSON:", e);
                     }
                 }
                 
                 // Step 4: Combine all data into the final User object
+                // App title and logo are no longer part of the user profile; they are loaded globally.
                 return {
                     id: userData.id,
                     nombres: userData.nombres,
@@ -75,9 +78,7 @@ const AppContent: React.FC = () => {
                     rol: userData.rol,
                     roleName: roleName,
                     permissions: permissions,
-                    app_title: brandingSettings.app_title,
-                    logo_url: brandingSettings.logo_url,
-                    color_palette_name: brandingSettings.color_palette_name,
+                    color_palette_name: themeSettings.color_palette_name,
                 };
             }
         } catch (error) {
@@ -139,9 +140,11 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <SupabaseProvider>
-      <ThemeProvider>
-        <AppContent />
-      </ThemeProvider>
+      <AiServiceProvider>
+        <ThemeProvider>
+          <AppContent />
+        </ThemeProvider>
+      </AiServiceProvider>
     </SupabaseProvider>
   );
 };

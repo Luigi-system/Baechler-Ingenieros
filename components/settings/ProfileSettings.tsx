@@ -1,4 +1,5 @@
 
+
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useSupabase } from '../../contexts/SupabaseContext';
@@ -92,11 +93,11 @@ const ProfileSettings: React.FC = () => {
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
-            <h2 className="text-3xl font-bold text-gray-800 dark:text-white">Mi Perfil</h2>
+            <h2 className="text-3xl font-bold text-base-content">Mi Perfil</h2>
             
             {/* Personal Information Form */}
-            <form onSubmit={handleInfoSubmit} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
-                 <h3 className="text-xl font-semibold border-b border-gray-200 dark:border-gray-700 pb-2">Información Personal</h3>
+            <form onSubmit={handleInfoSubmit} className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6 transition-all duration-300 hover:shadow-2xl">
+                 <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información Personal</h3>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label htmlFor="nombres" className="block text-sm font-medium">Nombres</label>
@@ -104,7 +105,7 @@ const ProfileSettings: React.FC = () => {
                     </div>
                      <div>
                         <label htmlFor="email" className="block text-sm font-medium">Email</label>
-                        <input type="email" name="email" value={auth.user.email} className="mt-1 block w-full input-style bg-gray-100 dark:bg-gray-700/50" disabled />
+                        <input type="email" name="email" value={auth.user.email} className="mt-1 block w-full input-style" disabled />
                     </div>
                      <div>
                         <label htmlFor="dni" className="block text-sm font-medium">DNI</label>
@@ -116,7 +117,7 @@ const ProfileSettings: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex justify-end pt-4">
-                    <button type="submit" disabled={isSavingInfo} className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark disabled:bg-primary/50">
+                    <button type="submit" disabled={isSavingInfo} className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-focus disabled:bg-primary/50">
                         {isSavingInfo ? <Spinner /> : <SaveIcon className="h-5 w-5" />}
                         {isSavingInfo ? 'Guardando...' : 'Guardar Información'}
                     </button>
@@ -124,8 +125,8 @@ const ProfileSettings: React.FC = () => {
             </form>
 
             {/* Change Password Form */}
-            <form onSubmit={handlePasswordSubmit} className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
-                <h3 className="text-xl font-semibold border-b border-gray-200 dark:border-gray-700 pb-2">Cambiar Contraseña</h3>
+            <form onSubmit={handlePasswordSubmit} className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6 transition-all duration-300 hover:shadow-2xl">
+                <h3 className="text-xl font-semibold border-b border-base-border pb-2">Cambiar Contraseña</h3>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label htmlFor="newPassword">Nueva Contraseña</label>
@@ -137,7 +138,7 @@ const ProfileSettings: React.FC = () => {
                     </div>
                  </div>
                  <div className="flex justify-end pt-4">
-                    <button type="submit" disabled={isSavingPassword} className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-dark disabled:bg-primary/50">
+                    <button type="submit" disabled={isSavingPassword} className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-focus disabled:bg-primary/50">
                         {isSavingPassword ? <Spinner /> : <LockIcon className="h-5 w-5" />}
                         {isSavingPassword ? 'Cambiando...' : 'Cambiar Contraseña'}
                     </button>
@@ -145,7 +146,7 @@ const ProfileSettings: React.FC = () => {
             </form>
 
              {feedback && (
-                <div className={`p-4 rounded-md text-sm ${feedback.type === 'success' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' : 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'}`}>
+                <div className={`p-4 rounded-md text-sm ${feedback.type === 'success' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}>
                 {feedback.message}
                 </div>
             )}

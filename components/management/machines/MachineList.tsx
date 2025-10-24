@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSupabase } from '../../../contexts/SupabaseContext';
 import type { Machine, Company, Plant } from '../../../types';
@@ -214,7 +215,7 @@ const MachineList: React.FC = () => {
                  <>
                  <p className="text-sm text-gray-500 dark:text-gray-400">Mostrando {filteredMachines.length} de {machines.length} máquinas.</p>
                  <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
-                    <div className="overflow-y-auto max-h-[60vh] relative">
+                    <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
                         <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
                             <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
                                 <tr>

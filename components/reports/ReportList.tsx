@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { ServiceReport } from '../../types';
 import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon } from '../ui/Icons';
@@ -211,7 +212,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
       
       {!isLoading && !error && (
         <div className="bg-base-200 shadow-lg rounded-xl overflow-hidden">
-          <div className="overflow-y-auto max-h-[60vh] relative">
+          <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
             <table className="w-full table-auto divide-y divide-base-border">
               <thead className="bg-base-300 sticky top-0 z-10">
                 <tr>

@@ -1,11 +1,13 @@
-
 import type { ColorPalette } from '../types';
 
 const professionalBaseLight = {
   primary: '#3b82f6', 'primary-focus': '#2563eb', 'primary-light': '#60a5fa', 'primary-lighter': '#dbeafe',
   secondary: '#10b981', accent: '#f97316', neutral: '#6b7280',
-  'base-100': '#f3f4f6', 'base-200': '#ffffff', 'base-300': '#e5e7eb',
-  'base-content': '#1f2937', 'base-border': '#d1d5db',
+  'base-100': '#f8fafc', // Softer background (slate-50)
+  'base-200': '#ffffff', // Cards remain white for contrast
+  'base-300': '#f1f5f9', // Hover and subtle backgrounds (slate-100)
+  'base-content': '#1f2937', 
+  'base-border': '#e2e8f0', // Softer border (slate-200)
   info: '#0ea5e9', success: '#22c55e', warning: '#f59e0b', error: '#ef4444',
 };
 

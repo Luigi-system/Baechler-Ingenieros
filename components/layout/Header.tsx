@@ -1,15 +1,24 @@
+
 import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import ThemeToggle from '../ui/ThemeToggle';
-import { BellIcon, LogoutIcon, UserIcon } from '../ui/Icons';
+import { BellIcon, LogoutIcon, UserIcon, CheckCircleIcon } from '../ui/Icons';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface HeaderProps {
   onNavigateToProfile: () => void;
 }
 
+// Dummy data for the notification charts
+const reportsData = [{ name: 'Creados', value: 12 }, { name: 'Restantes', value: 8 }];
+const tasksData = [{ name: 'Completadas', value: 5 }, { name: 'Pendientes', value: 3 }];
+const profileData = [{ name: 'Completo', value: 85 }, { name: 'Restante', value: 15 }];
+const COLORS = ['var(--color-primary)', 'var(--color-base-300)'];
+
 const Header: React.FC<HeaderProps> = ({ onNavigateToProfile }) => {
   const auth = useContext(AuthContext);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   if (!auth || !auth.user) {
     return null;
@@ -24,11 +33,62 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile }) => {
 
       <div className="flex items-center space-x-4">
         <div className="relative">
-            <BellIcon className="h-6 w-6 text-neutral cursor-pointer hover:text-primary"/>
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-error"></span>
-            </span>
+            <button onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} className="relative">
+                <BellIcon className="h-6 w-6 text-neutral cursor-pointer hover:text-primary"/>
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-error"></span>
+                </span>
+            </button>
+
+            {isNotificationsOpen && (
+                 <div 
+                    className="absolute right-0 mt-2 w-80 bg-base-200 rounded-lg shadow-lg py-2 z-50 border border-base-border"
+                    onMouseLeave={() => setIsNotificationsOpen(false)}
+                 >
+                    <div className="px-4 py-2 border-b border-base-border">
+                        <h4 className="font-semibold">Resumen de Actividad</h4>
+                    </div>
+                    <div className="p-4 grid grid-cols-3 gap-2 text-center">
+                        <div className="flex flex-col items-center">
+                            <ResponsiveContainer width="100%" height={60}>
+                                <PieChart>
+                                    <Pie data={reportsData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={25} fill="#8884d8" paddingAngle={5}>
+                                        {reportsData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <p className="text-xs mt-1">12/20 Reportes</p>
+                        </div>
+                        <div className="flex flex-col items-center">
+                             <ResponsiveContainer width="100%" height={60}>
+                                <PieChart>
+                                    <Pie data={tasksData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={25} fill="#82ca9d" paddingAngle={5}>
+                                        {tasksData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                             <p className="text-xs mt-1">3 Tareas Pend.</p>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <ResponsiveContainer width="100%" height={60}>
+                                <PieChart>
+                                    <Pie data={profileData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={25} fill="#ffc658" paddingAngle={5}>
+                                        {profileData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <p className="text-xs mt-1">Perfil al 85%</p>
+                        </div>
+                    </div>
+                     <div className="px-4 py-3 border-t border-base-border">
+                        <div className="flex items-start">
+                            <CheckCircleIcon className="h-5 w-5 text-success mr-2 mt-0.5"/>
+                            <p className="text-sm">¡Todo está al día! No hay nuevas notificaciones.</p>
+                        </div>
+                    </div>
+                 </div>
+            )}
         </div>
         
         <ThemeToggle />
