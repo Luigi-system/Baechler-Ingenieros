@@ -1,3 +1,5 @@
+
+
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import type { Chat } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
@@ -87,7 +89,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     config: geminiConfig,
                 });
                 setChat(newChat);
-                if (messages.length > 1) setMessages([WELCOME_MESSAGE]);
+                // Only reset messages if switching service or initializing for the first time
+                // to avoid clearing active conversations unnecessarily.
+                if (messages.length > 1 && messages[0] !== WELCOME_MESSAGE) {
+                    setMessages([WELCOME_MESSAGE]);
+                } else if (messages.length === 0) { // If somehow empty, add welcome
+                     setMessages([WELCOME_MESSAGE]);
+                }
             } catch (e) {
                 console.error("Failed to create Gemini chat session:", e);
                 setChat(null);
@@ -95,9 +103,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else if (service === 'openai') {
             // OpenAI is stateless, so we nullify the stateful chat object.
             setChat(null);
-            if (messages.length > 1) setMessages([WELCOME_MESSAGE]);
+            if (messages.length > 1 && messages[0] !== WELCOME_MESSAGE) {
+                setMessages([WELCOME_MESSAGE]);
+            } else if (messages.length === 0) { // If somehow empty, add welcome
+                 setMessages([WELCOME_MESSAGE]);
+            }
         } else {
             setChat(null);
+            if (messages.length > 1) setMessages([WELCOME_MESSAGE]); // Clear if service is unconfigured
         }
     }, [service, geminiClient]);
 
@@ -130,18 +143,31 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     { type: 'function', function: getAggregateData_OpenAI },
                     { type: 'function', function: performAction_OpenAI }
                 ];
-                const history = messages.map(msg => {
-                    if (msg.sender === 'user') return { role: 'user', content: msg.content as string };
-                    // For AI, just send the text response for history context.
-                    return { role: 'assistant', content: (msg.content as AIResponse).displayText };
+                
+                // Map existing messages to OpenAI format
+                const historyForOpenAI = messages.map(msg => {
+                    if (msg.sender === 'user') {
+                        return { role: 'user', content: msg.content as string };
+                    } else { // msg.sender === 'ai'
+                        const aiContent = msg.content as AIResponse;
+                        return { role: 'assistant', content: aiContent.displayText || '' };
+                    }
                 });
+
+                // Prepend system instruction and add current user prompt
+                const messagesForOpenAI = [
+                    { role: 'system', content: systemInstruction },
+                    ...historyForOpenAI,
+                    { role: 'user', content: prompt }
+                ];
 
                 // 2. Make initial request
                 let response = await openaiClient.chat.completions.create({
                     model: 'gpt-4o',
-                    messages: [...history, { role: 'user', content: prompt }],
+                    messages: messagesForOpenAI,
                     tools: openaiTools,
                     tool_choice: 'auto',
+                    response_format: { type: "json_object" } // Enforce JSON output
                 });
                 
                 let responseMessage = response.choices[0].message;
@@ -156,9 +182,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     
                     // Add AI's tool call request and our tool responses to the history
                     const newHistory = [
-                        ...history,
-                        { role: 'user', content: prompt },
-                        responseMessage,
+                        ...messagesForOpenAI, // Include system instruction and previous turns
+                        responseMessage, // AI's tool call message
                         ...toolResponses.map((tr, i) => ({
                             tool_call_id: toolCalls[i].id,
                             role: 'tool',
@@ -173,6 +198,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         messages: newHistory,
                         tools: openaiTools,
                         tool_choice: 'auto',
+                        response_format: { type: "json_object" } // Enforce JSON output
                     });
                     responseMessage = response.choices[0].message;
                 }

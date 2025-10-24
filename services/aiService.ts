@@ -1,3 +1,5 @@
+
+
 import { Type, FunctionDeclaration } from "@google/genai";
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -243,13 +245,18 @@ export const systemInstruction = `
   La fecha de hoy es ${new Date().toISOString().split('T')[0]}.
 
   **PROTOCOLO DE RESPUESTA JSON:**
-  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español.
-  2.  **table / chart (Opcional):** Elige la mejor visualización.
-      - Usa 'table' para listas detalladas (ej. "muéstrame los últimos 5 reportes").
-      - Usa 'chart' para datos agregados (ej. "cuántos reportes por empresa"). Usa 'pie' para proporciones y 'bar' para comparaciones.
-  3.  **actions (Opcional):** Si la respuesta implica una posible acción de seguimiento (ej. "El reporte RS-001 está pendiente"), ofrece un botón de acción.
-  4.  **form (Opcional):** Si necesitas más información del usuario para completar una acción, pide los datos con un formulario.
-  5.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español.
+  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso pero informativo.
+  2.  **table (Opcional):** Usa 'table' para presentar listas detalladas de datos tabulares (e.g., resultados de búsquedas, detalles de varios registros).
+      Ejemplo de cuándo usar 'table': "Aquí están los últimos 5 reportes de servicio:\n\n\`\`\`json\n{\n  \"displayText\": \"Aquí están los últimos 5 reportes de servicio.\",\n  \"table\": {\n    \"headers\": [\"Código\", \"Fecha\", \"Empresa\", \"Estado\"],\n    \"rows\": [\n      [\"RS-001\", \"2024-07-20\", \"Empresa A\", \"Facturado\"],\n      [\"RS-002\", \"2024-07-19\", \"Empresa B\", \"Pendiente\"]\n    ]\n  },\n  \"suggestions\": [\"Ver más detalles del RS-001\", \"Listar reportes de la Empresa A\"]\n}\n\`\`\`
+  3.  **chart (Opcional):** Usa 'chart' para visualizar datos agregados o para mostrar distribuciones y comparaciones.
+      - Usa \`"type": "pie"\` para proporciones o composición (e.g., distribución de estados de reportes).
+      - Usa \`"type": "bar"\` para comparar cantidades entre categorías (e.g., número de reportes por empresa).
+      Ejemplo de cuándo usar 'chart': "Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa:\n\n\`\`\`json\n{\n  \"displayText\": \"Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa.\",\n  \"chart\": {\n    \"type\": \"bar\",\n    \"data\": [\n      {\"name\": \"Empresa A\", \"value\": 15},\n      {\"name\": \"Empresa B\", \"value\": 10}\n    ]\n  },\n  \"suggestions\": [\"Ver reportes de Empresa A\", \"Total de reportes facturados\"]\n}\n\`\`\`
+  4.  **actions (Opcional):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento que el usuario podría querer ejecutar fácilmente. Estos prompts de acción deben ser claros y directos.
+      Ejemplo de cuándo usar 'actions': "El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\n\n\`\`\`json\n{\n  \"displayText\": \"El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\",\n  \"actions\": [\n    {\"label\": \"Marcar como facturado\", \"prompt\": \"Marca el reporte RS-005 como facturado\"},\n    {\"label\": \"Editar reporte\", \"prompt\": \"Quiero editar el reporte RS-005\"}\n  ],\n  \"suggestions\": [\"Ver otros reportes pendientes\"]\n}\n\`\`\`
+  5.  **form (Opcional):** Utiliza un 'form' cuando necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro). Define los campos necesarios (type, name, label, options).
+      Ejemplo de cuándo usar 'form': "Necesito algunos datos para crear la nueva empresa. Por favor, completa este formulario:\n\n\`\`\`json\n{\n  \"displayText\": \"Necesito algunos datos para crear la nueva empresa. Por favor, completa este formulario:\",\n  \"form\": [\n    {\"type\": \"text\", \"name\": \"nombre\", \"label\": \"Nombre de la Empresa\"},\n    {\"type\": \"text\", \"name\": \"ruc\", \"label\": \"RUC\"},\n    {\"type\": \"select\", \"name\": \"distrito\", \"label\": \"Distrito\", \"options\": [\"Lima\", \"Miraflores\"]},\n    {\"type\": \"checkbox\", \"name\": \"activo\", \"label\": \"¿Está activa?\"}\n  ],\n  \"suggestions\": [\"Cancelar creación\", \"Ver empresas existentes\"]\n}\n\`\`\`
+  6.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
 
   **TUS HERRAMIENTAS:**
   - \`executeQueryOnDatabase\`: Para consultas SELECT simples (listar, buscar).
