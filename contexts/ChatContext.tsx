@@ -548,27 +548,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             // --- 4. Process Final Response ---
-            let finalResponseContent: string = responseFromLLM.text || responseFromLLM.content;
+            const finalResponseContent: string = responseFromLLM.text || responseFromLLM.content;
             let parsedAIResponse: AIResponse | null = null;
 
-            if (isAgentModeSelected && functionResponseProcessed && lastToolResponses.length > 0) {
-                // If agent was called, map its raw response (the *last* tool response) to AIResponse
-                const actualAgentResponse = lastToolResponses[lastToolResponses.length - 1];
-                // Ensure actualAgentResponse is a valid JSON object before mapping
-                if (typeof actualAgentResponse === 'object' && actualAgentResponse !== null) {
-                    parsedAIResponse = mapAgentResponseToAIResponse(actualAgentResponse);
-                } else {
-                    console.warn("Raw agent response was not a valid JSON object. Displaying as text. Response:", actualAgentResponse);
-                    parsedAIResponse = { 
-                        displayText: `He recibido una respuesta del agente, pero no es un JSON válido. Aquí está el contenido:\n\n---\n\n${String(actualAgentResponse)}`,
-                        statusDisplay: { icon: 'error', title: 'Error de Formato', message: 'La respuesta del agente no es un objeto JSON válido.' }
-                    };
-                }
-            } else {
-                // For direct LLM responses or if agent mode was not active.
-                // Use the LLM's final content directly and try to parse it as AIResponse.
-                parsedAIResponse = extractAndParseJson(finalResponseContent);
-            }
+            // When using an orchestrator pattern, the LLM's final response (`finalResponseContent`) is the source of truth for the UI.
+            // It has already processed any tool call results (including the raw data from the external agent) and has decided on the best presentation format (table, chart, etc.).
+            // Therefore, we must prioritize parsing this final response, rather than manually mapping the raw tool data.
+            // The `mapAgentResponseToAIResponse` function remains useful for direct agent calls that bypass the LLM's final formatting step, such as form submissions.
+            parsedAIResponse = extractAndParseJson(finalResponseContent);
 
             if (parsedAIResponse) {
                 const aiMessage: Message = { sender: 'ai', content: parsedAIResponse, tool_calls: responseFromLLM.tool_calls };
