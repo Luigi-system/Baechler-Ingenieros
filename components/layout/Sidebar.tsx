@@ -1,14 +1,14 @@
 
 
 import React, { useContext, useState } from 'react';
-import { AuthContext } from '../../contexts/AuthContext';
 import { 
     DashboardIcon, ReportsIcon, SettingsIcon, 
     ChevronLeftIcon, MenuIcon, BuildingIcon, IndustryIcon, 
     CogIcon, UserCircleIcon, PaletteIcon, DatabaseIcon, 
-    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon, DriveIcon, DocumentIcon // Added DriveIcon, DocumentIcon
+    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon, DriveIcon, DocumentIcon, LinkIcon 
 } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { AuthContext } from '../../contexts/AuthContext'; // Import AuthContext
 
 interface SidebarProps {
   activePage: string;
@@ -25,7 +25,7 @@ const navItems = [
       subItems: [
         { id: 'reports-service', label: 'Reportes de Servicio', icon: ReportsIcon, permission: 'reports' },
         { id: 'reports-visit', label: 'Reportes de Visita', icon: ClipboardCheckIcon, permission: 'reports' },
-        { id: 'google-doc-viewer', label: 'Visualizador de Docs', icon: DocumentIcon, permission: 'reports' }, // New sub-item
+        { id: 'google-doc-viewer', label: 'Visualizador de Docs', icon: DocumentIcon, permission: 'reports' },
       ] 
     },
     { 
@@ -54,14 +54,15 @@ const navItems = [
         { id: 'settings-import', label: 'Importador', icon: UploadCloudIcon, permission: 'settings' },
       ]
     },
-    { // New top-level item for Integrations
+    { 
         id: 'integrations',
         label: 'Integraciones',
-        icon: DriveIcon, // Reusing DriveIcon for the main category
-        permission: 'settings', // Assuming 'settings' permission for integrations
+        icon: DriveIcon, 
+        permission: 'settings', 
         subItems: [
             { id: 'settings-ai', label: 'Servicios de IA', icon: CpuChipIcon, permission: 'settings' },
-            { id: 'settings-google-drive', label: 'Google Drive', icon: DriveIcon, permission: 'settings' }, // New sub-item
+            { id: 'settings-agente', label: 'Agente AI Externo', icon: LinkIcon, permission: 'settings' }, // New sub-item for Agente
+            { id: 'settings-google-drive', label: 'Google Drive', icon: DriveIcon, permission: 'settings' },
         ]
     },
 ];
@@ -70,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   const auth = useContext(AuthContext);
   const { logoUrl, appTitle } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set(['reports', 'management', 'settings', 'integrations'])); // Keep Integrations open by default
+  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set(['reports', 'management', 'settings', 'integrations']));
 
   const toggleMenu = (id: string) => {
     setOpenMenus(prev => {

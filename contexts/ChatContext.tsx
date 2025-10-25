@@ -1,16 +1,16 @@
-
-
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import type { Chat } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
 import { useAiService } from './AiServiceContext';
 import { 
-    systemInstruction, responseSchema, 
+    directSupabaseSystemInstruction, responseSchema, 
     executeQueryOnDatabase_Gemini, getAggregateData_Gemini, performAction_Gemini,
+    callExternalAgentWithQuery_Gemini, callExternalAgentWithData_Gemini, // New Gemini agent tools
     executeQueryOnDatabase_OpenAI, getAggregateData_OpenAI, performAction_OpenAI,
-    handleFunctionExecution
+    callExternalAgentWithQuery_OpenAI, callExternalAgentWithData_OpenAI, // New OpenAI agent tools
+    handleFunctionExecution, agenteOrchestratorSystemInstruction
 } from '../services/aiService';
-import type { AIResponse } from '../types';
+import type { AIResponse, TableData } from '../types';
 
 export interface Message {
   sender: 'user' | 'ai';
@@ -39,10 +39,17 @@ const WELCOME_MESSAGE: Message = {
     } 
 };
 
+// Constants for retry logic
+const MAX_AGENT_RETRIES = 4; // 1 initial attempt + 4 retries = 5 total attempts
+const RETRY_DELAY_MS = 1000; // Base delay in milliseconds
+
+// Helper for delays
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
  * Extracts and parses a JSON object from a string.
  * It first tries to parse the string directly. If that fails, it looks for a JSON
- * object wrapped in markdown code fences (```json ... ```) and attempts to parse that.
+ * objeto wrapped in markdown code fences (```json ... ```) and attempts to parse that.
  * @param text The string that may contain a JSON object.
  * @returns The parsed AIResponse object, or null if no valid JSON is found.
  */
@@ -63,56 +70,96 @@ const extractAndParseJson = (text: string): AIResponse | null => {
     return null;
 };
 
+/**
+ * Maps a raw JSON response from the external agent into a standardized AIResponse format.
+ * This is crucial for displaying agent results consistently in the chat UI.
+ * @param rawAgentResponse The raw JSON object received from the webhook.
+ * @returns An AIResponse object.
+ */
+const mapAgentResponseToAIResponse = (rawAgentResponse: any): AIResponse => {
+    // Check if the response is directly an AIResponse (e.g., from an action confirmation)
+    if (rawAgentResponse && typeof rawAgentResponse === 'object' && rawAgentResponse.displayText) {
+        return rawAgentResponse as AIResponse;
+    }
+
+    let displayText = "Aquí tienes la información solicitada:";
+    let table: TableData | undefined;
+    let suggestions: string[] = ["¿Hay algo más en lo que pueda ayudarte?"];
+
+    // Example mapping for a common agent response structure like {"maquinas": [...]}
+    const keys = Object.keys(rawAgentResponse);
+    if (keys.length === 1 && Array.isArray(rawAgentResponse[keys[0]])) {
+        const dataArray = rawAgentResponse[keys[0]];
+        const entityName = keys[0]; // e.g., "maquinas"
+
+        if (dataArray.length > 0) {
+            displayText = `Encontré ${dataArray.length} ${entityName}.`;
+            const headers = Object.keys(dataArray[0]);
+            const rows = dataArray.map((item: any) => headers.map(header => item[header]));
+            table = { headers, rows };
+            suggestions = [`Ver detalles de la primera ${entityName}`, `Filtrar ${entityName} por...`];
+        } else {
+            displayText = `No se encontraron ${entityName} que coincidan con tu consulta.`;
+        }
+    } else if (rawAgentResponse.error) {
+        displayText = `El agente reportó un error: ${rawAgentResponse.error.message || rawAgentResponse.error}`;
+    } else if (rawAgentResponse.message) {
+        displayText = rawAgentResponse.message; // Generic message
+    } else {
+        // Fallback for any other unexpected but valid JSON structure
+        displayText = `Recibí una respuesta del agente, pero no pude interpretarla completamente. Contenido: ${JSON.stringify(rawAgentResponse, null, 2)}`;
+    }
+
+    return { displayText, table, suggestions };
+};
+
+
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { supabase } = useSupabase();
-    const { service, geminiClient, openaiClient, isConfigured } = useAiService();
-    const [chat, setChat] = useState<Chat | null>(null);
+    const { 
+        service, geminiClient, openaiClient, agenteClient, isAgenteEnabled, agenteWebhookUrl 
+    } = useAiService();
+    const [chat, setChat] = useState<Chat | null>(null); // Only used for Gemini's stateful chat
 
     const [messages, setMessages] = useState<Message[]>([WELCOME_MESSAGE]);
     const [isLoading, setIsLoading] = useState(false);
     const [hasUnreadMessage, setHasUnreadMessage] = useState(false);
 
+    // Effect to initialize or re-initialize chat session when service or isAgenteEnabled changes
     useEffect(() => {
+        // Chat session (stateful) is only created for Gemini.
+        // For 'openai' service, it's stateless, so no chat object is needed here.
         if (service === 'gemini' && geminiClient) {
             try {
-                const geminiTools = [{ functionDeclarations: [executeQueryOnDatabase_Gemini, getAggregateData_Gemini, performAction_Gemini] }];
-                const geminiConfig = {
-                    tools: geminiTools,
-                    systemInstruction: systemInstruction,
-                    temperature: 0.1,
-                    responseMimeType: "application/json",
-                    responseSchema: responseSchema,
-                };
+                // Determine system instruction and tools based on whether the agent is enabled
+                const geminiTools = isAgenteEnabled ?
+                    [{ functionDeclarations: [callExternalAgentWithQuery_Gemini, callExternalAgentWithData_Gemini] }] :
+                    [{ functionDeclarations: [executeQueryOnDatabase_Gemini, getAggregateData_Gemini, performAction_Gemini] }];
+
+                const currentSystemInstruction = isAgenteEnabled ? agenteOrchestratorSystemInstruction : directSupabaseSystemInstruction;
 
                 const newChat = geminiClient.chats.create({
-                    model: 'gemini-2.5-pro',
-                    config: geminiConfig,
+                    model: 'gemini-2.5-pro', // Using a powerful model for reasoning.
+                    config: {
+                        tools: geminiTools,
+                        systemInstruction: currentSystemInstruction,
+                        temperature: 0.1,
+                        responseMimeType: "application/json",
+                        responseSchema: responseSchema,
+                    }
                 });
                 setChat(newChat);
-                // Only reset messages if switching service or initializing for the first time
-                // to avoid clearing active conversations unnecessarily.
-                if (messages.length > 1 && messages[0] !== WELCOME_MESSAGE) {
-                    setMessages([WELCOME_MESSAGE]);
-                } else if (messages.length === 0) { // If somehow empty, add welcome
-                     setMessages([WELCOME_MESSAGE]);
-                }
             } catch (e) {
                 console.error("Failed to create Gemini chat session:", e);
                 setChat(null);
             }
-        } else if (service === 'openai') {
-            // OpenAI is stateless, so we nullify the stateful chat object.
-            setChat(null);
-            if (messages.length > 1 && messages[0] !== WELCOME_MESSAGE) {
-                setMessages([WELCOME_MESSAGE]);
-            } else if (messages.length === 0) { // If somehow empty, add welcome
-                 setMessages([WELCOME_MESSAGE]);
-            }
         } else {
-            setChat(null);
-            if (messages.length > 1) setMessages([WELCOME_MESSAGE]); // Clear if service is unconfigured
+            setChat(null); // Clear chat object if not Gemini
         }
-    }, [service, geminiClient]);
+
+        // Always reset messages to welcome message on service/agent config change
+        setMessages([WELCOME_MESSAGE]);
+    }, [service, geminiClient, isAgenteEnabled]);
 
     const sendMessage = useCallback(async (prompt: string) => {
         if (prompt.trim() === '' || isLoading) return;
@@ -124,105 +171,211 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             if (!supabase) throw new Error("La conexión a Supabase no está disponible.");
 
-            let finalResponse;
+            // --- 1. Determine which LLM to use as the orchestrator, and its configuration ---
+            let activeLLMClient: any = null;
+            let activeLLMModel: string;
+            let activeLlmTools: any[];
+            let activeSystemInstruction: string;
+            let isLLMGemini: boolean = false; // Flag to differentiate LLM logic
+            let openaiMessagesHistory: any[] = []; // Only built for OpenAI stateless calls
 
-            if (service === 'gemini' && chat) {
-                let result = await chat.sendMessage({ message: prompt });
-                while (result.functionCalls && result.functionCalls.length > 0) {
-                    const functionCalls = result.functionCalls;
-                    const toolExecutionPromises = functionCalls.map(call => handleFunctionExecution(call, supabase));
-                    const toolResponseParts = await Promise.all(toolExecutionPromises);
-                    result = await chat.sendMessage({ message: toolResponseParts });
-                }
-                finalResponse = result.text;
+            // Determine if the agent is enabled for orchestration
+            const isAgentModeSelected = isAgenteEnabled;
 
-            } else if (service === 'openai' && openaiClient) {
-                // 1. Convert tools and history to OpenAI format
-                const openaiTools = [
-                    { type: 'function', function: executeQueryOnDatabase_OpenAI },
-                    { type: 'function', function: getAggregateData_OpenAI },
-                    { type: 'function', function: performAction_OpenAI }
-                ];
+            if (service === 'gemini') {
+                if (!geminiClient) throw new Error("Google Gemini client not initialized.");
+                if (!chat) throw new Error("Chat session not initialized for Gemini. This should be handled by useEffect.");
                 
-                // Map existing messages to OpenAI format
-                const historyForOpenAI = messages.map(msg => {
+                activeLLMClient = geminiClient;
+                activeLLMModel = 'gemini-2.5-pro';
+                // Tools and system instruction are already configured in chat useEffect based on `isAgentModeSelected`.
+                activeLlmTools = (chat as any).config.tools;
+                activeSystemInstruction = (chat as any).config.systemInstruction;
+                isLLMGemini = true;
+
+            } else if (service === 'openai') {
+                if (!openaiClient) throw new Error("OpenAI client not initialized.");
+                
+                activeLLMClient = openaiClient;
+                activeLLMModel = 'gpt-4o'; // Use a powerful OpenAI model
+
+                if (isAgentModeSelected) {
+                    activeLlmTools = [{ type: 'function', function: callExternalAgentWithQuery_OpenAI }, { type: 'function', function: callExternalAgentWithData_OpenAI }];
+                    activeSystemInstruction = agenteOrchestratorSystemInstruction;
+                } else { // Direct OpenAI mode
+                    activeLlmTools = [
+                        { type: 'function', function: executeQueryOnDatabase_OpenAI },
+                        { type: 'function', function: getAggregateData_OpenAI },
+                        { type: 'function', function: performAction_OpenAI }
+                    ];
+                    activeSystemInstruction = directSupabaseSystemInstruction;
+                }
+
+                // Build OpenAI message history for stateless calls.
+                openaiMessagesHistory = messages.map(msg => {
                     if (msg.sender === 'user') {
                         return { role: 'user', content: msg.content as string };
-                    } else { // msg.sender === 'ai'
+                    } else if (typeof msg.content === 'object') {
                         const aiContent = msg.content as AIResponse;
+                        // Correctly handle previous tool calls in history
+                        if (msg.tool_calls && msg.tool_calls.length > 0) {
+                            return { role: 'assistant', content: aiContent.displayText || null, tool_calls: msg.tool_calls };
+                        }
                         return { role: 'assistant', content: aiContent.displayText || '' };
+                    }
+                    return { role: 'assistant', content: msg.content as string };
+                });
+                openaiMessagesHistory.unshift({ role: 'system', content: activeSystemInstruction });
+                openaiMessagesHistory.push({ role: 'user', content: prompt });
+                isLLMGemini = false;
+
+            } else {
+                // This case should ideally not be reached with the updated AiService type.
+                throw new Error(`Ningún servicio de IA (Gemini/OpenAI) configurado para el modo seleccionado: '${service}'.`);
+            }
+
+            // Check if the selected LLM is configured (has an API key)
+            if ((service === 'gemini' && !geminiClient) || (service === 'openai' && !openaiClient)) {
+                 throw new Error(`El servicio de IA (${service}) no está configurado con una clave API válida. Por favor, revisa la sección de configuración.`);
+            }
+
+
+            // --- 2. Make the initial LLM call ---
+            let responseFromLLM: any;
+            if (isLLMGemini) {
+                // Gemini handles message history internally via the `chat` object
+                responseFromLLM = await (chat as Chat).sendMessage({ message: prompt });
+            } else { // OpenAI (activeLLMClient is openaiClient)
+                responseFromLLM = await activeLLMClient.chat.completions.create({
+                    model: activeLLMModel,
+                    messages: openaiMessagesHistory,
+                    tools: activeLlmTools,
+                    tool_choice: 'auto',
+                    response_format: { type: "json_object" }
+                });
+                responseFromLLM = responseFromLLM.choices[0].message;
+            }
+
+            // --- 3. Handle function/tool calls in a loop ---
+            let toolCalls = responseFromLLM.functionCalls || responseFromLLM.tool_calls || [];
+            let functionResponseProcessed = false; // Flag to indicate if any tool was called
+            let lastToolResponses: any[] = []; // Stores raw results from tool functions (e.g., direct agent JSON or {functionResponse: ...})
+            let lastToolResultsForLLM: any[] = []; // Stores results formatted for LLM's `parts` (e.g., {name, id, response: {result}})
+
+            while (toolCalls && toolCalls.length > 0) {
+                functionResponseProcessed = true;
+                const toolExecutionPromises = toolCalls.map(async (call: any) => {
+                    const functionName = call.name || call.function?.name;
+                    const functionArgs = call.args || JSON.parse(call.function?.arguments || '{}');
+                    const toolCallId = call.id || call.tool_call_id; // Get the ID for the response
+
+                    if (agenteClient && (functionName === 'callExternalAgentWithQuery' || functionName === 'callExternalAgentWithData')) {
+                        let payload: string | object;
+                        if (functionName === 'callExternalAgentWithQuery') {
+                            payload = functionArgs.query;
+                            if (typeof payload !== 'string') throw new Error("Parámetro 'query' inválido para callExternalAgentWithQuery.");
+                        } else { // callExternalAgentWithData
+                            payload = functionArgs.data;
+                            if (typeof payload !== 'object' || payload === null) throw new Error("Parámetro 'data' inválido para callExternalAgentWithData.");
+                        }
+
+                        // --- Retry logic for external agent calls ---
+                        for (let attempt = 0; attempt <= MAX_AGENT_RETRIES; attempt++) {
+                            try {
+                                const rawAgentResponse = await agenteClient.sendToAgent(payload, agenteWebhookUrl);
+                                // Ensure the response is actually an object before returning
+                                if (typeof rawAgentResponse !== 'object' || rawAgentResponse === null) {
+                                    throw new Error("Respuesta del agente externo no es un objeto JSON válido.");
+                                }
+                                return rawAgentResponse; // Success, return the raw response
+                            } catch (retryError: any) {
+                                console.error(`Intento ${attempt + 1}/${MAX_AGENT_RETRIES + 1} fallido para la llamada al agente:`, retryError.message);
+                                if (attempt < MAX_AGENT_RETRIES) {
+                                    await sleep(RETRY_DELAY_MS * (attempt + 1)); // Exponential backoff
+                                } else {
+                                    // All retries exhausted, throw a specific error
+                                    throw new Error("AGENT_EXTERNAL_FAILED_AFTER_RETRIES");
+                                }
+                            }
+                        }
+                        // This line should technically not be reached, but needed for TypeScript
+                        throw new Error("Ruta de error inesperada para la llamada al agente."); 
+
+                    } else if (!isAgentModeSelected) { // Direct Supabase tools, ONLY if NOT in agent mode
+                        return await handleFunctionExecution({ name: functionName, args: functionArgs, id: toolCallId }, supabase);
+                    } else {
+                        throw new Error(`Función '${functionName}' no soportada o no implementada para el modo agente con ${isLLMGemini ? 'Gemini' : 'OpenAI'} como orquestador.`);
                     }
                 });
 
-                // Prepend system instruction and add current user prompt
-                const messagesForOpenAI = [
-                    { role: 'system', content: systemInstruction },
-                    ...historyForOpenAI,
-                    { role: 'user', content: prompt }
-                ];
+                lastToolResponses = await Promise.all(toolExecutionPromises); // These are the raw results from the tools
 
-                // 2. Make initial request
-                let response = await openaiClient.chat.completions.create({
-                    model: 'gpt-4o',
-                    messages: messagesForOpenAI,
-                    tools: openaiTools,
-                    tool_choice: 'auto',
-                    response_format: { type: "json_object" } // Enforce JSON output
-                });
-                
-                let responseMessage = response.choices[0].message;
-
-                // 3. Handle tool calls if any
-                while (responseMessage.tool_calls) {
-                    const toolCalls = responseMessage.tool_calls;
-                    const functionCallPromises = toolCalls.map((tc: any) => 
-                        handleFunctionExecution({name: tc.function.name, args: JSON.parse(tc.function.arguments)}, supabase)
-                    );
-                    const toolResponses = await Promise.all(functionCallPromises);
-                    
-                    // Add AI's tool call request and our tool responses to the history
-                    const newHistory = [
-                        ...messagesForOpenAI, // Include system instruction and previous turns
-                        responseMessage, // AI's tool call message
-                        ...toolResponses.map((tr, i) => ({
-                            tool_call_id: toolCalls[i].id,
-                            role: 'tool',
-                            name: toolCalls[i].function.name,
-                            content: tr.functionResponse.response.result
-                        }))
-                    ];
-                    
-                    // Make a follow-up request with the tool responses
-                    response = await openaiClient.chat.completions.create({
-                        model: 'gpt-4o',
-                        messages: newHistory,
-                        tools: openaiTools,
-                        tool_choice: 'auto',
-                        response_format: { type: "json_object" } // Enforce JSON output
+                if (isLLMGemini) { // Gemini client is the orchestrator
+                    lastToolResultsForLLM = toolCalls.map((originalCall: any, i: number) => {
+                        const toolExecutionResult = lastToolResponses[i]; // This is the raw output from the tool
+                        // All agent-related calls will return raw JSON from the agent, so we wrap it.
+                        // Direct Supabase calls (if agent mode wasn't selected) return { functionResponse: ... }.
+                        return {
+                            name: originalCall.name,
+                            id: originalCall.id,
+                            response: { result: JSON.stringify(toolExecutionResult) }, // result must be stringified JSON
+                        };
                     });
-                    responseMessage = response.choices[0].message;
+                    responseFromLLM = await (chat as Chat).sendMessage({ parts: lastToolResultsForLLM });
+                } else { // OpenAI client is the orchestrator
+                    const newToolMessages = toolCalls.map((call: any, i: number) => {
+                        const toolExecutionResult = lastToolResponses[i]; // This is the raw output from the tool
+                        // Content for the tool message depends on whether it was an external agent call or a direct Supabase tool call.
+                        const content = (call.function?.name === 'callExternalAgentWithQuery' || call.function?.name === 'callExternalAgentWithData')
+                            ? JSON.stringify(toolExecutionResult) // Raw JSON from agent
+                            : toolExecutionResult.functionResponse.response.result; // Stringified JSON from handleFunctionExecution
+                        
+                        return {
+                            tool_call_id: call.id || call.tool_call_id,
+                            role: 'tool',
+                            name: call.function?.name || call.name,
+                            content: content
+                        };
+                    });
+                    
+                    openaiMessagesHistory.push(responseFromLLM); // Add AI's tool call request to history
+                    openaiMessagesHistory.push(...newToolMessages); // Add tool outputs to history
+                    
+                    responseFromLLM = await activeLLMClient.chat.completions.create({
+                        model: activeLLMModel,
+                        messages: openaiMessagesHistory,
+                        tools: activeLlmTools,
+                        tool_choice: 'auto',
+                        response_format: { type: "json_object" }
+                    });
+                    responseFromLLM = responseFromLLM.choices[0].message;
                 }
+                toolCalls = responseFromLLM.functionCalls || responseFromLLM.tool_calls || []; // Update for next iteration
+            }
 
-                finalResponse = responseMessage.content;
+            // --- 4. Process Final Response ---
+            let finalResponseContent: string = responseFromLLM.text || responseFromLLM.content;
+            let parsedAIResponse: AIResponse | null = null;
+
+            if (isAgentModeSelected && functionResponseProcessed && lastToolResponses.length > 0) {
+                // If agent was called, map its raw response (the *last* tool response) to AIResponse
+                const actualAgentResponse = lastToolResponses[lastToolResponses.length - 1];
+                parsedAIResponse = mapAgentResponseToAIResponse(actualAgentResponse);
             } else {
-                 throw new Error(`Servicio de IA (${service}) no está configurado o el cliente no está disponible.`);
+                // For direct LLM responses or if agent mode was not active.
+                // Use the LLM's final content directly and try to parse it as AIResponse.
+                parsedAIResponse = extractAndParseJson(finalResponseContent);
             }
 
-            if (!finalResponse) {
-                throw new Error("La IA no generó una respuesta de texto.");
-            }
-        
-            const parsedJson = extractAndParseJson(finalResponse);
-
-            if (parsedJson) {
-                const aiMessage: Message = { sender: 'ai', content: parsedJson };
+            if (parsedAIResponse) {
+                const aiMessage: Message = { sender: 'ai', content: parsedAIResponse, tool_calls: responseFromLLM.tool_calls };
                 setMessages(prev => [...prev, aiMessage]);
             } else {
-                console.warn("AI response was not valid JSON. Displaying as text. Response:", finalResponse);
+                console.warn("AI response was not valid JSON. Displaying as text. Response:", finalResponseContent);
                 const fallbackMessage: Message = {
-                    sender: 'ai',
+                    sender: 'ai', 
                     content: {
-                        displayText: `He recibido una respuesta, pero no tiene el formato JSON esperado. Aquí está el texto original:\n\n---\n\n${finalResponse}`
+                        displayText: `He recibido una respuesta, pero no tiene el formato JSON esperado. Aquí está el texto original:\n\n---\n\n${finalResponseContent}`
                     }
                 };
                 setMessages(prev => [...prev, fallbackMessage]);
@@ -230,17 +383,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         } catch (error: any) {
             console.error("Error getting AI response:", error);
+            let userFacingMessage = `Lo siento, ocurrió un error: ${error.message}`;
+
+            if (error.message === "AGENT_EXTERNAL_FAILED_AFTER_RETRIES") {
+                userFacingMessage = "Lo siento, el agente externo no pudo procesar tu solicitud después de varios intentos. Por favor, inténtalo de nuevo más tarde o reformula tu pregunta. Si el problema persiste, contacta a soporte técnico.";
+            }
+
             const errorMessage: Message = { 
                 sender: 'ai', 
                 content: {
-                    displayText: `Lo siento, ocurrió un error: ${error.message}`
+                    displayText: userFacingMessage
                 } 
             };
             setMessages(prev => [...prev, errorMessage]);
         } finally {
             setIsLoading(false);
         }
-    }, [isLoading, supabase, chat, service, openaiClient, messages]);
+    }, [isLoading, supabase, chat, service, geminiClient, openaiClient, agenteClient, isAgenteEnabled, agenteWebhookUrl, messages]);
     
     const clearUnread = () => {
         setHasUnreadMessage(false);

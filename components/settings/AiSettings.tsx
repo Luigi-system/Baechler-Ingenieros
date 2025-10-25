@@ -1,14 +1,21 @@
+
+
 import React, { useState, useEffect } from 'react';
 import { useAiService } from '../../contexts/AiServiceContext';
-import { SparklesIcon, CpuChipIcon, KeyIcon, SaveIcon } from '../ui/Icons';
+import { SparklesIcon, CpuChipIcon, KeyIcon, SaveIcon } from '../ui/Icons'; 
 import Spinner from '../ui/Spinner';
 
 const AiSettings: React.FC = () => {
-    const { service, setService, isConfigured, apiKeys, updateApiKeys } = useAiService();
+    const { 
+        service, setService, 
+        isConfigured, apiKeys, updateApiKeys
+    } = useAiService();
+    
     const [keys, setKeys] = useState({ gemini: '', openai: '' });
     const [isSaving, setIsSaving] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
+    // Update internal states when context values change
     useEffect(() => {
         setKeys({
             gemini: apiKeys.gemini || '',
@@ -25,12 +32,14 @@ const AiSettings: React.FC = () => {
         e.preventDefault();
         setIsSaving(true);
         setFeedback(null);
-        const { error } = await updateApiKeys(keys);
+        
+        const { error: keysError } = await updateApiKeys(keys);
+
         setIsSaving(false);
-        if (error) {
-            setFeedback({ type: 'error', message: `Error al guardar: ${error.message}` });
+        if (keysError) {
+            setFeedback({ type: 'error', message: `Error al guardar: ${keysError.message}` });
         } else {
-            setFeedback({ type: 'success', message: '¡Claves de API guardadas exitosamente!' });
+            setFeedback({ type: 'success', message: '¡Configuración de IA guardada exitosamente!' });
         }
     };
 
@@ -53,7 +62,7 @@ const AiSettings: React.FC = () => {
             {/* Provider Selection */}
             <div className="bg-base-200 p-6 rounded-xl shadow-lg transition-all duration-300 hover:shadow-2xl">
                 <h3 className="text-base font-semibold text-base-content mb-4 pb-4 border-b border-base-border">Proveedor de IA Activo</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4"> 
                     {/* Gemini Option */}
                     <div
                         onClick={() => setService('gemini')}
@@ -103,7 +112,7 @@ const AiSettings: React.FC = () => {
                     <div className="bg-secondary/10 text-secondary p-3 rounded-lg"><KeyIcon className="h-8 w-8"/></div>
                     <div>
                         <h3 className="text-xl font-bold text-base-content">Claves de API</h3>
-                        <p className="mt-1 text-sm text-neutral">Introduce las claves de API para los servicios que desees utilizar. Esta es una configuración global.</p>
+                        <p className="mt-1 text-sm text-neutral">Introduce las claves de API para los servicios de IA. Esta es una configuración global.</p>
                     </div>
                 </div>
 
@@ -127,7 +136,7 @@ const AiSettings: React.FC = () => {
                 <div className="flex justify-end pt-6 mt-6 border-t border-base-border">
                     <button type="submit" disabled={isSaving} className="flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary-focus disabled:bg-primary/50">
                         {isSaving ? <Spinner/> : <SaveIcon className="h-5 w-5"/>}
-                        {isSaving ? 'Guardando...' : 'Guardar Claves'}
+                        {isSaving ? 'Guardando...' : 'Guardar Configuración'}
                     </button>
                 </div>
             </form>

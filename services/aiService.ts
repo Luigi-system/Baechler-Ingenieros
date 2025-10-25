@@ -1,7 +1,7 @@
-
-
 import { Type, FunctionDeclaration } from "@google/genai";
 import type { SupabaseClient } from '@supabase/supabase-js';
+// Removed AgenteClient type import, no longer needed in handleFunctionExecution
+// Removed AiService type import, no longer needed in handleFunctionExecution
 
 const allTables = [
     'Reporte_Servicio', 'Reporte_Visita', 'Empresa', 'Planta', 'Maquinas', 'Encargado',
@@ -18,7 +18,7 @@ const DATABASE_SCHEMA = `
   - Roles (id, nombre)
 `;
 
-// --- GEMINI FUNCTION DECLARATIONS ---
+// --- GEMINI FUNCTION DECLARATIONS (for direct Supabase, or for Agente orchestration) ---
 
 export const executeQueryOnDatabase_Gemini: FunctionDeclaration = {
   name: 'executeQueryOnDatabase',
@@ -101,7 +101,41 @@ export const performAction_Gemini: FunctionDeclaration = {
     }
 };
 
-// --- OPENAI FUNCTION DECLARATIONS ---
+// New function declaration for interacting with the external agent with a natural language query
+export const callExternalAgentWithQuery_Gemini: FunctionDeclaration = {
+    name: 'callExternalAgentWithQuery',
+    description: "Envía una consulta en lenguaje natural (reformada por ti) al agente externo para que la procese y busque datos en la base de datos. Úsala para cualquier pregunta de datos cuando el agente externo esté activo.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: {
+          type: Type.STRING,
+          description: "La consulta en lenguaje natural (reformada por ti) para que el agente externo la procese y busque datos en la base de datos."
+        }
+      },
+      required: ["query"]
+    }
+};
+
+// New function declaration for interacting with the external agent with structured data
+export const callExternalAgentWithData_Gemini: FunctionDeclaration = {
+    name: 'callExternalAgentWithData',
+    description: "Envía un objeto JSON con los datos estructurados a insertar en la base de datos a través del agente externo. Usar solo después de que el usuario haya completado un formulario.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        data: {
+          type: Type.OBJECT,
+          description: "Un objeto JSON con los datos estructurados a insertar/actualizar en la base de datos a través del agente externo. Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"ruc\": \"12345\"}'",
+          additionalProperties: true 
+        }
+      },
+      required: ["data"]
+    }
+};
+
+
+// --- OPENAI FUNCTION DECLARATIONS (for direct Supabase, or for Agente orchestration) ---
 
 export const executeQueryOnDatabase_OpenAI = {
   name: 'executeQueryOnDatabase',
@@ -184,6 +218,39 @@ export const performAction_OpenAI = {
     }
 };
 
+// New function declaration for interacting with the external agent with a natural language query
+export const callExternalAgentWithQuery_OpenAI = {
+    name: 'callExternalAgentWithQuery',
+    description: "Envía una consulta en lenguaje natural (reformada por ti) al agente externo para que la procese y busque datos en la base de datos. Úsala para cualquier pregunta de datos cuando el agente externo esté activo.",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "La consulta en lenguaje natural (reformada por ti) para que el agente externo la procese y busque datos en la base de datos."
+        }
+      },
+      required: ["query"]
+    }
+};
+
+// New function declaration for interacting with the external agent with structured data
+export const callExternalAgentWithData_OpenAI = {
+    name: 'callExternalAgentWithData',
+    description: "Envía un objeto JSON con los datos estructurados a insertar en la base de datos a través del agente externo. Usar solo después de que el usuario haya completado un formulario.",
+    parameters: {
+      type: "object",
+      properties: {
+        data: {
+          type: "object",
+          description: "Un objeto JSON con los datos estructurados a insertar/actualizar en la base de datos a través del agente externo. Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"ruc\": \"12345\"}'",
+          additionalProperties: true
+        }
+      },
+      required: ["data"]
+    }
+};
+
 
 export const responseSchema = {
     type: Type.OBJECT,
@@ -239,29 +306,30 @@ export const responseSchema = {
     required: ["displayText"]
 };
 
-export const systemInstruction = `
+// System instruction for when the AI is directly interacting with Supabase functions
+export const directSupabaseSystemInstruction = `
   Eres un asistente experto y analista de datos para una aplicación de gestión de reportes de servicio.
-  Tu misión es responder preguntas y ejecutar acciones consultando la base de datos y DEVOLVER SIEMPRE UN OBJETO JSON estructurado según el schema.
+  Tu misión es responder preguntas y ejecutar acciones consultando directamente la base de datos y DEVOLVER SIEMPRE UN OBJETO JSON estructurado según el schema.
   La fecha de hoy es ${new Date().toISOString().split('T')[0]}.
 
   **PROTOCOLO DE RESPUESTA JSON:**
   1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso pero informativo.
   2.  **table (Opcional):** Usa 'table' para presentar listas detalladas de datos tabulares (e.g., resultados de búsquedas, detalles de varios registros).
-      Ejemplo de cuándo usar 'table': "Aquí están los últimos 5 reportes de servicio:\n\n\`\`\`json\n{\n  \"displayText\": \"Aquí están los últimos 5 reportes de servicio.\",\n  \"table\": {\n    \"headers\": [\"Código\", \"Fecha\", \"Empresa\", \"Estado\"],\n    \"rows\": [\n      [\"RS-001\", \"2024-07-20\", \"Empresa A\", \"Facturado\"],\n      [\"RS-002\", \"2024-07-19\", \"Empresa B\", \"Pendiente\"]\n    ]\n  },\n  \"suggestions\": [\"Ver más detalles del RS-001\", \"Listar reportes de la Empresa A\"]\n}\n\`\`\`
+      Ejemplo de cuándo usar 'table': "Aquí están los últimos 5 reportes de servicio:\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"Aquí están los últimos 5 reportes de servicio.\",\\n  \"table\": {\\n    \"headers\": [\"Código\", \"Fecha\", \"Empresa\", \"Estado\"],\\n    \"rows\": [\\n      [\"RS-001\", \"2024-07-20\", \"Empresa A\", \"Facturado\"],\\n      [\"RS-002\", \"2024-07-19\", \"Empresa B\", \"Pendiente\"]\\n    ]\\n  },\\n  \"suggestions\": [\"Ver más detalles del RS-001\", \"Listar reportes de la Empresa A\"]\\n}\\n\`\`\`
   3.  **chart (Opcional):** Usa 'chart' para visualizar datos agregados o para mostrar distribuciones y comparaciones.
       - Usa \`"type": "pie"\` para proporciones o composición (e.g., distribución de estados de reportes).
       - Usa \`"type": "bar"\` para comparar cantidades entre categorías (e.g., número de reportes por empresa).
-      Ejemplo de cuándo usar 'chart': "Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa:\n\n\`\`\`json\n{\n  \"displayText\": \"Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa.\",\n  \"chart\": {\n    \"type\": \"bar\",\n    \"data\": [\n      {\"name\": \"Empresa A\", \"value\": 15},\n      {\"name\": \"Empresa B\", \"value\": 10}\n    ]\n  },\n  \"suggestions\": [\"Ver reportes de Empresa A\", \"Total de reportes facturados\"]\n}\n\`\`\`
+      Ejemplo de cuándo usar 'chart': "Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa:\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa.\",\\n  \"chart\": {\\n    \"type\": \"bar\",\\n    \"data\": [\\n      {\"name\": \"Empresa A\", \"value\": 15},\\n      {\"name\": \"Empresa B\", \"value\": 10}\\n    ]\\n  },\\n  \"suggestions\": [\"Ver reportes de Empresa A\", \"Total de reportes facturados\"]\\n}\\n\`\`\`
   4.  **actions (Opcional):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento que el usuario podría querer ejecutar fácilmente. Estos prompts de acción deben ser claros y directos.
-      Ejemplo de cuándo usar 'actions': "El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\n\n\`\`\`json\n{\n  \"displayText\": \"El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\",\n  \"actions\": [\n    {\"label\": \"Marcar como facturado\", \"prompt\": \"Marca el reporte RS-005 como facturado\"},\n    {\"label\": \"Editar reporte\", \"prompt\": \"Quiero editar el reporte RS-005\"}\n  ],\n  \"suggestions\": [\"Ver otros reportes pendientes\"]\n}\n\`\`\`
+      Ejemplo de cuándo usar 'actions': "El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\",\\n  \"actions\": [\\n    {\"label\": \"Marcar como facturado\", \"prompt\": \"Marca el reporte RS-005 como facturado\"},\\n    {\"label\": \"Editar reporte\", \"prompt\": \"Quiero editar el reporte RS-005\"}\\n  ],\\n  \"suggestions\": [\"Ver otros reportes pendientes\"]\\n}\\n\`\`\`
   5.  **form (Opcional):** Utiliza un 'form' cuando necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro). Define los campos necesarios (type, name, label, options).
-      Ejemplo de cuándo usar 'form': "Necesito algunos datos para crear la nueva empresa. Por favor, completa este formulario:\n\n\`\`\`json\n{\n  \"displayText\": \"Necesito algunos datos para crear la nueva empresa. Por favor, completa este formulario:\",\n  \"form\": [\n    {\"type\": \"text\", \"name\": \"nombre\", \"label\": \"Nombre de la Empresa\"},\n    {\"type\": \"text\", \"name\": \"ruc\", \"label\": \"RUC\"},\n    {\"type\": \"select\", \"name\": \"distrito\", \"label\": \"Distrito\", \"options\": [\"Lima\", \"Miraflores\"]},\n    {\"type\": \"checkbox\", \"name\": \"activo\", \"label\": \"¿Está activa?\"}\n  ],\n  \"suggestions\": [\"Cancelar creación\", \"Ver empresas existentes\"]\n}\n\`\`\`
+      Ejemplo de cuándo usar 'form': "Necesito algunos datos para crear la nueva empresa. Por favor, completa este formulario:\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"Necesito algunos datos para crear una nueva empresa. Por favor, completa este formulario:\",\\n  \"form\": [\\n    {\"type\": \"text\", \"name\": \"nombre\", \"label\": \"Nombre de la Empresa\"},\\n    {\"type\": \"text\", \"name\": \"ruc\", \"label\": \"RUC\"},\\n    {\"type\": \"select\", \"name\": \"distrito\", \"label\": \"Distrito\", \"options\": [\"Lima\", \"Miraflores\"]},\\n    {\"type\": \"checkbox\", \"name\": \"activo\", \"label\": \"¿Está activa?\"}\\n  ],\\n  \"suggestions\": [\"Cancelar creación\", \"Ver empresas existentes\"]\\n}\\n\`\`\`
   6.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
 
   **TUS HERRAMIENTAS:**
   - \`executeQueryOnDatabase\`: Para consultas SELECT simples (listar, buscar).
   - \`getAggregateData\`: Para consultas complejas (COUNT, SUM, GROUP BY). Es la herramienta principal para generar datos para los 'charts'.
-  - \`performAction\`: Úsalo SOLO cuando el usuario te pida explícitamente modificar datos (ej. "marca el reporte X como facturado") o después de que el usuario haya completado un formulario para crear un nuevo registro.
+  - \`performAction\`: Úsalo SOLO cuando el usuario te lo ordene explícitamente modificar datos (ej. "marca el reporte X como facturado") o después de que el usuario haya completado un formulario para crear un nuevo registro.
 
   **FLUJO PARA CREAR DATOS:**
   - Si el usuario pide crear algo (ej. "crea una nueva empresa"), PRIMERO solicita la información necesaria devolviendo un objeto \`form\` en tu respuesta JSON. NO intentes adivinar los datos.
@@ -274,85 +342,132 @@ export const systemInstruction = `
   - **ERES UN ANALISTA, NO UN OPERADOR POR DEFECTO.** No modifiques datos a menos que el usuario te lo ordene explícitamente. Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
 `;
 
-export const handleFunctionExecution = async (call: any, supabase: SupabaseClient) => {
-    const args = call.args;
-    let callResponsePayload;
+// System instruction for when the AI is acting as an orchestrator for the external agent
+export const agenteOrchestratorSystemInstruction = `
+  Eres un asistente experto en lenguaje natural para una aplicación de gestión de reportes de servicio.
+  Tu rol es ORQUESTAR las interacciones del usuario con un agente externo que maneja la base de datos.
+  La fecha de hoy es ${new Date().toISOString().split('T')[0]}.
 
+  **TU MISIÓN DETALLADA COMO ORQUESTADOR:**
+
+  1.  **Interpretación de la Intención del Usuario:**
+      *   Analiza cuidadosamente lo que el usuario solicita.
+
+  2.  **Generación DIRECTA de Formularios (por ti):**
+      *   Si la intención del usuario es **crear o actualizar un registro** (ej. "quiero registrar un nuevo cliente", "añade una nueva máquina", "modifica los datos de la empresa X"), **DEBES responder directamente con un objeto JSON que contenga un 'form'** en el \`AIResponse\`. Define los campos necesarios (type, name, label, options) para recopilar la información estructurada del usuario.
+      *   **Importante:** NO intentes consultar al agente externo para pedir un formulario. Tú eres el encargado de generarlo.
+
+  3.  **Comunicación con el Agente Externo (vía herramientas \`callExternalAgentWithQuery\` y \`callExternalAgentWithData\`):**
+      *   **Para Consultas de Datos:** Si la intención del usuario es **consultar información de la base de datos** (ej. "dame las empresas", "cuántas máquinas hay de marca Easyprint"), o si has detectado que la pregunta inicial del usuario requiere una consulta a la DB, **reformularás la pregunta en un lenguaje natural claro y conciso** y luego **usarás la herramienta \`callExternalAgentWithQuery\` con el parámetro \`query\`** para enviar esta pregunta reformulada al agente externo.
+      *   **Para Guardar Datos de Formularios:** Una vez que el usuario haya completado y enviado un formulario (que tú generaste), **recibirás esos datos estructurados y DEBERÁS usar la herramienta \`callExternalAgentWithData\` con el parámetro \`data\`** para enviar este objeto JSON directamente al agente externo para que realice la operación de guardado (INSERT/UPDATE).
+
+  4.  **Interpretación y Presentación de la Respuesta Final:**
+      *   Una vez que recibas una respuesta del agente externo (que puede ser datos brutos de una consulta, o una confirmación de una operación de guardado), **deberás interpretarla y transformarla en un objeto \`AIResponse\` coherente y amigable** para el usuario. El agente externo SIEMPRE te enviará JSON en su respuesta.
+
+  **PROTOCOLO DE RESPUESTA JSON (para la interfaz de usuario):**
+  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso pero informativo.
+  2.  **table (Opcional):** Usa 'table' para presentar listas detalladas de datos tabulares.
+  3.  **chart (Opcional):** Usa 'chart' para visualizar datos agregados o para mostrar distribuciones y comparaciones.
+  4.  **actions (Opcional):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento.
+  5.  **form (Opcional):** Utiliza un 'form' cuando necesites recopilar información estructurada del usuario.
+  6.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español.
+
+  **TUS HERRAMIENTAS:**
+  - \`callExternalAgentWithQuery\`: Para enviar preguntas de datos al agente externo.
+  - \`callExternalAgentWithData\`: Para enviar datos a guardar (después de un formulario) al agente externo.
+
+  **REGLAS DE ORO:**
+  -   **SIEMPRE RESPONDER EN FORMATO JSON.**
+  -   **TU PRIORIDAD ES LA UX:** Si una acción requiere datos, ¡pide el formulario! Si una pregunta es de datos, ¡prepara la consulta para el agente!
+  -   **NO INVENTES DATOS.** Si no tienes suficiente información para una acción o consulta, pídesela al usuario o usa la herramienta \`callExternalAgentWithQuery\` si es una consulta.
+  -   **NO MODIFIQUES DATOS DIRECTAMENTE.** Tu rol es de orquestador. El agente externo es quien realiza las operaciones finales en la DB.
+  -   Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
+`;
+
+
+export const handleFunctionExecution = async (
+  // FIX: Updated `call` type to include optional `id`.
+  call: { name: string, args: any, id?: string },
+  supabase: SupabaseClient,
+) => {
+    let callResponsePayload: any = null; // Ensure explicit initialization
+    
+    // Original Supabase direct execution logic (now always used when this function is called)
     try {
-        if (typeof args.tableName !== 'string' || !allTables.includes(args.tableName)) {
-            throw new Error(`Acceso denegado o tabla inválida: '${args.tableName}'.`);
+        if (typeof call.args.tableName !== 'string' || !allTables.includes(call.args.tableName)) {
+            throw new Error(`Acceso denegado o tabla inválida: '${call.args.tableName}'.`);
         }
 
         if (call.name === 'executeQueryOnDatabase') {
-            let query = supabase.from(args.tableName).select(args.select as string || '*');
-            if (args.filters && Array.isArray(args.filters)) {
-                args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
+            let query = supabase.from(call.args.tableName).select(call.args.select as string || '*');
+            if (call.args.filters && Array.isArray(call.args.filters)) {
+                call.args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
             }
-            if (args.orderBy) {
+            if (call.args.orderBy) {
                 // This logic handles both boolean (from OpenAI) and string 'false' (from Gemini)
-                const ascending = args.ascending !== false && args.ascending !== 'false';
-                query = query.order(args.orderBy as string, { ascending });
+                const ascending = call.args.ascending !== false && call.args.ascending !== 'false';
+                query = query.order(call.args.orderBy as string, { ascending });
             }
-            query = query.limit(args.limit as number || 10);
+            query = query.limit(call.args.limit as number || 10);
             const { data, error } = await query;
             if (error) throw error;
             callResponsePayload = { results: data };
         } else if (call.name === 'getAggregateData') {
             let query: any;
-            if(args.aggregationType === 'COUNT') {
-                query = supabase.from(args.tableName).select(`${args.groupByColumn}, count:count()`, { count: 'exact' });
-            } else if(args.aggregationType === 'SUM') {
-                 let initialQuery = supabase.from(args.tableName).select(`${args.groupByColumn}, ${args.valueColumn}`);
-                 if (args.filters && Array.isArray(args.filters)) {
-                    args.filters.forEach((filter: any) => initialQuery = initialQuery.filter(filter.column, filter.operator, filter.value));
+            if(call.args.aggregationType === 'COUNT') {
+                query = supabase.from(call.args.tableName).select(`${call.args.groupByColumn}, count:count()`, { count: 'exact' });
+            } else if(call.args.aggregationType === 'SUM') {
+                 let initialQuery = supabase.from(call.args.tableName).select(`${call.args.groupByColumn}, ${call.args.valueColumn}`);
+                 if (call.args.filters && Array.isArray(call.args.filters)) {
+                    call.args.filters.forEach((filter: any) => initialQuery = initialQuery.filter(filter.column, filter.operator, filter.value));
                  }
                  const { data, error } = await initialQuery;
                  if (error) throw error;
 
                  const groupedSums = data.reduce((acc, item) => {
-                     const group = item[args.groupByColumn];
-                     const value = item[args.valueColumn];
+                     const group = item[call.args.groupByColumn];
+                     const value = item[call.args.valueColumn];
                      if (group && typeof value === 'number') {
                          acc[group] = (acc[group] || 0) + value;
                      }
                      return acc;
                  }, {} as Record<string, number>);
 
-                 const results = Object.entries(groupedSums).map(([group, total]) => ({ [args.groupByColumn]: group, total }));
+                 const results = Object.entries(groupedSums).map(([group, total]) => ({ [call.args.groupByColumn]: group, total }));
                  callResponsePayload = { results };
-                 return { functionResponse: { name: call.name, response: { result: JSON.stringify(callResponsePayload) } } };
+                 return { functionResponse: { name: call.name, id: call.id, response: { result: JSON.stringify(callResponsePayload) } } };
             } else {
-                throw new Error(`Tipo de agregación no soportado: ${args.aggregationType}`);
+                throw new Error(`Tipo de agregación no soportado: ${call.args.aggregationType}`);
             }
 
-            if (args.filters && Array.isArray(args.filters)) {
-                args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
+            if (call.args.filters && Array.isArray(call.args.filters)) {
+                call.args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
             }
-            if (args.groupByColumn) query = query.group(args.groupByColumn as string);
+            if (call.args.groupByColumn) query = query.group(call.args.groupByColumn as string);
             
             const { data, error } = await query;
             if (error) throw error;
             callResponsePayload = { results: data };
         } else if (call.name === 'performAction') {
-             const updatesObject = JSON.parse(args.updates);
+             const updatesObject = JSON.parse(call.args.updates);
              if (typeof updatesObject !== 'object' || updatesObject === null) {
                 throw new Error("El campo 'updates' debe ser un string JSON que represente un objeto válido.");
              }
 
-             if (args.actionType === 'UPDATE') {
-                let query = supabase.from(args.tableName).update(updatesObject);
-                 if (args.filters && Array.isArray(args.filters)) {
-                    args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
+             if (call.args.actionType === 'UPDATE') {
+                let query = supabase.from(call.args.tableName).update(updatesObject);
+                 if (call.args.filters && Array.isArray(call.args.filters)) {
+                    call.args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
                 }
                 const { data, error } = await query.select();
                 if (error) throw error;
                 callResponsePayload = { results: data, message: `Se actualizaron ${data?.length || 0} registro(s).` };
-             } else if (args.actionType === 'INSERT') {
-                const { data, error } = await supabase.from(args.tableName).insert(updatesObject).select();
+             } else if (call.args.actionType === 'INSERT') {
+                const { data, error } = await supabase.from(call.args.tableName).insert(updatesObject).select();
                 if(error) throw error;
                 callResponsePayload = { results: data, message: `Se creó ${data?.length || 0} nuevo registro(s) exitosamente.`};
              } else {
-                throw new Error(`Acción no soportada: ${args.actionType}. Solo se permiten 'UPDATE' e 'INSERT'.`);
+                throw new Error(`Acción no soportada: ${call.args.actionType}. Solo se permiten 'UPDATE' e 'INSERT'.`);
              }
         } else {
             throw new Error("Función no soportada.");
@@ -364,6 +479,8 @@ export const handleFunctionExecution = async (call: any, supabase: SupabaseClien
     return {
         functionResponse: {
             name: call.name,
+            // FIX: Include the `id` from the original tool call.
+            id: call.id, 
             response: { result: JSON.stringify(callResponsePayload) },
         },
     };

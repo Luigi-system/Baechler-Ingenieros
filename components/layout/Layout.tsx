@@ -26,8 +26,9 @@ import RoleManagement from '../settings/RoleManagement';
 import DataImporter from '../settings/DataImporter';
 import AccessManagement from '../settings/AccessManagement';
 import ProfileSettings from '../settings/ProfileSettings';
-import GoogleDriveSettings from '../settings/GoogleDriveSettings'; // New import
-import GoogleDocViewer from '../google-docs/GoogleDocViewer'; // New import
+import GoogleDriveSettings from '../settings/GoogleDriveSettings'; 
+import GoogleDocViewer from '../google-docs/GoogleDocViewer'; 
+import AgenteSettings from '../settings/AgenteSettings'; // Import the renamed component
 
 const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
@@ -78,7 +79,7 @@ const Layout: React.FC = () => {
         return <VisitReportForm onBack={() => navigateTo('reports-visit')} />;
       case 'edit-report-visit':
         return <VisitReportForm reportId={editingReportId?.toString()} onBack={() => navigateTo('reports-visit')} />;
-      case 'google-doc-viewer': // New route
+      case 'google-doc-viewer': 
         return <GoogleDocViewer />;
       
       // Management Pages
@@ -96,6 +97,8 @@ const Layout: React.FC = () => {
         return <CustomizationSettings />;
       case 'settings-ai':
         return <AiSettings />;
+      case 'settings-agente': // Route to AgenteSettings for Agente config
+        return <AgenteSettings />; 
       case 'settings-database':
         return <DatabaseSettings />;
       case 'settings-users':
@@ -108,7 +111,7 @@ const Layout: React.FC = () => {
         return <DataImporter />;
       case 'settings-profile':
         return <ProfileSettings />;
-      case 'settings-google-drive': // New route
+      case 'settings-google-drive': 
         return <GoogleDriveSettings />;
         
       default:

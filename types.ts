@@ -1,3 +1,8 @@
+
+
+import { GoogleGenAI } from '@google/genai'; // FIX: Import GoogleGenAI from @google/genai
+import { AgenteClient } from './services/agenteService'; // FIX: Import AgenteClient from its definition file
+
 export enum UserRole {
   ADMIN = 'Administrador',
   MANAGER = 'Gerente',
@@ -147,7 +152,7 @@ interface ColorSet {
   neutral: string;
   'base-100': string; // Main background
   'base-200': string; // Cards, modals
-  'base-300': string; // Subtle bg, hover
+  'base-300': string; // Hover, subtle backgrounds
   'base-content': string; // Main text color
   'base-border': string;
   info: string;
@@ -258,4 +263,37 @@ export interface GoogleAuthContextType {
   handleSignOut: () => void;
   gapiLoaded: boolean;
   gisLoaded: boolean;
+}
+
+// FIX: Moved OpenAiClient interface definition here from AiServiceContext.tsx
+// Define a simple type for our custom fetch-based OpenAI client
+export interface OpenAiClient {
+    chat: {
+        completions: {
+            create: (payload: any) => Promise<any>;
+        };
+    };
+}
+
+// Modified AiService type to only include 'gemini' and 'openai'
+export type AiService = 'gemini' | 'openai';
+
+export interface AiApiKeys {
+    gemini?: string;
+    openai?: string;
+}
+
+// Updated AiServiceContextType to include `isAgenteEnabled`
+export interface AiServiceContextType {
+    service: AiService;
+    setService: (service: AiService) => void;
+    isConfigured: (service: AiService) => boolean;
+    isAgenteEnabled: boolean; // New property to indicate if the external agent is configured
+    geminiClient: GoogleGenAI | null;
+    openaiClient: OpenAiClient | null;
+    agenteClient: AgenteClient | null;
+    apiKeys: AiApiKeys;
+    agenteWebhookUrl: string;
+    updateApiKeys: (keys: AiApiKeys) => Promise<{error: Error | null}>;
+    updateAgenteWebhookUrl: (url: string) => Promise<{error: Error | null}>;
 }
