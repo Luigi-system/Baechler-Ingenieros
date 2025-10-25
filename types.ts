@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from '@google/genai'; // FIX: Import GoogleGenAI from @google/genai
 import { AgenteClient } from './services/agenteService'; // FIX: Import AgenteClient from its definition file
 
@@ -243,6 +244,7 @@ export interface FormField {
     name: string;
     label: string;
     options?: string[];
+    placeholder?: string; // Added placeholder
 }
 
 export interface ConfirmationMessage {

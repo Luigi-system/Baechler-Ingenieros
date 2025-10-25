@@ -1,8 +1,9 @@
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { BarChart, Bar, PieChart, Pie, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { SendIcon, AssistantIcon, XIcon, CheckCircleIcon, AlertTriangleIcon } from '../ui/Icons';
+import { SendIcon, AssistantIcon, XIcon, CheckCircleIcon, AlertTriangleIcon, SearchIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import { useChat, Message } from '../../contexts/ChatContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -14,31 +15,66 @@ interface AssistantProps {
   onClose: () => void;
 }
 
-const SimpleTable: React.FC<{ data: TableData }> = ({ data }) => {
+const FilterableTable: React.FC<{ data: TableData }> = ({ data }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    const filteredRows = useMemo(() => {
+        if (!searchTerm.trim()) return data.rows;
+        return data.rows.filter(row => 
+            row.some(cell => 
+                String(cell).toLowerCase().includes(searchTerm.toLowerCase())
+            )
+        );
+    }, [searchTerm, data.rows]);
+
     if (!data || !data.headers || !data.rows) return null;
+    
     return (
-        <div className="overflow-auto max-h-60 mt-3 border border-base-border rounded-lg custom-scrollbar">
-            <table className="min-w-full text-sm">
-                <thead className="bg-base-100 dark:bg-base-300 sticky top-0 z-10">
-                    <tr>
-                        {data.headers.map((header, i) => (
-                            <th key={i} className="px-3 py-2 text-left font-semibold">{header}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-base-border">
-                    {data.rows.map((row, i) => (
-                        <tr key={i} className="hover:bg-base-100 dark:hover:bg-base-300/50">
-                            {row.map((cell, j) => (
-                                <td key={j} className="px-3 py-2 whitespace-pre-wrap">{String(cell)}</td>
+        <div className="mt-3 space-y-2">
+            <div className="relative">
+                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <SearchIcon className="h-4 w-4 text-neutral" />
+                </div>
+                <input
+                    type="text"
+                    placeholder={`Filtrar en ${data.rows.length} filas...`}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="block w-full text-sm pl-9 pr-3 py-1.5 input-style"
+                />
+            </div>
+            <div className="overflow-auto max-h-96 border border-base-border rounded-lg custom-scrollbar">
+                <table className="min-w-full text-sm">
+                    <thead className="bg-base-100 dark:bg-base-300 sticky top-0 z-10">
+                        <tr>
+                            {data.headers.map((header, i) => (
+                                <th key={i} className="px-3 py-2 text-left font-semibold">{header}</th>
                             ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-base-border">
+                        {filteredRows.length > 0 ? (
+                            filteredRows.map((row, i) => (
+                                <tr key={i} className="hover:bg-base-100 dark:hover:bg-base-300/50">
+                                    {row.map((cell, j) => (
+                                        <td key={j} className="px-3 py-2 whitespace-pre-wrap">{String(cell)}</td>
+                                    ))}
+                                </tr>
+                            ))
+                        ) : (
+                             <tr>
+                                <td colSpan={data.headers.length} className="px-3 py-4 text-center text-neutral">
+                                    No se encontraron resultados para "{searchTerm}".
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };
+
 
 const BarChartComponent: React.FC<{ data: any[] }> = ({ data }) => {
     const { themeMode } = useTheme();
@@ -93,12 +129,19 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
     
     if (lastAiMessageWithForm) {
         const messageIndex = messages.indexOf(lastAiMessageWithForm);
-        const formContent = (lastAiMessageWithForm.content as AIResponse).form; // Get the raw form content
-        
-        // --- ADD VALIDATION HERE ---
-        if (Array.isArray(formContent)) { // Check if it's actually an array
-            const fields = formContent; // Now 'fields' is guaranteed to be an array
-            
+        const formContent = (lastAiMessageWithForm.content as AIResponse).form;
+        let fields: FormField[] | undefined;
+
+        if (Array.isArray(formContent)) {
+            // Standard, correct case
+            fields = formContent;
+        } else if (formContent && typeof formContent === 'object' && Array.isArray((formContent as any).fields)) {
+            // Handle malformed AI response: { title: '...', fields: [...] }
+            console.warn("AI returned a non-standard form object. Adapting to its structure.");
+            fields = (formContent as any).fields;
+        }
+
+        if (fields && Array.isArray(fields) && fields.every(f => typeof f === 'object' && f.name && f.label && f.type)) {
             // Only update if the form is different from the current active one
             if (activeForm?.messageIndex !== messageIndex) {
                 setActiveForm({ messageIndex, fields });
@@ -109,8 +152,7 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                 setFormValues(initialValues);
             }
         } else {
-            // If the AI returned a 'form' field but it's not an array, log a warning and clear activeForm.
-            console.warn("AI response contained a 'form' field that was not an array:", formContent);
+            console.warn("AI response contained a 'form' field that was not an array or a recognized object structure:", formContent);
             if (activeForm) {
                 setActiveForm(null);
                 setFormValues({});
@@ -118,11 +160,11 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
         }
     } else {
         if (activeForm) {
-            activeForm === null; // Clear form if no longer present in last message
+            setActiveForm(null); // Clear form if no longer present in last message
             setFormValues({}); // Also clear form values
         }
     }
-  }, [messages, activeForm]); // Added activeForm to dependencies to prevent stale closure issues
+  }, [messages, activeForm]);
   
   useEffect(() => {
     if (messages.length > 0 && messages[messages.length - 1].sender === 'ai' && !isOpen) {
@@ -161,8 +203,19 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
 
   const handleFormSubmit = async () => {
       if (!activeForm) return;
+      
+      // For select fields, we need to extract the ID from "ID: Name" format.
+      const processedFormValues = { ...formValues };
+      activeForm.fields.forEach(field => {
+          if (field.type === 'select') {
+              const selectedValue = formValues[field.name];
+              if (typeof selectedValue === 'string' && selectedValue.includes(':')) {
+                  processedFormValues[field.name] = selectedValue.split(':')[0].trim();
+              }
+          }
+      });
 
-      const submissionPrompt = `El usuario ha completado el formulario con los siguientes datos: ${JSON.stringify(formValues)}. Procede a crear el registro en la base de datos.`;
+      const submissionPrompt = `El usuario ha completado el formulario con los siguientes datos: ${JSON.stringify(processedFormValues)}. Procede a crear el registro en la base de datos.`;
       
       setActiveForm(null);
       setFormValues({});
@@ -206,7 +259,10 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><AssistantIcon className="h-5 w-5 text-white"/></div>
                             <div className="max-w-lg p-3 rounded-2xl bg-base-300 rounded-bl-none w-full">
                                 {statusDisplay && (
-                                    <div className={`p-4 rounded-lg mb-3 flex items-center gap-3 ${
+                                    <div 
+                                        role="alert"
+                                        aria-live="assertive"
+                                        className={`p-4 rounded-lg mb-3 flex items-center gap-3 ${
                                         statusDisplay.icon === 'success' ? 'bg-success/10 text-success' :
                                         statusDisplay.icon === 'error' ? 'bg-error/10 text-error' :
                                         statusDisplay.icon === 'warning' ? 'bg-warning/10 text-warning' :
@@ -223,7 +279,7 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                                 )}
 
                                 <div className="prose prose-sm max-w-none prose-zinc dark:prose-invert text-base-content"><ReactMarkdown>{aiContent.displayText}</ReactMarkdown></div>
-                                {aiContent.table && <SimpleTable data={aiContent.table} />}
+                                {aiContent.table && <FilterableTable data={aiContent.table} />}
                                 {aiContent.chart && aiContent.chart.type === 'bar' && <BarChartComponent data={aiContent.chart.data} />}
                                 {aiContent.chart && aiContent.chart.type === 'pie' && <PieChartComponent data={aiContent.chart.data} />}
                                 {aiContent.actions && (
@@ -241,10 +297,10 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                                         {activeForm.fields.map(field => (
                                             <div key={field.name}>
                                                 <label htmlFor={field.name} className="block text-xs font-medium mb-1">{field.label}</label>
-                                                {field.type === 'text' && <input type="text" id={field.name} name={field.name} value={formValues[field.name] || ''} onChange={handleFormInputChange} className="w-full text-sm input-style" required />}
+                                                {field.type === 'text' && <input type="text" id={field.name} name={field.name} value={formValues[field.name] || ''} onChange={handleFormInputChange} className="w-full text-sm input-style" required placeholder={field.placeholder || ''}/>}
                                                 {field.type === 'select' && (
                                                     <select id={field.name} name={field.name} value={formValues[field.name] || ''} onChange={handleFormInputChange} className="w-full text-sm input-style" required>
-                                                        <option value="" disabled>Selecciona...</option>
+                                                        <option value="" disabled>{field.placeholder || 'Selecciona...'}</option>
                                                         {field.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                                                     </select>
                                                 )}

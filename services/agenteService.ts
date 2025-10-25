@@ -53,7 +53,22 @@ export const createAgenteClient = (): AgenteClient => {
         }
         throw new Error(errorDetail);
       }
-      return response.json(); // Expecting structured JSON from agent on success
+      
+      const text = await response.text();
+      try {
+        // Attempt to parse the response text as JSON.
+        // An empty string will cause an error, which is caught below.
+        return JSON.parse(text);
+      } catch (e) {
+        // If parsing fails, check for common non-JSON webhook responses.
+        if (text.trim().toLowerCase() === 'accepted') {
+          // This indicates an async webhook. Our app requires a sync response with data.
+          throw new Error('El agente aceptó la solicitud pero no devolvió datos de inmediato. La configuración del webhook debe ser ajustada para que devuelva una respuesta JSON síncrona.');
+        }
+        
+        // If the response is not "Accepted" and not valid JSON, it's an unexpected format.
+        throw new Error(`Respuesta inesperada del agente (no es JSON): ${text.substring(0, 200)}`);
+      }
     }
   };
 };

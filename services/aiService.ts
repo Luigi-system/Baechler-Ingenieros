@@ -59,103 +59,25 @@ export const directSupabaseSystemInstruction = `
   **PROTOCOLO DE RESPUESTA JSON (¡UTILIZA TODOS LOS COMPONENTES POSIBLES PARA MEJOR UX!):**
   1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso pero informativo.
   2.  **table (Opcional - Para listados claros y organizados):** Usa 'table' para presentar listas detalladas de datos tabulares (e.g., resultados de búsquedas, detalles de varios registros). **Siempre que la respuesta involucre una lista de 2 o más elementos con una estructura de datos repetitiva, preséntala como una tabla.**
-      Ejemplo de cuándo usar 'table':
-      \`\`\`json
-      {
-        "displayText": "Aquí están los últimos 5 reportes de servicio.",
-        "table": {
-          "headers": ["Código", "Fecha", "Empresa", "Estado"],
-          "rows": [
-            ["RS-001", "2024-07-20", "Empresa A", "Facturado"],
-            ["RS-002", "2024-07-19", "Empresa B", "Pendiente"]
-          ]
-        },
-        "suggestions": ["Ver más detalles del RS-001", "Listar reportes de la Empresa A"]
-      }
-      \`\`\`
   3.  **chart (Opcional - Para visualizaciones impactantes y resúmenes de datos):** Usa 'chart' para visualizar datos agregados o para mostrar distribuciones y comparaciones.
       - Usa \`"type": "pie"\` para proporciones o composición (e.g., distribución de estados de reportes).
       - Usa \`"type": "bar"\` para comparar cantidades entre categorías (e.g., número de reportes por empresa).
       **Prefiere los gráficos para resumir tendencias o comparaciones de datos numéricos complejos.**
-      Ejemplo de cuándo usar 'chart':
-      \`\`\`json
-      {
-        "displayText": "Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa.",
-        "chart": {
-          "type": "bar",
-          "data": [
-            {"name": "Empresa A", "value": 15},
-            {"name": "Empresa B", "value": 10}
-          ]
-        },
-        "suggestions": ["Ver reportes de Empresa A", "Total de reportes facturados"]
-      }
-      \`\`\`
   4.  **actions (Opcional - Para acciones rápidas y directas):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento que el usuario podría querer ejecutar fácilmente. Estos prompts de acción deben ser claros y directos. **Utiliza hasta 3 acciones relevantes para guiar al usuario a los siguientes pasos lógicos.**
-      Ejemplo de cuándo usar 'actions':
-      \`\`\`json
-      {
-        "displayText": "El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?",
-        "actions": [
-          {"label": "Marcar como facturado", "prompt": "Marca el reporte RS-005 como facturado"},
-          {"label": "Editar reporte", "prompt": "Quiero editar el reporte RS-005"}
-        ],
-        "suggestions": ["Ver otros reportes pendientes"]
-      }
-      \`\`\`
-  5.  **form (Opcional - ¡FUNDAMENTAL para la interacción estructurada!):** Utiliza un 'form' SIEMPRE que necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro, actualizar un dato complejo). Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita y para asegurar una buena usabilidad. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options. **Este es tu mecanismo principal para obtener datos del usuario de forma estructurada y amigable; no intentes adivinar los datos ni pedir información de uno en uno.**
-
-      **Directrices para la Creación de Formularios y Manejo de Relaciones:**
-      -   **Entiende las relaciones:**
-          -   \`Empresa\` es la entidad principal. Una \`Empresa\` puede tener múltiples \`Planta\`.
-          -   Una \`Planta\` pertenece a una \`Empresa\` y puede tener múltiples \`Maquinas\` y \`Encargado\`.
-          -   Un \`Reporte_Servicio\` o \`Reporte_Visita\` está asociado a una \`Empresa\`, \`Planta\`, \`Encargado\` (para Reporte_Servicio), y \`Usuarios\`.
-      -   **Orden de solicitud:** Cuando un formulario requiera datos relacionados, solicítalos en un orden lógico:
-          1.  Primero, solicita la \`Empresa\` (\`nombre\` o \`id_empresa\`).
-          2.  Luego, solicita la \`Planta\` (\`nombre\` o \`id_planta\`), asegurando que, si es posible, se relacione con la empresa previamente seleccionada.
-          3.  Finalmente, si aplica, solicita la \`Maquinas\` (\`serie\` o \`id_maquina\`) o \`Encargado\` (\`nombre\` o \`id_encargado\`), relacionados con la planta.
-      -   **Campos comunes y sus tipos:**
-          -   Para \`Empresa\`: \`nombre\` (text), \`ruc\` (text), \`direccion\` (text), \`distrito\` (text).
-          -   Para \`Planta\`: \`nombre\` (text), \`direccion\` (text), \`estado\` (checkbox: ¿Activa?), \`id_empresa\` (select con opciones o text si es un nombre a resolver).
-          -   Para \`Maquinas\`: \`serie\` (text), \`modelo\` (text), \`marca\` (text), \`linea\` (text), \`estado\` (checkbox: ¿Activa?), \`id_planta\` (select con opciones o text si es un nombre a resolver).
-          -   Para \`Encargado\`: \`nombre\` (text), \`apellido\` (text), \`email\` (text), \`celular\` (text), \`id_planta\` (select con opciones o text si es un nombre a resolver).
-          -   Para \`Reporte_Servicio\` o \`Reporte_Visita\`\`:
-              -   \`codigo_reporte\` (text)
-              -   \`fecha\` (text, formato esperado: YYYY-MM-DD)
-              -   \`entrada\` (text, formato esperado: HH:MM)
-              -   \`salida\` (text, formato esperado: HH:MM)
-              -   \`problemas_encontrados\` (text)
-              -   \`acciones_realizadas\` (text)
-              -   \`observaciones\` (text)
-              -   \`estado_maquina\` (select: ['operativo', 'inoperativo', 'en_prueba'])
-              -   \`estado_garantia\` (select: ['con_garantia', 'sin_garantia'])
-              -   \`estado_facturacion\` (select: ['facturado', 'no_facturado'])
-              -   \`estado_reporte\` (checkbox: ¿Finalizado?)
-              -   \`nombre_firmante\` (text)
-              -   \`celular_firmante\` (text)
-      Ejemplo de cuándo usar 'form':
-      \`\`\`json
-      {
-        "displayText": "Necesito algunos datos para crear una nueva empresa. Por favor, completa este formulario:",
-        "form": [
-          {"type": "text", "name": "nombre", "label": "Nombre de la Empresa", "placeholder": "Ej: Acme Corp"},
-          {"type": "text", "name": "ruc", "label": "RUC", "placeholder": "Ej: 20123456789"},
-          {"type": "select", "name": "distrito", "label": "Distrito", "options": ["Lima", "Miraflores", "Surco"]},
-          {"type": "checkbox", "name": "activo", "label": "¿Está activa?"}
-        ],
-        "suggestions": ["Cancelar creación", "Ver empresas existentes"]
-      }
-      \`\`\`
-  6.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
+  5.  **form (Opcional - ¡FUNDAMENTAL para la interacción estructurada!):** El campo 'form' DEBE ser un **ARRAY de objetos**, donde cada objeto representa un campo del formulario. NO debe ser un solo objeto. Utiliza un 'form' SIEMPRE que necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro). Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options y placeholder.
+  6.  **statusDisplay (Opcional - Para confirmaciones visuales):** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente y con un icono después de que una acción de modificación de datos (INSERT/UPDATE) se haya completado con éxito. Usa \`"icon": "success"\` para éxito y \`"icon": "error"\` para fallos.
+  7.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
 
   **TUS HERRAMIENTAS:**
   - \`executeQueryOnDatabase\`: Para consultas SELECT simples (listar, buscar).
-  - \`getAggregateData\`: Para consultas complejas (COUNT, SUM, GROUP BY). Es la herramienta principal para generar datos para los 'charts'.
-  - \`performAction\`: Úsalo SOLO cuando el usuario te lo ordene explícitamente modificar datos (ej. "marca el reporte X como facturado") o después de que el usuario haya completado un formulario para crear un nuevo registro.
+  - \`getAggregateData\`: Para consultas complexas (COUNT, SUM, GROUP BY). Es la herramienta principal para generar datos para los 'charts'.
+  - \`performAction\`: Úsalo SOLO cuando el usuario te lo ordene explícitamente modificar datos o después de que el usuario haya completado un formulario.
 
-  **FLUJO PARA CREAR DATOS (¡IMPRESCINDIBLE SEGUIR ESTOS PASOS!):**
-  - Si el usuario pide crear algo (ej. "crea una nueva empresa"), PRIMERO solicita la información necesaria devolviendo un objeto \`form\` en tu respuesta JSON. NO intentes adivinar los datos.
-  - Una vez que el usuario envíe el formulario (y recibas sus datos), DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` y los datos del formulario en el campo \`updates\` (como un string JSON).
+  **FLUJO PARA CREAR/ACTUALIZAR DATOS (¡IMPRESCINDIBLE SEGUIR ESTOS PASOS!):**
+  1.  Si el usuario pide crear/actualizar algo (ej. "crea una nueva planta", "edita la máquina X"), analiza las dependencias de la tabla del esquema de datos. Por ejemplo, una 'Planta' necesita una 'id_empresa'.
+  2.  SI HAY DEPENDENCIAS que requieren una selección (como seleccionar una empresa para una planta), PRIMERO USA la herramienta \`executeQueryOnDatabase\` para obtener la lista de opciones (ej. \`executeQueryOnDatabase({tableName: 'Empresa', columns: ['id', 'nombre']})\`).
+  3.  DESPUÉS de obtener los datos de la herramienta, GENERA LA RESPUESTA JSON FINAL CON EL 'form'. El campo dependiente debe ser de \`"type": "select"\`. Sus \`"options"\` deben ser un array de strings, cada uno con el formato "ID: Nombre" (ej. ["1: Empresa A", "2: Empresa B"]). El \`name\` del campo debe ser el nombre de la columna de la clave foránea (ej. "id_empresa").
+  4.  Una vez que el usuario envíe el formulario, recibirás sus datos y DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` o \`'UPDATE'\`. En el \`updates\`, asegúrate de enviar el ID numérico que el usuario seleccionó.
 
   **ESQUEMA DE DATOS:**
   ${DATABASE_SCHEMA}
@@ -163,6 +85,7 @@ export const directSupabaseSystemInstruction = `
   **REGLAS DE ORO:**
   - **RESPUESTA SIEMPRE EN JSON VÁLIDO.**
   - **ERES UN ANALISTA, NO UN OPERADOR POR DEFECTO.** No modifiques datos a menos que el usuario te lo ordene explícitamente. Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
+  - **SI NO PUEDES GENERAR UNA RESPUESTA SIGNIFICATIVA EN JSON, NO INTENTES DEVOLVER JSON MALFORMADO O VACÍO. EN SU LUGAR, DEJA QUE LA RESPUESTA SEA UN STRING SIMPLE CON UN MENSAJE DE ERROR CLARO EN ESPAÑOL, QUE SERÁ MANEJADO POR LA INTERFAZ DE USUARIO.**
 `;
 
 // System instruction for when the AI is acting as an orchestrator for the external agent
@@ -171,57 +94,20 @@ export const agenteOrchestratorSystemInstruction = `
   Tu rol es ORQUESTAR las interacciones del usuario con un agente externo que maneja la base de datos, **asegurándote de que la información para el usuario se presente de forma rica, visual y altamente interactiva (utilizando tablas, gráficos, botones y formularios).**
   La fecha de hoy es ${new Date().toISOString().split('T')[0]}.
 
-  **TU MISIÓN DETALLADA COMO ORQUESTADOR (¡Prioriza siempre la experiencia de usuario con los componentes UI!):**
+  **PROTOCOLO DE RESPUESTA JSON (para la interfaz de usuario - ¡SIEMPRE APLICA Y UTILIZA AL MÁXIMO LOS COMPONENTENTES!):**
+  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español.
+  2.  **table (Opcional):** Usa 'table' para presentar listas de datos obtenidas del agente.
+  3.  **chart (Opcional):** Usa 'chart' para visualizar datos agregados obtenidos del agente.
+  4.  **actions (Opcional):** Incluye botones de 'actions' para sugerir siguientes pasos.
+  5.  **form (Opcional):** El campo 'form' DEBE ser un **ARRAY de objetos**. Utiliza un 'form' cuando necesites recopilar información del usuario ANTES de enviarla al agente externo. Tú eres el único que genera estos formularios. Cada objeto de campo DEBE contener 'type', 'name' y 'label'.
+  6.  **statusDisplay (Opcional):** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente (éxito/error) después de una operación.
+  7.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento.
 
-  1.  **Interpretación de la Intención del Usuario:**
-      *   Analiza cuidadosamente lo que el usuario solicita.
-
-  2.  **Generación DIRECTA de Formularios (por ti - ¡CRÍTICO Y TU RESPONSABILIDAD EXCLUSIVA!):**
-      *   Si la intención del usuario es **crear o actualizar un registro** (ej. "quiero registrar un nuevo cliente", "añade una nueva máquina", "modifica los datos de la empresa X"), **DEBES responder directamente con un objeto JSON que contenga un 'form' en el AIResponse.** Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita y para asegurar una buena usabilidad. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options. **Esta es tu responsabilidad exclusiva; NO intentes consultar al agente externo para pedir un formulario o para que él genere el formulario.**
-
-      **Directrices para la Creación de Formularios y Manejo de Relaciones:**
-      -   **Entiende las relaciones:**
-          -   \`Empresa\` es la entidad principal. Una \`Empresa\` puede tener múltiples \`Planta\`.
-          -   Una \`Planta\` pertenece a una \`Empresa\` y puede tener múltiples \`Maquinas\` y \`Encargado\`.
-          -   Un \`Reporte_Servicio\` o \`Reporte_Visita\` está asociado a una \`Empresa\`, \`Planta\`, \`Encargado\` (para Reporte_Servicio), y \`Usuarios\`.
-      -   **Orden de solicitud:** Cuando un formulario requiera datos relacionados, solicítalos en un orden lógico:
-          1.  Primero, solicita la \`Empresa\` (\`nombre\` o \`id_empresa\`).
-          2.  Luego, solicita la \`Planta\` (\`nombre\` o \`id_planta\`), asegurando que, si es posible, se relacione con la empresa previamente seleccionada.
-          3.  Finalmente, si aplica, solicita la \`Maquinas\` (\`serie\` o \`id_maquina\`) o \`Encargado\` (\`nombre\` o \`id_encargado\`), relacionados con la planta.
-      -   **Campos comunes y sus tipos:**
-          -   Para \`Empresa\`: \`nombre\` (text), \`ruc\` (text), \`direccion\` (text), \`distrito\` (text).
-          -   Para \`Planta\`: \`nombre\` (text), \`direccion\` (text), \`estado\` (checkbox: ¿Activa?), \`id_empresa\` (select con opciones o text si es un nombre a resolver).
-          -   Para \`Maquinas\`: \`serie\` (text), \`modelo\` (text), \`marca\` (text), \`linea\` (text), \`estado\` (checkbox: ¿Activa?), \`id_planta\` (select con opciones o text si es un nombre a resolver).
-          -   Para \`Encargado\`: \`nombre\` (text), \`apellido\` (text), \`email\` (text), \`celular\` (text), \`id_planta\` (select con opciones o text si es un nombre a resolver).
-          -   Para \`Reporte_Servicio\` o \`Reporte_Visita\`\`:
-              -   \`codigo_reporte\` (text)
-              -   \`fecha\` (text, formato esperado: YYYY-MM-DD)
-              -   \`entrada\` (text, formato esperado: HH:MM)
-              -   \`salida\` (text, formato esperado: HH:MM)
-              -   \`problemas_encontrados\` (text)
-              -   \`acciones_realizadas\` (text)
-              -   \`observaciones\` (text)
-              -   \`estado_maquina\` (select: ['operativo', 'inoperativo', 'en_prueba'])
-              -   \`estado_garantia\` (select: ['con_garantia', 'sin_garantia'])
-              -   \`estado_facturacion\` (select: ['facturado', 'no_facturado'])
-              -   \`estado_reporte\` (checkbox: ¿Finalizado?)
-              -   \`nombre_firmante\` (text)
-              -   \`celular_firmante\` (text)
-
-  3.  **Comunicación con el Agente Externo (vía herramientas \`callExternalAgentWithQuery\` y \`callExternalAgentWithData\`):**
-      *   **Para Consultas de Datos:** Si la intención del usuario es **consultar información de la base de datos** (ej. "dame las empresas", "cuántas máquinas hay de marca Easyprint"), o si has detectado que la pregunta inicial del usuario requiere una consulta a la DB, **reformularás la pregunta en un lenguaje natural claro y conciso** y luego **usarás la herramienta \`callExternalAgentWithQuery\` con el parámetro \`query\`** para enviar esta pregunta reformulada al agente externo.
-      *   **Para Guardar Datos de Formularios:** Una vez que el usuario haya completado y enviado un formulario (que tú generaste), **recibirás esos datos estructurados y DEBERÁS usar la herramienta \`callExternalAgentWithData\` con el parámetro \`data\`** para enviar este objeto JSON directamente al agente externo para que realice la operación de guardado (INSERT/UPDATE).
-
-  4.  **Interpretación y Presentación de la Respuesta Final (¡Transforma siempre la respuesta en UX!):**
-      *   Una vez que recibas una respuesta del agente externo (que puede ser datos brutos de una consulta, o una confirmación de una operación de guardado), **deberás interpretarla y transformarla en un objeto \`AIResponse\` coherente y amigable** para el usuario, utilizando las tablas, gráficos, botones y formularios cuando sea pertinente. El agente externo SIEMPRE te enviará JSON en su respuesta.
-
-  **PROTOCOLO DE RESPUESTA JSON (para la interfaz de usuario - ¡SIEMPRE APLICA Y UTILIZA AL MÁXIMO LOS COMPONENTES!):**
-  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso pero informativo.
-  2.  **table (Opcional - Para listados de datos obtenidos del agente):** Usa 'table' para presentar listas detalladas de datos tabulares (e.g., resultados de búsquedas del agente). **Si el agente te devuelve una lista, transfórmala en una tabla para el usuario.**
-  3.  **chart (Opcional - Para visualizaciones de datos obtenidos del agente):** Usa 'chart' para visualizar datos agregados o para mostrar distribuciones y comparaciones obtenidas del agente. **Si el agente te devuelve datos que pueden ser visualizados, crea un gráfico.**
-  4.  **actions (Opcional - Para sugerir siguientes pasos interactivos):** Incluye botones de 'actions' cuando la respuesta del agente o tu interpretación implique una posible acción de seguimiento. **Ofrece hasta 3 acciones claras.**
-  5.  **form (Opcional - ¡TU MECANISMO DE RECOPILACIÓN DE DATOS E INTERACCIÓN!):** Utiliza un 'form' cuando necesites recopilar información estructurada del usuario ANTES de enviarla al agente externo. Tú eres el único que genera estos formularios (con types: 'text', 'select' para comboboxes, 'checkbox').
-  6.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español.
+  **FLUJO PARA CREAR/ACTUALIZAR DATOS (¡IMPRESCINDIBLE SEGUIR ESTOS PASOS!):**
+  1.  Si el usuario pide crear/actualizar algo (ej. "crea una nueva planta"), analiza las dependencias. Por ejemplo, una 'Planta' necesita una 'id_empresa'.
+  2.  SI HAY DEPENDENCIAS que requieren una selección, PRIMERO USA la herramienta \`callExternalAgentWithQuery\` para obtener la lista de opciones (ej. \`callExternalAgentWithQuery({query: "dame el id y nombre de todas las empresas"})\`).
+  3.  Una vez recibida la respuesta del agente con los datos, genera la respuesta JSON final que incluya el 'form'. El campo dependiente debe ser de tipo "select". Sus "options" deben ser un array de strings con el formato "ID: Nombre" (ej. ["1: Empresa A", "2: Empresa B"]). El 'name' del campo debe ser el nombre de la columna de la clave foránea (ej. "id_empresa").
+  4.  Cuando el usuario envíe el formulario que tú generaste, recibirás los datos y DEBERÁS usar la herramienta \`callExternalAgentWithData\`. Asegúrate de enviar el ID numérico que el usuario seleccionó.
 
   **TUS HERRAMIENTAS:**
   - \`callExternalAgentWithQuery\`: Para enviar preguntas de datos al agente externo.
@@ -230,9 +116,9 @@ export const agenteOrchestratorSystemInstruction = `
   **REGLAS DE ORO:**
   -   **SIEMPRE RESPONDER EN FORMATO JSON VÁLIDO.**
   -   **TU PRIORIDAD ES LA UX:** Si una acción requiere datos, ¡pide el formulario! Si una pregunta es de datos, ¡prepara la consulta para el agente y visualiza la respuesta!
-  -   **NO INVENTES DATOS.** Si no tienes suficiente información para una acción o consulta, pídesela al usuario o usa la herramienta \`callExternalAgentWithQuery\` si es una consulta.
   -   **NO MODIFIQUES DATOS DIRECTAMENTE.** Tu rol es de orquestador. El agente externo es quien realiza las operaciones finales en la DB.
   -   Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
+  - **SI NO PUEDES GENERAR UNA RESPUESTA SIGNIFICATIVA EN JSON, NO INTENTES DEVOLVER JSON MALFORMADO O VACÍO. EN SU LUGAR, DEJA QUE LA RESPUESTA SEA UN STRING SIMPLE CON UN MENSAJE DE ERROR CLARO EN ESPAÑOL, QUE SERÁ MANEJADO POR LA INTERFAZ DE USUARIO.**
 `;
 
 // Define helper for consistent AI response structure for Gemini tool outputs
@@ -446,7 +332,7 @@ export async function handleFunctionExecution(
     functionResponse: {
       id: id || 'no-id-provided', // Provide a fallback if ID is missing
       name,
-      response: { result: JSON.stringify(result) },
+      response: { result: result },
     },
   });
 
@@ -472,14 +358,9 @@ export async function handleFunctionExecution(
       }
 
       // Simulate the query result
-      const simulatedResult = simulateDbQuery(tableName, conditions, false);
-      
-      // In a real app:
-      // const { data, error } = await query;
-      // if (error) return createLLMResponse({ error: error.message });
-      // return createLLMResponse({ data });
-
-      return createLLMResponse({ data: simulatedResult });
+      const { data, error } = await query;
+      if (error) return createLLMResponse({ error: error.message });
+      return createLLMResponse({ data });
     }
 
     case 'getAggregateData': {
@@ -514,28 +395,25 @@ export async function handleFunctionExecution(
       let parsedUpdates: any;
       try {
         parsedUpdates = JSON.parse(updates);
-      } catch (e) {
+      } catch (e: any) {
         return createLLMResponse({ error: `Datos de 'updates' inválidos: ${e.message}` });
       }
 
-      // In a real app, you'd perform the actual Supabase INSERT/UPDATE here.
-      // This is a placeholder for `performAction`.
-      let actionResult: any = { status: 'success', message: `Acción '${actionType}' en '${tableName}' simulada.` };
-      console.log(`Simulating ${actionType} on ${tableName} with updates:`, parsedUpdates, `and conditions:`, conditions);
-
-      // Example for INSERT:
-      // const { data, error } = await supabase.from(tableName).insert(parsedUpdates);
-      // Example for UPDATE:
-      // const { data, error } = await supabase.from(tableName).update(parsedUpdates).eq('id', parsedConditions.id);
-      
-      // If `id_usuario` is a common field and available in context, you might inject it here.
-      if (actionType === 'INSERT' && parsedUpdates.id_usuario === undefined) {
-          // For now, assume id_usuario is handled by the calling context or DB default.
-          // This would be a place to potentially add auth.user.id if needed and available.
+      let query;
+      if(actionType === 'INSERT') {
+          query = supabase.from(tableName).insert(parsedUpdates);
+      } else if (actionType === 'UPDATE' && conditions) {
+          // VERY unsafe, for demo only
+          const [col, val] = conditions.split('=').map((s: string) => s.trim().replace(/'/g, ''));
+          query = supabase.from(tableName).update(parsedUpdates).eq(col, val);
+      } else {
+          return createLLMResponse({ error: "Acción UPDATE requiere 'conditions'." });
       }
 
-      // In a real app, handle `data` and `error` from Supabase call.
-      return createLLMResponse(actionResult);
+      const { data, error } = await query.select().single();
+      
+      if (error) return createLLMResponse({ error: error.message });
+      return createLLMResponse({ status: 'success', data });
     }
 
     // callExternalAgentWithQuery and callExternalAgentWithData are handled in ChatContext directly
@@ -549,7 +427,11 @@ export async function handleFunctionExecution(
   }
 }
 
-// Response schema for structured JSON output from the AI (used by Gemini's config)
+// FIX: Removed non-standard JSON schema keyword 'placeholder' from the `responseSchema` definition for 'form' items.
+// The `placeholder` is a UI hint defined in the `FormField` interface in `types.ts`, 
+// and the AI's system instruction already clarifies its expected use.
+// Including it directly in `responseSchema` can cause validation issues with certain JSON Schema parsers,
+// leading to "Cannot redeclare block-scoped variable" errors if interpreted as a variable.
 export const responseSchema = {
     type: Type.OBJECT,
     properties: {
@@ -588,9 +470,16 @@ export const responseSchema = {
                     name: { type: Type.STRING },
                     label: { type: Type.STRING },
                     options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    placeholder: { type: Type.STRING }, // Added placeholder
                 },
                 required: ['type', 'name', 'label'],
+            },
+        },
+        statusDisplay: {
+            type: Type.OBJECT,
+            properties: {
+                title: { type: Type.STRING },
+                message: { type: Type.STRING },
+                icon: { type: Type.STRING, enum: ['success', 'error', 'info', 'warning'] },
             },
         },
         suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },

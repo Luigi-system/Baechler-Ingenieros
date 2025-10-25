@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import type { Chat } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
@@ -74,86 +75,128 @@ const extractAndParseJson = (text: string): AIResponse | null => {
 };
 
 /**
+ * Helper to safely stringify values for table display, handling objects/arrays and dates.
+ * @param value The value to stringify.
+ * @returns A string representation of the value.
+ */
+const safeStringify = (value: any): string => {
+    if (value === null || value === undefined) {
+        return 'N/A';
+    }
+    // Check for string-like dates/timestamps
+    if (typeof value === 'string') {
+        // More robust date detection including ISO strings (YYYY-MM-DD, ISO with Z, etc.)
+        const dateRegex = /^(\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?)?)$/;
+        if (dateRegex.test(value)) {
+            try {
+                const date = new Date(value);
+                if (!isNaN(date.getTime())) {
+                    // Use es-ES locale for consistent formatting
+                    return date.toLocaleString('es-ES', { 
+                        year: 'numeric', month: 'numeric', day: 'numeric', 
+                        hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        hour12: false // 24-hour format
+                    });
+                }
+            } catch (e) { /* ignore */ }
+        }
+        return value; // If it's a string but not a date, return as is.
+    }
+    // Handle objects/arrays
+    if (typeof value === 'object') {
+        // Try to get a common display property if it's an object with known keys
+        if (value.nombre) return String(value.nombre);
+        if (value.name) return String(value.name);
+        if (value.id) return String(value.id);
+        
+        // Final fallback for complex objects/arrays, pretty print for readability
+        return JSON.stringify(value, null, 2); 
+    }
+    return String(value);
+};
+
+
+/**
  * Maps a raw JSON response from the external agent into a standardized AIResponse format.
  * This is crucial for displaying agent results consistently in the chat UI.
  * @param rawAgentResponse The raw JSON object received from the webhook.
  * @returns An AIResponse object.
  */
 const mapAgentResponseToAIResponse = (rawAgentResponse: any): AIResponse => {
-    // If the raw response is already an AIResponse, return it directly.
+    // Check for the specific agent structure first: { error, contexto, data }
+    if (rawAgentResponse && typeof rawAgentResponse === 'object' && 'error' in rawAgentResponse && 'contexto' in rawAgentResponse && 'data' in rawAgentResponse) {
+        const { error, contexto, data } = rawAgentResponse;
+        
+        if (error) {
+            // Handle explicit error from the agent
+            return {
+                displayText: `El agente reportó un error: ${contexto}`,
+                statusDisplay: { icon: 'error', title: 'Error en la Operación', message: contexto },
+                suggestions: ["¿Puedes reformular la pregunta?", "Verificar los datos de entrada"]
+            };
+        }
+
+        // Handle success responses
+        const suggestions = ["Listar todos los registros de esta tabla", "¿Qué más puedo hacer?"];
+        if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'object') {
+            const headers = Object.keys(data[0]);
+            const rows = data.map((item: any) => headers.map(header => safeStringify(item[header])));
+            const table = { headers, rows };
+
+            if (data.length === 1 && (String(contexto).toLowerCase().includes('creado') || String(contexto).toLowerCase().includes('actualizado'))) {
+                // Single item, likely an INSERT/UPDATE result
+                return {
+                    displayText: `¡Operación completada con éxito! ${contexto}.`,
+                    statusDisplay: { icon: 'success', title: '¡Éxito!', message: contexto },
+                    table,
+                    suggestions
+                };
+            } else {
+                 // Multiple items, likely a SELECT result
+                 return {
+                    displayText: `${contexto}. Se encontraron ${data.length} registros.`,
+                    statusDisplay: { icon: 'info', title: 'Resultados Encontrados', message: `Se encontraron ${data.length} registros.` },
+                    table,
+                    suggestions: [`Ver detalles de un registro`, `Filtrar los resultados`]
+                 };
+            }
+
+        } else if (Array.isArray(data) && data.length === 0) {
+            // Empty result set
+            return {
+                displayText: `${contexto}. No se encontraron registros que coincidan con tu consulta.`,
+                statusDisplay: { icon: 'info', title: 'Sin Resultados', message: 'No se encontraron datos.' },
+                suggestions: ["Intenta con una búsqueda más amplia", "¿Puedes verificar los filtros?"]
+            };
+        } else {
+            // Success, but data is not in a recognizable array format. Display the message.
+             return {
+                displayText: `Operación completada: ${contexto}`,
+                statusDisplay: { icon: 'success', title: 'Completado', message: contexto },
+                suggestions
+             };
+        }
+    }
+
+    // --- FALLBACK LOGIC for other response formats ---
+    console.warn("La respuesta del agente no sigue la estructura {error, contexto, data}. Usando lógica de mapeo de fallback.");
     if (rawAgentResponse && typeof rawAgentResponse === 'object' && 'displayText' in rawAgentResponse) {
         return rawAgentResponse as AIResponse;
     }
 
-    let displayText: string = "";
-    let table: TableData | undefined;
-    let chart: any | undefined; // Using 'any' as chart type is more complex.
-    let suggestions: string[] = ["¿Hay algo más en lo que pueda ayudarte?"];
-    let actions: any[] | undefined;
-    let statusDisplay: ConfirmationMessage | undefined; // New field
-
     if (rawAgentResponse === null || typeof rawAgentResponse !== 'object') {
-        displayText = `Recibí una respuesta inesperada del agente: ${String(rawAgentResponse)}.`;
-        statusDisplay = { icon: 'error', title: 'Error Inesperado', message: 'La respuesta del agente no es válida o está vacía.' };
-    } else if (rawAgentResponse.error) {
-        // Handle explicit error messages from the agent
-        displayText = `El agente reportó un error: ${rawAgentResponse.error.message || rawAgentResponse.error}`;
-        statusDisplay = { icon: 'error', title: 'Error en la Operación', message: rawAgentResponse.error.message || String(rawAgentResponse.error) };
-        suggestions = ["¿Puedes reformular la pregunta?", "Contactar a soporte"];
-    } else if (rawAgentResponse.data && typeof rawAgentResponse.data === 'object' && Object.keys(rawAgentResponse.data).length > 0) {
-        // SUCCESS: Agent returned structured data, likely a new or updated record (e.g., {"data": {"id": 32, "nombre": "inkakola", ...}})
-        displayText = `¡Operación completada con éxito! Se ha registrado/actualizado el siguiente elemento:`;
-        statusDisplay = { icon: 'success', title: '¡Éxito!', message: 'El registro se ha guardado correctamente.' };
-        
-        // Convert the single data object into a simple table for display
-        const headers = Object.keys(rawAgentResponse.data);
-        const rows = [headers.map(header => {
-            const value = rawAgentResponse.data[header];
-            // Format dates/timestamps if they look like them
-            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-                try {
-                    const date = new Date(value);
-                    if (!isNaN(date.getTime())) {
-                        return date.toLocaleString(); // Prettier date display
-                    }
-                } catch (e) { /* ignore */ }
-            }
-            return String(value);
-        })];
-        table = { headers, rows };
-
-    } else if (rawAgentResponse.message) {
-        // Handle generic success messages (e.g., {"message": "Company created successfully."})
-        displayText = rawAgentResponse.message;
-        statusDisplay = { icon: 'info', title: 'Información', message: rawAgentResponse.message };
-    } else {
-        // Attempt to find lists or data to display as tables/charts (for query results from agent)
-        const keys = Object.keys(rawAgentResponse);
-        let foundDataToDisplay = false;
-
-        for (const key of keys) {
-            const value = rawAgentResponse[key];
-            if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
-                // Found an array of objects, assume it's tabular data
-                displayText = `Aquí están los ${key.replace(/_/g, ' ')} solicitados:`;
-                const headers = Object.keys(value[0]);
-                const rows = value.map((item: any) => headers.map(header => item[header]));
-                table = { headers, rows };
-                suggestions = [`Ver detalles de ${key} específicos`, `Filtrar ${key} por...`];
-                foundDataToDisplay = true;
-                break;
-            }
-            // Add more specific handling for charts or other types if expected from agent
-        }
-
-        if (!foundDataToDisplay) {
-            // If no recognizable data structure was found, stringify the whole response.
-            displayText = `Recibí una respuesta del agente, pero no pude interpretarla completamente. Contenido: \`\`\`json\n${JSON.stringify(rawAgentResponse, null, 2)}\n\`\`\``;
-            statusDisplay = { icon: 'warning', title: 'Respuesta Ambígüa', message: 'La respuesta del agente no se pudo interpretar completamente.' };
-        }
+        return {
+            displayText: `Recibí una respuesta inesperada del agente: ${String(rawAgentResponse)}.`,
+            statusDisplay: { icon: 'error', title: 'Error Inesperado', message: 'La respuesta del agente no es válida o está vacía.' }
+        };
     }
-
-    return { displayText, table, chart, actions, suggestions, statusDisplay };
+    
+    // Fallback display logic
+    const displayText = `El agente respondió:\n\`\`\`json\n${JSON.stringify(rawAgentResponse, null, 2)}\n\`\`\``;
+    return {
+        displayText,
+        statusDisplay: { icon: 'info', title: 'Respuesta del Agente', message: 'Se recibió una respuesta en un formato no estándar.' }
+    };
 };
 
 
@@ -232,8 +275,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const tempLoadingMessageId = Date.now().toString(); // Unique ID for temporary message
                 const loadingMessageContent: AIResponse = { 
                     displayText: 'El asistente está procesando los datos del formulario y guardando el registro en la base de datos...',
-                    // Optionally, you can add a temporary statusDisplay for visual loading feedback
-                    // statusDisplay: { icon: 'info', title: 'Procesando...', message: 'Enviando datos al agente externo...' }
+                    statusDisplay: { icon: 'info', title: 'Procesando...', message: 'Enviando datos al agente externo...' }
                 };
                 setMessages(prev => [...prev, { sender: 'ai', content: loadingMessageContent, tempId: tempLoadingMessageId }]);
                 
@@ -428,20 +470,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         throw new Error("Ruta de error inesperada para la llamada al agente."); 
 
                     } else if (!isAgentModeSelected) { // Direct Supabase tools, ONLY if NOT in agent mode
-                        // handleFunctionExecution returns { functionResponse: { id, name, response: { result: JSON_STRING } } }
-                        const toolResult = await handleFunctionExecution({ name: functionName, args: functionArgs, id: toolCallId }, supabase);
-                        // Ensure the result is correctly formatted to be a JSON string for the LLM.
-                        const resultString = typeof toolResult === 'object' && toolResult !== null
-                            ? (toolResult.functionResponse?.response?.result || JSON.stringify(toolResult))
-                            : String(toolResult);
-                        
-                        return { 
-                            functionResponse: { 
-                                id: toolCallId || 'no-id', 
-                                name: functionName, 
-                                response: { result: resultString } 
-                            } 
-                        };
+                        // handleFunctionExecution returns { functionResponse: { id, name, response: { result: { ... } } } }
+                        return await handleFunctionExecution({ name: functionName, args: functionArgs, id: toolCallId }, supabase);
+
                     } else {
                         throw new Error(`Función '${functionName}' no soportada o no implementada para el modo agente con ${isLLMGemini ? 'Gemini' : 'OpenAI'} como orquestador.`);
                     }
@@ -449,25 +480,41 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                 lastToolResponses = await Promise.all(toolExecutionPromises); // These are the raw results from the tools
 
-                if (isLLMGemini) { // Gemini client is the orchestrator
+                if (isLLMGemini) {
+                    // --- Gemini-Specific Tool Response Handling ---
+                    // Gemini's Chat session `sendMessage` expects a `GenerateContentParameters` object,
+                    // which contains a `message` property holding an array of `FunctionResponsePart` objects.
                     const geminiFormattedToolResponses = toolCalls.map((originalCall: any, i: number) => {
-                        const toolExecutionResult = lastToolResponses[i]; // This is the raw output from the tool
-                        
-                        // Ensure the `result` property of the function response is always a stringified JSON.
-                        const resultString = typeof toolExecutionResult === 'object' && toolExecutionResult !== null
-                            ? JSON.stringify(toolExecutionResult) 
-                            : String(toolExecutionResult);
-                        
+                        const toolExecutionResult = lastToolResponses[i];
+    
+                        // Case 1: The tool execution already returned a fully formed FunctionResponsePart.
+                        // This happens in direct mode with handleFunctionExecution.
+                        if (toolExecutionResult && toolExecutionResult.functionResponse) {
+                            // The ID from the original call must be used for matching.
+                            toolExecutionResult.functionResponse.id = originalCall.id;
+                            return toolExecutionResult;
+                        }
+    
+                        // Case 2: The tool execution returned raw data (e.g., from the external agent).
+                        // We need to wrap it in the expected FunctionResponsePart structure.
                         return {
                             functionResponse: {
                                 name: originalCall.name,
                                 id: originalCall.id,
-                                response: { result: resultString },
+                                // The LLM expects the tool's response to be an object with a 'result' key.
+                                response: { result: toolExecutionResult },
                             }
                         };
                     });
-                    responseFromLLM = await (chat as Chat).sendMessage({ parts: geminiFormattedToolResponses });
-                } else { // OpenAI client is the orchestrator
+                    
+                    // CRITICAL FIX: The payload must be `{ message: [...] }` for chat sessions.
+                    // The previous implementation used `{ parts: [...] }` which is incorrect for this context
+                    // and was causing the "ContentUnion is required" error.
+                    responseFromLLM = await (chat as Chat).sendMessage({ message: geminiFormattedToolResponses });
+                } else {
+                    // --- OpenAI-Specific Tool Response Handling ---
+                    // OpenAI is stateless via the API. We must construct a new message history
+                    // that includes the assistant's tool_calls request and our new 'tool' role messages.
                     const newToolMessages = toolCalls.map((call: any, i: number) => {
                         const toolExecutionResult = lastToolResponses[i]; // This is the raw output from the tool
                         // Content for the tool message depends on whether it was an external agent call or a direct Supabase tool call.
@@ -485,8 +532,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     });
                     
                     openaiMessagesHistory.push(responseFromLLM); // Add AI's tool call request to history
-                    openaiMessagesHistory.push(...newToolMessages); // Add tool outputs to history
+                    openaiMessagesHistory.push(...newToolMessages); // Add our tool execution results to history
                     
+                    // Make a new completion call with the updated history
                     const completion = await activeLLMClient.chat.completions.create({
                         model: activeLLMModel,
                         messages: openaiMessagesHistory,
