@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useEffect, useCallback, useMemo, useContext } from 'react';
 import type { GoogleAuthContextType } from '../types';
 
@@ -10,9 +9,8 @@ declare global {
   }
 }
 
-// Placeholder for Google Client ID. In a real app, this would be configured securely.
-// For the purpose of this exercise, we assume process.env.GOOGLE_CLIENT_ID is available.
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID_HERE';
+// The user has provided their Client ID, so we will use it directly.
+const GOOGLE_CLIENT_ID = '840172213603-j80un5i07u530b5fobna6ghdqjb33obh.apps.googleusercontent.com';
 
 export const GoogleAuthContext = createContext<GoogleAuthContextType | undefined>(undefined);
 
@@ -24,12 +22,19 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
   const [gisLoaded, setGisLoaded] = useState(false);
   const [gsiClient, setGsiClient] = useState<any>(null); // Google Sign-In client
 
+  // Since the Client ID has been provided, the integration is considered configured.
+  const isConfigured = true;
+
   const SCOPES = 'email profile https://www.googleapis.com/auth/drive.readonly'; // Minimal scopes for user info and checking drive access
 
   // Load gapi script
   useEffect(() => {
     const loadGapi = () => {
-      window.gapi.load('client:auth2', () => {
+      // FIX: Changed 'client:auth2' to 'client' to prevent conflicts.
+      // The 'auth2' module is for the deprecated Google Sign-In library.
+      // We only need the 'client' module for making API calls, while the
+      // separate GIS library (gsi/client) handles authentication.
+      window.gapi.load('client', () => {
         setGapiLoaded(true);
       });
     };
@@ -60,50 +65,58 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // Initialize GIS client
   useEffect(() => {
-    if (gisLoaded && !gsiClient) {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: GOOGLE_CLIENT_ID,
-        scope: SCOPES,
-        callback: (tokenResponse: any) => {
-          if (tokenResponse.error) {
-            console.error("GIS token client error:", tokenResponse.error);
-            setIsSignedIn(false);
-            setCurrentUserEmail(null);
-            setAccessToken(null);
-            return;
-          }
-          setAccessToken(tokenResponse.access_token);
-          // Fetch user info with the access token
-          fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: {
-              'Authorization': `Bearer ${tokenResponse.access_token}`
+    if (gisLoaded && !gsiClient && isConfigured) {
+      try {
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: SCOPES,
+          callback: (tokenResponse: any) => {
+            if (tokenResponse.error) {
+              console.error("GIS token client error:", tokenResponse.error, tokenResponse.error_description);
+              setIsSignedIn(false);
+              setCurrentUserEmail(null);
+              setAccessToken(null);
+              return;
             }
-          })
-          .then(res => res.json())
-          .then(user => {
-            setIsSignedIn(true);
-            setCurrentUserEmail(user.email);
-            console.log("Signed in with Google:", user.email);
-          })
-          .catch(error => {
-            console.error("Error fetching user info:", error);
-            setIsSignedIn(false);
-            setCurrentUserEmail(null);
-            setAccessToken(null);
-          });
-        },
-      });
-      setGsiClient(client);
+            setAccessToken(tokenResponse.access_token);
+            // Fetch user info with the access token
+            fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+              headers: {
+                'Authorization': `Bearer ${tokenResponse.access_token}`
+              }
+            })
+            .then(res => res.json())
+            .then(user => {
+              setIsSignedIn(true);
+              setCurrentUserEmail(user.email);
+              console.log("Signed in with Google:", user.email);
+            })
+            .catch(error => {
+              console.error("Error fetching user info:", error);
+              setIsSignedIn(false);
+              setCurrentUserEmail(null);
+              setAccessToken(null);
+            });
+          },
+        });
+        setGsiClient(client);
+      } catch (error) {
+        console.error("Failed to initialize Google Sign-In client:", error);
+      }
     }
-  }, [gisLoaded, gsiClient]);
+  }, [gisLoaded, gsiClient, isConfigured]);
 
   const handleSignIn = useCallback(async () => {
+    if (!isConfigured) {
+      console.warn("Google authentication is not configured. Please provide a valid Client ID.");
+      return;
+    }
     if (!gapiLoaded || !gisLoaded || !gsiClient) {
       console.warn("Google API or GIS client not fully loaded.");
       return;
     }
     gsiClient.requestAccessToken();
-  }, [gapiLoaded, gisLoaded, gsiClient]);
+  }, [gapiLoaded, gisLoaded, gsiClient, isConfigured]);
 
   const handleSignOut = useCallback(() => {
     if (accessToken) {
@@ -128,7 +141,8 @@ export const GoogleAuthProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     handleSignOut,
     gapiLoaded,
     gisLoaded,
-  }), [isSignedIn, currentUserEmail, accessToken, handleSignIn, handleSignOut, gapiLoaded, gisLoaded]);
+    isConfigured,
+  }), [isSignedIn, currentUserEmail, accessToken, handleSignIn, handleSignOut, gapiLoaded, gisLoaded, isConfigured]);
 
   return (
     <GoogleAuthContext.Provider value={contextValue}>

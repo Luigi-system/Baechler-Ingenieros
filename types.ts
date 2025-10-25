@@ -271,6 +271,7 @@ export interface GoogleAuthContextType {
   handleSignOut: () => void;
   gapiLoaded: boolean;
   gisLoaded: boolean;
+  isConfigured: boolean;
 }
 
 // FIX: Moved OpenAiClient interface definition here from AiServiceContext.tsx
