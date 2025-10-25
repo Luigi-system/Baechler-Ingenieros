@@ -1,5 +1,4 @@
 
-
 import { GoogleGenAI } from '@google/genai'; // FIX: Import GoogleGenAI from @google/genai
 import { AgenteClient } from './services/agenteService'; // FIX: Import AgenteClient from its definition file
 
@@ -246,6 +245,12 @@ export interface FormField {
     options?: string[];
 }
 
+export interface ConfirmationMessage {
+  title: string;
+  message: string;
+  icon: 'success' | 'error' | 'info' | 'warning';
+}
+
 export interface AIResponse {
   displayText: string;
   table?: TableData;
@@ -253,6 +258,7 @@ export interface AIResponse {
   actions?: Action[];
   form?: FormField[];
   suggestions?: string[];
+  statusDisplay?: ConfirmationMessage; // New field for prominent status messages
 }
 
 export interface GoogleAuthContextType {

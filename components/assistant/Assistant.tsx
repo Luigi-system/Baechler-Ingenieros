@@ -1,12 +1,13 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { BarChart, Bar, PieChart, Pie, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { SendIcon, AssistantIcon, XIcon } from '../ui/Icons';
+import { SendIcon, AssistantIcon, XIcon, CheckCircleIcon, AlertTriangleIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import { useChat, Message } from '../../contexts/ChatContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAiService } from '../../contexts/AiServiceContext';
-import type { AIResponse, TableData, ChartData, Action, FormField } from '../../types';
+import type { AIResponse, TableData, ChartData, Action, FormField, ConfirmationMessage } from '../../types';
 
 interface AssistantProps {
   isOpen: boolean;
@@ -92,23 +93,36 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
     
     if (lastAiMessageWithForm) {
         const messageIndex = messages.indexOf(lastAiMessageWithForm);
-        const fields = (lastAiMessageWithForm.content as AIResponse).form!;
+        const formContent = (lastAiMessageWithForm.content as AIResponse).form; // Get the raw form content
         
-        // Only update if the form is different from the current active one
-        if (activeForm?.messageIndex !== messageIndex) {
-            setActiveForm({ messageIndex, fields });
-            const initialValues = fields.reduce((acc, field) => {
-                acc[field.name] = field.type === 'checkbox' ? false : '';
-                return acc;
-            }, {} as Record<string, any>);
-            setFormValues(initialValues);
+        // --- ADD VALIDATION HERE ---
+        if (Array.isArray(formContent)) { // Check if it's actually an array
+            const fields = formContent; // Now 'fields' is guaranteed to be an array
+            
+            // Only update if the form is different from the current active one
+            if (activeForm?.messageIndex !== messageIndex) {
+                setActiveForm({ messageIndex, fields });
+                const initialValues = fields.reduce((acc, field) => {
+                    acc[field.name] = field.type === 'checkbox' ? false : '';
+                    return acc;
+                }, {} as Record<string, any>);
+                setFormValues(initialValues);
+            }
+        } else {
+            // If the AI returned a 'form' field but it's not an array, log a warning and clear activeForm.
+            console.warn("AI response contained a 'form' field that was not an array:", formContent);
+            if (activeForm) {
+                setActiveForm(null);
+                setFormValues({});
+            }
         }
     } else {
         if (activeForm) {
-            setActiveForm(null); // Clear form if no longer present in last message
+            activeForm === null; // Clear form if no longer present in last message
+            setFormValues({}); // Also clear form values
         }
     }
-  }, [messages]);
+  }, [messages, activeForm]); // Added activeForm to dependencies to prevent stale closure issues
   
   useEffect(() => {
     if (messages.length > 0 && messages[messages.length - 1].sender === 'ai' && !isOpen) {
@@ -178,17 +192,36 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                     const content = msg.content;
                     if (isUser && typeof content === 'string') {
                         return (
-                          <div key={index} className="flex justify-end">
+                          <div key={index} className="flex justify-end animate-slide-in-up">
                             <div className="max-w-lg px-4 py-2 rounded-2xl bg-primary text-white rounded-br-none">{content}</div>
                           </div>
                         );
                     }
                     if (!isUser && typeof content === 'object') {
                         const aiContent = content as AIResponse;
+                        const statusDisplay = aiContent.statusDisplay;
+
                         return (
-                          <div key={index} className="flex items-start gap-3 justify-start">
+                          <div key={index} className="flex items-start gap-3 justify-start animate-slide-in-up">
                              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><AssistantIcon className="h-5 w-5 text-white"/></div>
                             <div className="max-w-lg p-3 rounded-2xl bg-base-300 rounded-bl-none w-full">
+                                {statusDisplay && (
+                                    <div className={`p-4 rounded-lg mb-3 flex items-center gap-3 ${
+                                        statusDisplay.icon === 'success' ? 'bg-success/10 text-success' :
+                                        statusDisplay.icon === 'error' ? 'bg-error/10 text-error' :
+                                        statusDisplay.icon === 'warning' ? 'bg-warning/10 text-warning' :
+                                        'bg-info/10 text-info'
+                                    }`}>
+                                        {statusDisplay.icon === 'success' && <CheckCircleIcon className="h-8 w-8 shrink-0" />}
+                                        {(statusDisplay.icon === 'error' || statusDisplay.icon === 'warning') && <AlertTriangleIcon className="h-8 w-8 shrink-0" />}
+                                        {statusDisplay.icon === 'info' && <AssistantIcon className="h-8 w-8 shrink-0" />} {/* Reusing AssistantIcon for general info */}
+                                        <div>
+                                            <h4 className="font-bold text-lg">{statusDisplay.title}</h4>
+                                            <p className="text-sm">{statusDisplay.message}</p>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="prose prose-sm max-w-none prose-zinc dark:prose-invert text-base-content"><ReactMarkdown>{aiContent.displayText}</ReactMarkdown></div>
                                 {aiContent.table && <SimpleTable data={aiContent.table} />}
                                 {aiContent.chart && aiContent.chart.type === 'bar' && <BarChartComponent data={aiContent.chart.data} />}
@@ -239,7 +272,7 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                     return null;
                 })}
                 {isLoading && (
-                    <div className="flex items-start gap-3 justify-start">
+                    <div className="flex items-start gap-3 justify-start animate-slide-in-up">
                         <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0"><AssistantIcon className="h-5 w-5 text-white"/></div>
                         <div className="max-w-sm p-3 rounded-2xl bg-base-300 rounded-bl-none">
                             <div className="flex items-center space-x-2">

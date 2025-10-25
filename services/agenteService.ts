@@ -41,10 +41,19 @@ export const createAgenteClient = (): AgenteClient => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `Agente webhook request failed with status: ${response.status}`);
+        let errorDetail = `Agente webhook request failed with status: ${response.status}`;
+        try {
+            const errorData = await response.json();
+            // If errorData is an object, try to extract a message or stringify it
+            errorDetail = errorData.error?.message || JSON.stringify(errorData);
+        } catch (jsonParseError) {
+            // If response.json() fails, fall back to plain text
+            const responseText = await response.text();
+            errorDetail = `Agente webhook request failed (status: ${response.status}, response: ${responseText.substring(0, 200)}...)`;
+        }
+        throw new Error(errorDetail);
       }
-      return response.json(); // Expecting structured JSON from agent
+      return response.json(); // Expecting structured JSON from agent on success
     }
   };
 };

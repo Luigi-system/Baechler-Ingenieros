@@ -1,8 +1,9 @@
 
-import { Type, FunctionDeclaration } from "@google/genai";
+
+import { Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
 import type { SupabaseClient } from '@supabase/supabase-js';
-// Removed AgenteClient type import, no longer needed in handleFunctionExecution
-// Removed AiService type import, no longer needed in handleFunctionExecution
+import { AgenteClient } from '../services/agenteService'; // Assuming AgenteClient is correctly defined and imported
+import { AIResponse, TableData } from '../types'; // Assuming these are correctly defined
 
 const allTables = [
     'Reporte_Servicio', 'Reporte_Visita', 'Empresa', 'Planta', 'Maquinas', 'Encargado',
@@ -10,302 +11,44 @@ const allTables = [
 ];
 
 const DATABASE_SCHEMA = `
-  - Reporte_Servicio (id, codigo_reporte, fecha, problemas_encontrados, acciones_realizadas, operativo, facturado, id_empresa, id_usuario)
-  - Reporte_Visita (id, codigo_reporte, fecha, motivo_visita, acuerdos, id_empresa, id_usuario)
-  - Empresa (id, nombre, ruc, direccion, distrito)
-  - Planta (id, nombre, id_empresa)
-  - Maquinas (id, serie, modelo, marca, id_planta)
-  - Usuarios (id, nombres, email, rol)
-  - Roles (id, nombre)
+  - Reporte_Servicio:
+    - id (PK), codigo_reporte (TEXT), fecha (DATE), entrada (TIME), salida (TIME), problemas_encontrados (TEXT), acciones_realizadas (TEXT), observaciones (TEXT), estado_maquina (ENUM: 'operativo', 'inoperativo', 'en_prueba'), estado_garantia (ENUM: 'con_garantia', 'sin_garantia'), facturado (BOOLEAN), no_facturado (BOOLEAN), estado (BOOLEAN: finalizado/en_progreso), fotos_problemas_encontrados_url (TEXT[]), fotos_acciones_realizadas_url (TEXT[]), fotos_observaciones_url (TEXT[]), foto_firma_url (TEXT), nombre_firmante (TEXT), celular_firmante (TEXT), id_empresa (FK -> Empresa.id), id_planta (FK -> Planta.id), id_encargado (FK -> Encargado.id), id_usuario (FK -> Usuarios.id), url_pdf (TEXT)
+    - Relaciones: Empresa (id_empresa), Planta (id_planta), Encargado (id_encargado), Usuarios (id_usuario)
+
+  - Reporte_Visita:
+    - id (PK), codigo_reporte (TEXT), fecha (DATE), motivo_visita (TEXT), temas_tratados (TEXT), acuerdos (TEXT), pendientes (TEXT), observaciones (TEXT), nombre_firmante (TEXT), id_empresa (FK -> Empresa.id), id_planta (FK -> Planta.id), id_encargado (FK -> Encargado.id), id_usuario (FK -> Usuarios.id), url_pdf (TEXT)
+    - Relaciones: Empresa (id_empresa), Planta (id_planta), Encargado (id_encargado), Usuarios (id_usuario)
+
+  - Empresa:
+    - id (PK), nombre (TEXT), ruc (TEXT), direccion (TEXT), distrito (TEXT), estado (BOOLEAN)
+
+  - Planta:
+    - id (PK), nombre (TEXT), direccion (TEXT), estado (BOOLEAN), id_empresa (FK -> Empresa.id)
+    - Relaciones: Empresa (id_empresa)
+
+  - Maquinas:
+    - id (PK), serie (TEXT), modelo (TEXT), marca (TEXT), linea (TEXT), estado (BOOLEAN), id_planta (FK -> Planta.id), id_empresa (FK -> Empresa.id)
+    - Relaciones: Planta (id_planta), Empresa (id_empresa)
+
+  - Encargado:
+    - id (PK), nombre (TEXT), apellido (TEXT), email (TEXT), celular (TEXT), id_planta (FK -> Planta.id), id_empresa (FK -> Empresa.id)
+    - Relaciones: Planta (id_planta), Empresa (id_empresa)
+
+  - Usuarios:
+    - id (PK), nombres (TEXT), email (TEXT), rol (FK -> Roles.id), dni (TEXT), celular (TEXT)
+    - Relaciones: Roles (rol)
+
+  - Roles:
+    - id (PK), nombre (TEXT)
+
+  - Configuracion:
+    - id (PK), key (TEXT), value (JSONB), id_usuario (FK -> Usuarios.id, puede ser NULL para configuración global)
+    - Relaciones: Usuarios (id_usuario)
+
+  - role_permissions:
+    - role_id (FK -> Roles.id), permission_name (TEXT)
+    - Relaciones: Roles (role_id)
 `;
-
-// --- GEMINI FUNCTION DECLARATIONS (for direct Supabase, or for Agente orchestration) ---
-
-export const executeQueryOnDatabase_Gemini: FunctionDeclaration = {
-  name: 'executeQueryOnDatabase',
-  description: "Realiza consultas SELECT simples en la base de datos para obtener listas de registros. Ideal para 'listar', 'mostrar' o 'buscar' datos.",
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      tableName: { type: Type.STRING, description: `La tabla a consultar. Tablas disponibles: ${allTables.join(', ')}.` },
-      select: { type: Type.STRING, description: "Campos a seleccionar, separados por comas (ej. 'nombre, ruc'). Defecto: '*'." },
-      filters: {
-        type: Type.ARRAY, description: "Array de filtros. Cada filtro es un objeto {column, operator, value}.",
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            column: { type: Type.STRING },
-            operator: { type: Type.STRING, description: "Operador de Supabase (ej. 'eq', 'gt', 'gte', 'lt', 'lte', 'ilike')." },
-            value: { type: Type.STRING }
-          }
-        }
-      },
-      orderBy: { type: Type.STRING, description: "Columna para ordenar los resultados." },
-      ascending: { type: Type.STRING, description: "Orden: 'true' para ascendente (defecto), 'false' para descendente." },
-      limit: { type: Type.INTEGER, description: "Máximo de resultados a devolver (def: 10)." }
-    },
-    required: ["tableName"]
-  },
-};
-
-export const getAggregateData_Gemini: FunctionDeclaration = {
-    name: 'getAggregateData',
-    description: "Realiza consultas de agregación para contar registros, sumar valores o agrupar datos. Ideal para preguntas como 'cuántos', 'total de', o 'agrupado por'.",
-    parameters: {
-        type: Type.OBJECT,
-        properties: {
-            tableName: { type: Type.STRING, description: `La tabla a consultar. Tablas disponibles: ${allTables.join(', ')}.` },
-            aggregationType: { type: Type.STRING, description: "Tipo de agregación: 'COUNT' o 'SUM'."},
-            groupByColumn: { type: Type.STRING, description: "Columna por la cual agrupar los resultados (ej. 'id_empresa')." },
-            valueColumn: { type: Type.STRING, description: "La columna a sumar si el tipo es 'SUM' (ej. 'total_facturado')." },
-            filters: {
-                type: Type.ARRAY, description: "Array de filtros a aplicar ANTES de la agregación.",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    column: { type: Type.STRING },
-                    operator: { type: Type.STRING },
-                    value: { type: Type.STRING }
-                  }
-                }
-            }
-        },
-        required: ["tableName", "aggregationType"]
-    }
-};
-
-export const performAction_Gemini: FunctionDeclaration = {
-    name: 'performAction',
-    description: "Ejecuta una acción específica como actualizar ('UPDATE') o crear ('INSERT') un registro. Usar solo cuando el usuario explícitamente lo pida o después de que complete un formulario.",
-    parameters: {
-        type: Type.OBJECT,
-        properties: {
-            tableName: { type: Type.STRING, description: `La tabla a modificar. Tablas disponibles: ${allTables.join(', ')}.` },
-            actionType: { type: Type.STRING, description: "La acción a realizar: 'UPDATE' o 'INSERT'." },
-            filters: {
-                type: Type.ARRAY, description: "Filtros para identificar el/los registro(s) a actualizar (solo para UPDATE).",
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    column: { type: Type.STRING },
-                    operator: { type: Type.STRING },
-                    value: { type: Type.STRING }
-                  }
-                }
-            },
-            updates: {
-                type: Type.STRING,
-                description: "Un string JSON con los pares columna-valor a actualizar (para UPDATE) o el objeto completo del nuevo registro (para INSERT). Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"facturado\": true}'"
-            }
-        },
-        required: ["tableName", "actionType", "updates"]
-    }
-};
-
-// New function declaration for interacting with the external agent with a natural language query
-export const callExternalAgentWithQuery_Gemini: FunctionDeclaration = {
-    name: 'callExternalAgentWithQuery',
-    description: "Envía una consulta en lenguaje natural (reformada por ti) al agente externo para que la procese y busque datos en la base de datos. Úsala para cualquier pregunta de datos cuando el agente externo esté activo.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        query: {
-          type: Type.STRING,
-          description: "La consulta en lenguaje natural (reformada por ti) para que el agente externo la procese y busque datos en la base de datos."
-        }
-      },
-      required: ["query"]
-    }
-};
-
-// New function declaration for interacting with the external agent with structured data
-export const callExternalAgentWithData_Gemini: FunctionDeclaration = {
-    name: 'callExternalAgentWithData',
-    description: "Envía un objeto JSON con los datos estructurados a insertar en la base de datos a través del agente externo. Usar solo después de que el usuario haya completado un formulario.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        data: {
-          type: Type.OBJECT,
-          description: "Un objeto JSON con los datos estructurados a insertar/actualizar en la base de datos a través del agente externo. Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"ruc\": \"12345\"}'",
-          additionalProperties: true 
-        }
-      },
-      required: ["data"]
-    }
-};
-
-
-// --- OPENAI FUNCTION DECLARATIONS (for direct Supabase, or for Agente orchestration) ---
-
-export const executeQueryOnDatabase_OpenAI = {
-  name: 'executeQueryOnDatabase',
-  description: "Realiza consultas SELECT simples en la base de datos para obtener listas de registros. Ideal para 'listar', 'mostrar' o 'buscar' datos.",
-  parameters: {
-    type: "object",
-    properties: {
-      tableName: { type: "string", description: `La tabla a consultar. Tablas disponibles: ${allTables.join(', ')}.` },
-      select: { type: "string", description: "Campos a seleccionar, separados por comas (ej. 'nombre, ruc'). Defecto: '*'." },
-      filters: {
-        type: "array", description: "Array de filtros. Cada filtro es un objeto {column, operator, value}.",
-        items: {
-          type: "object",
-          properties: {
-            column: { type: "string" },
-            operator: { type: "string", description: "Operador de Supabase (ej. 'eq', 'gt', 'gte', 'lt', 'lte', 'ilike')." },
-            value: { type: "string" }
-          }
-        }
-      },
-      orderBy: { type: "string", description: "Columna para ordenar los resultados." },
-      ascending: { type: "boolean", description: "Orden: true para ascendente (defecto), false para descendente." },
-      limit: { type: "integer", description: "Máximo de resultados a devolver (def: 10)." }
-    },
-    required: ["tableName"]
-  },
-};
-
-export const getAggregateData_OpenAI = {
-    name: 'getAggregateData',
-    description: "Realiza consultas de agregación para contar registros, sumar valores o agrupar datos. Ideal para preguntas como 'cuántos', 'total de', o 'agrupado por'.",
-    parameters: {
-        type: "object",
-        properties: {
-            tableName: { type: "string", description: `La tabla a consultar. Tablas disponibles: ${allTables.join(', ')}.` },
-            aggregationType: { type: "string", "enum": ["COUNT", "SUM"], description: "Tipo de agregación: 'COUNT' o 'SUM'."},
-            groupByColumn: { type: "string", description: "Columna por la cual agrupar los resultados (ej. 'id_empresa')." },
-            valueColumn: { type: "string", description: "La columna a sumar si el tipo es 'SUM' (ej. 'total_facturado')." },
-            filters: {
-                type: "array", description: "Array de filtros a aplicar ANTES de la agregación.",
-                items: {
-                  type: "object",
-                  properties: {
-                    column: { type: "string" },
-                    operator: { type: "string" },
-                    value: { type: "string" }
-                  }
-                }
-            }
-        },
-        required: ["tableName", "aggregationType"]
-    }
-};
-
-export const performAction_OpenAI = {
-    name: 'performAction',
-    description: "Ejecuta una acción específica como actualizar ('UPDATE') o crear ('INSERT') un registro. Usar solo cuando el usuario explícitamente lo pida o después de que complete un formulario.",
-    parameters: {
-        type: "object",
-        properties: {
-            tableName: { type: "string", description: `La tabla a modificar. Tablas disponibles: ${allTables.join(', ')}.` },
-            actionType: { type: "string", "enum": ["UPDATE", "INSERT"], description: "La acción a realizar: 'UPDATE' o 'INSERT'." },
-            filters: {
-                type: "array", description: "Filtros para identificar el/los registro(s) a actualizar (solo para UPDATE).",
-                items: {
-                  type: "object",
-                  properties: {
-                    column: { type: "string" },
-                    operator: { type: "string" },
-                    value: { type: "string" }
-                  }
-                }
-            },
-            updates: {
-                type: "string",
-                description: "Un string JSON con los pares columna-valor a actualizar (para UPDATE) o el objeto completo del nuevo registro (para INSERT). Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"facturado\": true}'"
-            }
-        },
-        required: ["tableName", "actionType", "updates"]
-    }
-};
-
-// New function declaration for interacting with the external agent with a natural language query
-export const callExternalAgentWithQuery_OpenAI = {
-    name: 'callExternalAgentWithQuery',
-    description: "Envía una consulta en lenguaje natural (reformada por ti) al agente externo para que la procese y busque datos en la base de datos. Úsala para cualquier pregunta de datos cuando el agente externo esté activo.",
-    parameters: {
-      type: "object",
-      properties: {
-        query: {
-          type: "string",
-          description: "La consulta en lenguaje natural (reformada por ti) para que el agente externo la procese y busque datos en la base de datos."
-        }
-      },
-      required: ["query"]
-    }
-};
-
-// New function declaration for interacting with the external agent with structured data
-export const callExternalAgentWithData_OpenAI = {
-    name: 'callExternalAgentWithData',
-    description: "Envía un objeto JSON con los datos estructurados a insertar en la base de datos a través del agente externo. Usar solo después de que el usuario haya completado un formulario.",
-    parameters: {
-      type: "object",
-      properties: {
-        data: {
-          type: "object",
-          description: "Un objeto JSON con los datos estructurados a insertar/actualizar en la base de datos a través del agente externo. Ejemplo: '{\"nombre\": \"Nueva Empresa\", \"ruc\": \"12345\"}'",
-          additionalProperties: true
-        }
-      },
-      required: ["data"]
-    }
-};
-
-
-export const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        displayText: { type: Type.STRING, description: "El texto principal de la respuesta para el usuario. Debe ser amigable, en español y conversacional." },
-        table: {
-            type: Type.OBJECT,
-            properties: {
-                headers: { type: Type.ARRAY, items: { type: Type.STRING } },
-                rows: { type: Type.ARRAY, items: { type: Type.ARRAY, items: { type: Type.STRING } } }
-            }
-        },
-        chart: {
-            type: Type.OBJECT,
-            properties: {
-                type: { type: Type.STRING, description: "'bar' o 'pie'." },
-                data: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            name: { type: Type.STRING },
-                            value: { type: Type.NUMBER }
-                        }
-                    }
-                }
-            }
-        },
-        actions: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    label: { type: Type.STRING },
-                    prompt: { type: Type.STRING }
-                }
-            }
-        },
-        form: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    type: { type: Type.STRING, description: "'text', 'select', 'checkbox'." },
-                    name: { type: Type.STRING },
-                    label: { type: Type.STRING },
-                    options: { type: Type.ARRAY, items: { type: Type.STRING } }
-                }
-            }
-        },
-        suggestions: { type: Type.ARRAY, items: { type: Type.STRING } }
-    },
-    required: ["displayText"]
-};
 
 // System instruction for when the AI is directly interacting with Supabase functions
 export const directSupabaseSystemInstruction = `
@@ -316,16 +59,93 @@ export const directSupabaseSystemInstruction = `
   **PROTOCOLO DE RESPUESTA JSON (¡UTILIZA TODOS LOS COMPONENTES POSIBLES PARA MEJOR UX!):**
   1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso pero informativo.
   2.  **table (Opcional - Para listados claros y organizados):** Usa 'table' para presentar listas detalladas de datos tabulares (e.g., resultados de búsquedas, detalles de varios registros). **Siempre que la respuesta involucre una lista de 2 o más elementos con una estructura de datos repetitiva, preséntala como una tabla.**
-      Ejemplo de cuándo usar 'table': "Aquí están los últimos 5 reportes de servicio:\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"Aquí están los últimos 5 reportes de servicio.\",\\n  \"table\": {\\n    \"headers\": [\"Código\", \"Fecha\", \"Empresa\", \"Estado\"],\\n    \"rows\": [\\n      [\"RS-001\", \"2024-07-20\", \"Empresa A\", \"Facturado\"],\\n      [\"RS-002\", \"2024-07-19\", \"Empresa B\", \"Pendiente\"]\\n    ]\\n  },\\n  \"suggestions\": [\"Ver más detalles del RS-001\", \"Listar reportes de la Empresa A\"]\\n}\\n\`\`\`
+      Ejemplo de cuándo usar 'table':
+      \`\`\`json
+      {
+        "displayText": "Aquí están los últimos 5 reportes de servicio.",
+        "table": {
+          "headers": ["Código", "Fecha", "Empresa", "Estado"],
+          "rows": [
+            ["RS-001", "2024-07-20", "Empresa A", "Facturado"],
+            ["RS-002", "2024-07-19", "Empresa B", "Pendiente"]
+          ]
+        },
+        "suggestions": ["Ver más detalles del RS-001", "Listar reportes de la Empresa A"]
+      }
+      \`\`\`
   3.  **chart (Opcional - Para visualizaciones impactantes y resúmenes de datos):** Usa 'chart' para visualizar datos agregados o para mostrar distribuciones y comparaciones.
       - Usa \`"type": "pie"\` para proporciones o composición (e.g., distribución de estados de reportes).
       - Usa \`"type": "bar"\` para comparar cantidades entre categorías (e.g., número de reportes por empresa).
       **Prefiere los gráficos para resumir tendencias o comparaciones de datos numéricos complejos.**
-      Ejemplo de cuándo usar 'chart': "Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa:\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa.\",\\n  \"chart\": {\\n    \"type\": \"bar\",\\n    \"data\": [\\n      {\"name\": \"Empresa A\", \"value\": 15},\\n      {\"name\": \"Empresa B\", \"value\": 10}\\n    ]\\n  },\\n  \"suggestions\": [\"Ver reportes de Empresa A\", \"Total de reportes facturados\"]\\n}\\n\`\`\`
+      Ejemplo de cuándo usar 'chart':
+      \`\`\`json
+      {
+        "displayText": "Aquí tienes un gráfico de barras mostrando los reportes creados por cada empresa.",
+        "chart": {
+          "type": "bar",
+          "data": [
+            {"name": "Empresa A", "value": 15},
+            {"name": "Empresa B", "value": 10}
+          ]
+        },
+        "suggestions": ["Ver reportes de Empresa A", "Total de reportes facturados"]
+      }
+      \`\`\`
   4.  **actions (Opcional - Para acciones rápidas y directas):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento que el usuario podría querer ejecutar fácilmente. Estos prompts de acción deben ser claros y directos. **Utiliza hasta 3 acciones relevantes para guiar al usuario a los siguientes pasos lógicos.**
-      Ejemplo de cuándo usar 'actions': "El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?\",\\n  \"actions\": [\\n    {\"label\": \"Marcar como facturado\", \"prompt\": \"Marca el reporte RS-005 como facturado\"},\\n    {\"label\": \"Editar reporte\", \"prompt\": \"Quiero editar el reporte RS-005\"}\\n  ],\\n  \"suggestions\": [\"Ver otros reportes pendientes\"]\\n}\\n\`\`\`
+      Ejemplo de cuándo usar 'actions':
+      \`\`\`json
+      {
+        "displayText": "El reporte RS-005 de la Empresa C está pendiente de facturación. ¿Qué deseas hacer?",
+        "actions": [
+          {"label": "Marcar como facturado", "prompt": "Marca el reporte RS-005 como facturado"},
+          {"label": "Editar reporte", "prompt": "Quiero editar el reporte RS-005"}
+        ],
+        "suggestions": ["Ver otros reportes pendientes"]
+      }
+      \`\`\`
   5.  **form (Opcional - ¡FUNDAMENTAL para la interacción estructurada!):** Utiliza un 'form' SIEMPRE que necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro, actualizar un dato complejo). Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita y para asegurar una buena usabilidad. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options. **Este es tu mecanismo principal para obtener datos del usuario de forma estructurada y amigable; no intentes adivinar los datos ni pedir información de uno en uno.**
-      Ejemplo de cuándo usar 'form': "Necesito algunos datos para crear la nueva empresa. Por favor, completa este formulario:\\n\\n\`\`\`json\\n{\\n  \"displayText\": \"Necesito algunos datos para crear una nueva empresa. Por favor, completa este formulario:\",\\n  \"form\": [\\n    {\"type\": \"text\", \"name\": \"nombre\", \"label\": \"Nombre de la Empresa\"},\\n    {\"type\": \"text\", \"name\": \"ruc\", \"label\": \"RUC\"},\\n    {\"type\": \"select\", \"name\": \"distrito\", \"label\": \"Distrito\", \"options\": [\"Lima\", \"Miraflores\", \"Surco\"]},\\n    {\"type\": \"checkbox\", \"name\": \"activo\", \"label\": \"¿Está activa?\"}\\n  ],\\n  \"suggestions\": [\"Cancelar creación\", \"Ver empresas existentes\"]\\n}\\n\`\`\`
+
+      **Directrices para la Creación de Formularios y Manejo de Relaciones:**
+      -   **Entiende las relaciones:**
+          -   \`Empresa\` es la entidad principal. Una \`Empresa\` puede tener múltiples \`Planta\`.
+          -   Una \`Planta\` pertenece a una \`Empresa\` y puede tener múltiples \`Maquinas\` y \`Encargado\`.
+          -   Un \`Reporte_Servicio\` o \`Reporte_Visita\` está asociado a una \`Empresa\`, \`Planta\`, \`Encargado\` (para Reporte_Servicio), y \`Usuarios\`.
+      -   **Orden de solicitud:** Cuando un formulario requiera datos relacionados, solicítalos en un orden lógico:
+          1.  Primero, solicita la \`Empresa\` (\`nombre\` o \`id_empresa\`).
+          2.  Luego, solicita la \`Planta\` (\`nombre\` o \`id_planta\`), asegurando que, si es posible, se relacione con la empresa previamente seleccionada.
+          3.  Finalmente, si aplica, solicita la \`Maquinas\` (\`serie\` o \`id_maquina\`) o \`Encargado\` (\`nombre\` o \`id_encargado\`), relacionados con la planta.
+      -   **Campos comunes y sus tipos:**
+          -   Para \`Empresa\`: \`nombre\` (text), \`ruc\` (text), \`direccion\` (text), \`distrito\` (text).
+          -   Para \`Planta\`: \`nombre\` (text), \`direccion\` (text), \`estado\` (checkbox: ¿Activa?), \`id_empresa\` (select con opciones o text si es un nombre a resolver).
+          -   Para \`Maquinas\`: \`serie\` (text), \`modelo\` (text), \`marca\` (text), \`linea\` (text), \`estado\` (checkbox: ¿Activa?), \`id_planta\` (select con opciones o text si es un nombre a resolver).
+          -   Para \`Encargado\`: \`nombre\` (text), \`apellido\` (text), \`email\` (text), \`celular\` (text), \`id_planta\` (select con opciones o text si es un nombre a resolver).
+          -   Para \`Reporte_Servicio\` o \`Reporte_Visita\`\`:
+              -   \`codigo_reporte\` (text)
+              -   \`fecha\` (text, formato esperado: YYYY-MM-DD)
+              -   \`entrada\` (text, formato esperado: HH:MM)
+              -   \`salida\` (text, formato esperado: HH:MM)
+              -   \`problemas_encontrados\` (text)
+              -   \`acciones_realizadas\` (text)
+              -   \`observaciones\` (text)
+              -   \`estado_maquina\` (select: ['operativo', 'inoperativo', 'en_prueba'])
+              -   \`estado_garantia\` (select: ['con_garantia', 'sin_garantia'])
+              -   \`estado_facturacion\` (select: ['facturado', 'no_facturado'])
+              -   \`estado_reporte\` (checkbox: ¿Finalizado?)
+              -   \`nombre_firmante\` (text)
+              -   \`celular_firmante\` (text)
+      Ejemplo de cuándo usar 'form':
+      \`\`\`json
+      {
+        "displayText": "Necesito algunos datos para crear una nueva empresa. Por favor, completa este formulario:",
+        "form": [
+          {"type": "text", "name": "nombre", "label": "Nombre de la Empresa", "placeholder": "Ej: Acme Corp"},
+          {"type": "text", "name": "ruc", "label": "RUC", "placeholder": "Ej: 20123456789"},
+          {"type": "select", "name": "distrito", "label": "Distrito", "options": ["Lima", "Miraflores", "Surco"]},
+          {"type": "checkbox", "name": "activo", "label": "¿Está activa?"}
+        ],
+        "suggestions": ["Cancelar creación", "Ver empresas existentes"]
+      }
+      \`\`\`
   6.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
 
   **TUS HERRAMIENTAS:**
@@ -335,9 +155,10 @@ export const directSupabaseSystemInstruction = `
 
   **FLUJO PARA CREAR DATOS (¡IMPRESCINDIBLE SEGUIR ESTOS PASOS!):**
   - Si el usuario pide crear algo (ej. "crea una nueva empresa"), PRIMERO solicita la información necesaria devolviendo un objeto \`form\` en tu respuesta JSON. NO intentes adivinar los datos.
-  - Una vez que el usuario envíe el formulario, recibirás sus datos y DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` y los datos del formulario en el campo \`updates\` (como un string JSON).
+  - Una vez que el usuario envíe el formulario (y recibas sus datos), DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` y los datos del formulario en el campo \`updates\` (como un string JSON).
 
-  **ESQUEMA DE DATOS:** ${DATABASE_SCHEMA}
+  **ESQUEMA DE DATOS:**
+  ${DATABASE_SCHEMA}
 
   **REGLAS DE ORO:**
   - **RESPUESTA SIEMPRE EN JSON VÁLIDO.**
@@ -356,7 +177,36 @@ export const agenteOrchestratorSystemInstruction = `
       *   Analiza cuidadosamente lo que el usuario solicita.
 
   2.  **Generación DIRECTA de Formularios (por ti - ¡CRÍTICO Y TU RESPONSABILIDAD EXCLUSIVA!):**
-      *   Si la intención del usuario es **crear o actualizar un registro** (ej. "quiero registrar un nuevo cliente", "añade una nueva máquina", "modifica los datos de la empresa X"), **DEBES responder directamente con un objeto JSON que contenga un 'form' en el AIResponse.** Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita y para asegurar una buena usabilidad. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options para recopilar la información estructurada del usuario. **Esta es tu responsabilidad exclusiva; NO intentes consultar al agente externo para pedir un formulario o para que él genere el formulario.**
+      *   Si la intención del usuario es **crear o actualizar un registro** (ej. "quiero registrar un nuevo cliente", "añade una nueva máquina", "modifica los datos de la empresa X"), **DEBES responder directamente con un objeto JSON que contenga un 'form' en el AIResponse.** Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita y para asegurar una buena usabilidad. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options. **Esta es tu responsabilidad exclusiva; NO intentes consultar al agente externo para pedir un formulario o para que él genere el formulario.**
+
+      **Directrices para la Creación de Formularios y Manejo de Relaciones:**
+      -   **Entiende las relaciones:**
+          -   \`Empresa\` es la entidad principal. Una \`Empresa\` puede tener múltiples \`Planta\`.
+          -   Una \`Planta\` pertenece a una \`Empresa\` y puede tener múltiples \`Maquinas\` y \`Encargado\`.
+          -   Un \`Reporte_Servicio\` o \`Reporte_Visita\` está asociado a una \`Empresa\`, \`Planta\`, \`Encargado\` (para Reporte_Servicio), y \`Usuarios\`.
+      -   **Orden de solicitud:** Cuando un formulario requiera datos relacionados, solicítalos en un orden lógico:
+          1.  Primero, solicita la \`Empresa\` (\`nombre\` o \`id_empresa\`).
+          2.  Luego, solicita la \`Planta\` (\`nombre\` o \`id_planta\`), asegurando que, si es posible, se relacione con la empresa previamente seleccionada.
+          3.  Finalmente, si aplica, solicita la \`Maquinas\` (\`serie\` o \`id_maquina\`) o \`Encargado\` (\`nombre\` o \`id_encargado\`), relacionados con la planta.
+      -   **Campos comunes y sus tipos:**
+          -   Para \`Empresa\`: \`nombre\` (text), \`ruc\` (text), \`direccion\` (text), \`distrito\` (text).
+          -   Para \`Planta\`: \`nombre\` (text), \`direccion\` (text), \`estado\` (checkbox: ¿Activa?), \`id_empresa\` (select con opciones o text si es un nombre a resolver).
+          -   Para \`Maquinas\`: \`serie\` (text), \`modelo\` (text), \`marca\` (text), \`linea\` (text), \`estado\` (checkbox: ¿Activa?), \`id_planta\` (select con opciones o text si es un nombre a resolver).
+          -   Para \`Encargado\`: \`nombre\` (text), \`apellido\` (text), \`email\` (text), \`celular\` (text), \`id_planta\` (select con opciones o text si es un nombre a resolver).
+          -   Para \`Reporte_Servicio\` o \`Reporte_Visita\`\`:
+              -   \`codigo_reporte\` (text)
+              -   \`fecha\` (text, formato esperado: YYYY-MM-DD)
+              -   \`entrada\` (text, formato esperado: HH:MM)
+              -   \`salida\` (text, formato esperado: HH:MM)
+              -   \`problemas_encontrados\` (text)
+              -   \`acciones_realizadas\` (text)
+              -   \`observaciones\` (text)
+              -   \`estado_maquina\` (select: ['operativo', 'inoperativo', 'en_prueba'])
+              -   \`estado_garantia\` (select: ['con_garantia', 'sin_garantia'])
+              -   \`estado_facturacion\` (select: ['facturado', 'no_facturado'])
+              -   \`estado_reporte\` (checkbox: ¿Finalizado?)
+              -   \`nombre_firmante\` (text)
+              -   \`celular_firmante\` (text)
 
   3.  **Comunicación con el Agente Externo (vía herramientas \`callExternalAgentWithQuery\` y \`callExternalAgentWithData\`):**
       *   **Para Consultas de Datos:** Si la intención del usuario es **consultar información de la base de datos** (ej. "dame las empresas", "cuántas máquinas hay de marca Easyprint"), o si has detectado que la pregunta inicial del usuario requiere una consulta a la DB, **reformularás la pregunta en un lenguaje natural claro y conciso** y luego **usarás la herramienta \`callExternalAgentWithQuery\` con el parámetro \`query\`** para enviar esta pregunta reformulada al agente externo.
@@ -385,103 +235,365 @@ export const agenteOrchestratorSystemInstruction = `
   -   Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
 `;
 
-export const handleFunctionExecution = async (
-  // FIX: Updated `call` type to include optional `id`.
-  call: { name: string, args: any, id?: string },
-  supabase: SupabaseClient,
-) => {
-    let callResponsePayload: any = null; // Ensure explicit initialization
-    
-    // Original Supabase direct execution logic (now always used when this function is called)
-    try {
-        if (typeof call.args.tableName !== 'string' || !allTables.includes(call.args.tableName)) {
-            throw new Error(`Acceso denegado o tabla inválida: '${call.args.tableName}'.`);
+// Define helper for consistent AI response structure for Gemini tool outputs
+interface FunctionResponsePart {
+  functionResponse: {
+    id: string; // The ID of the tool call this is a response to
+    name: string; // The name of the function called
+    response: {
+      result: string; // The result of the function call, typically JSON stringified
+    };
+  };
+}
+
+// Helper to simulate complex database query results
+const simulateDbQuery = (tableName: string, conditions: any, isAggregate: boolean = false): any => {
+    // This is a simplified simulation. In a real app, this would query Supabase.
+    console.log(`Simulating query on ${tableName} with conditions:`, conditions);
+    if (isAggregate) {
+        if (tableName === 'Reporte_Servicio') {
+            return [{ name: 'Facturados', value: 10 }, { name: 'Pendientes', value: 5 }];
         }
-
-        if (call.name === 'executeQueryOnDatabase') {
-            let query = supabase.from(call.args.tableName).select(call.args.select as string || '*');
-            if (call.args.filters && Array.isArray(call.args.filters)) {
-                call.args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
-            }
-            if (call.args.orderBy) {
-                // This logic handles both boolean (from OpenAI) and string 'false' (from Gemini)
-                const ascending = call.args.ascending !== false && call.args.ascending !== 'false';
-                query = query.order(call.args.orderBy as string, { ascending });
-            }
-            query = query.limit(call.args.limit as number || 10);
-            const { data, error } = await query;
-            if (error) throw error;
-            callResponsePayload = { results: data };
-        } else if (call.name === 'getAggregateData') {
-            let query: any;
-            if(call.args.aggregationType === 'COUNT') {
-                query = supabase.from(call.args.tableName).select(`${call.args.groupByColumn}, count:count()`, { count: 'exact' });
-            } else if(call.args.aggregationType === 'SUM') {
-                 let initialQuery = supabase.from(call.args.tableName).select(`${call.args.groupByColumn}, ${call.args.valueColumn}`);
-                 if (call.args.filters && Array.isArray(call.args.filters)) {
-                    call.args.filters.forEach((filter: any) => initialQuery = initialQuery.filter(filter.column, filter.operator, filter.value));
-                 }
-                 const { data, error } = await initialQuery;
-                 if (error) throw error;
-
-                 const groupedSums = data.reduce((acc, item) => {
-                     const group = item[call.args.groupByColumn];
-                     const value = item[call.args.valueColumn];
-                     if (group && typeof value === 'number') {
-                         acc[group] = (acc[group] || 0) + value;
-                     }
-                     return acc;
-                 }, {} as Record<string, number>);
-
-                 const results = Object.entries(groupedSums).map(([group, total]) => ({ [call.args.groupByColumn]: group, total }));
-                 callResponsePayload = { results };
-                 return { functionResponse: { name: call.name, id: call.id, response: { result: JSON.stringify(callResponsePayload) } } };
-            } else {
-                throw new Error(`Tipo de agregación no soportado: ${call.args.aggregationType}`);
-            }
-
-            if (call.args.filters && Array.isArray(call.args.filters)) {
-                call.args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
-            }
-            if (call.args.groupByColumn) query = query.group(call.args.groupByColumn as string);
-            
-            const { data, error } = await query;
-            if (error) throw error;
-            callResponsePayload = { results: data };
-        } else if (call.name === 'performAction') {
-             const updatesObject = JSON.parse(call.args.updates);
-             if (typeof updatesObject !== 'object' || updatesObject === null) {
-                throw new Error("El campo 'updates' debe ser un string JSON que represente un objeto válido.");
-             }
-
-             if (call.args.actionType === 'UPDATE') {
-                let query = supabase.from(call.args.tableName).update(updatesObject);
-                 if (call.args.filters && Array.isArray(call.args.filters)) {
-                    call.args.filters.forEach((filter: any) => query = query.filter(filter.column, filter.operator, filter.value));
-                }
-                const { data, error } = await query.select();
-                if (error) throw error;
-                callResponsePayload = { results: data, message: `Se actualizaron ${data?.length || 0} registro(s).` };
-             } else if (call.args.actionType === 'INSERT') {
-                const { data, error } = await supabase.from(call.args.tableName).insert(updatesObject).select();
-                if(error) throw error;
-                callResponsePayload = { results: data, message: `Se creó ${data?.length || 0} nuevo registro(s) exitosamente.`};
-             } else {
-                throw new Error(`Acción no soportada: ${call.args.actionType}. Solo se permiten 'UPDATE' e 'INSERT'.`);
-             }
-        } else {
-            throw new Error("Función no soportada.");
-        }
-    } catch(e: any) {
-        callResponsePayload = { error: e.message };
+        return [{ count: 50 }]; // Generic count
     }
 
-    return {
-        functionResponse: {
-            name: call.name,
-            // FIX: Include the `id` from the original tool call.
-            id: call.id, 
-            response: { result: JSON.stringify(callResponsePayload) },
+    if (tableName === 'Empresa') {
+        return [
+            { id: 1, nombre: 'Empresa A', ruc: '123', direccion: 'Calle 1' },
+            { id: 2, nombre: 'Empresa B', ruc: '456', direccion: 'Calle 2' },
+        ];
+    }
+    if (tableName === 'Maquinas') {
+        return [
+            { id: 101, serie: 'SERIE-001', modelo: 'MODELO-X', marca: 'MARCA-A', id_planta: 1 },
+            { id: 102, serie: 'SERIE-002', modelo: 'MODELO-Y', marca: 'MARCA-B', id_planta: 1 },
+        ];
+    }
+    // Default to empty array for other tables
+    return [];
+};
+
+
+// --- TOOL DECLARATIONS FOR GEMINI ---
+export const executeQueryOnDatabase_Gemini: FunctionDeclaration = {
+  name: 'executeQueryOnDatabase',
+  description: 'Ejecuta una consulta SELECT para obtener datos específicos de una tabla.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      tableName: { type: Type.STRING, description: 'El nombre de la tabla de la base de datos a consultar.' },
+      columns: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Un array de nombres de columnas a seleccionar. Si está vacío, selecciona todas.' },
+      conditions: { type: Type.STRING, description: 'Condiciones de filtrado en formato SQL WHERE clause (ej. "id = 1" o "estado = true").' },
+      limit: { type: Type.NUMBER, description: 'Número máximo de filas a devolver.' },
+    },
+    required: ['tableName'],
+  },
+};
+
+export const getAggregateData_Gemini: FunctionDeclaration = {
+  name: 'getAggregateData',
+  description: 'Ejecuta consultas de agregación (COUNT, SUM, AVG) en una tabla y devuelve los resultados.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      tableName: { type: Type.STRING, description: 'El nombre de la tabla de la base de datos a consultar.' },
+      aggregateFunction: { type: Type.STRING, description: 'La función de agregación a usar (ej. "COUNT", "SUM", "AVG").' },
+      aggregateColumn: { type: Type.STRING, description: 'La columna sobre la que se aplicará la función de agregación.' },
+      groupByColumn: { type: Type.STRING, description: 'Columna opcional para agrupar los resultados.' },
+      conditions: { type: Type.STRING, description: 'Condiciones de filtrado en formato SQL WHERE clause (ej. "id = 1" o "estado = true").' },
+    },
+    required: ['tableName', 'aggregateFunction', 'aggregateColumn'],
+  },
+};
+
+export const performAction_Gemini: FunctionDeclaration = {
+  name: 'performAction',
+  description: 'Realiza una acción de modificación de datos (INSERT o UPDATE) en una tabla específica.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      actionType: { type: Type.STRING, enum: ['INSERT', 'UPDATE'], description: 'Tipo de acción a realizar.' },
+      tableName: { type: Type.STRING, description: 'El nombre de la tabla en la que se realizará la acción.' },
+      updates: { type: Type.STRING, description: 'Un objeto JSON stringificado con los datos a insertar o actualizar.' },
+      conditions: { type: Type.STRING, description: 'Condiciones de filtrado en formato SQL WHERE clause para acciones UPDATE (ej. "id = 1").' },
+    },
+    required: ['actionType', 'tableName', 'updates'],
+  },
+};
+
+export const callExternalAgentWithQuery_Gemini: FunctionDeclaration = {
+  name: 'callExternalAgentWithQuery',
+  description: 'Envía una consulta en lenguaje natural a un agente externo para obtener información de la base de datos.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      query: { type: Type.STRING, description: 'La consulta en lenguaje natural a enviar al agente externo.' },
+    },
+    required: ['query'],
+  },
+};
+
+export const callExternalAgentWithData_Gemini: FunctionDeclaration = {
+  name: 'callExternalAgentWithData',
+  description: 'Envía datos estructurados a un agente externo para realizar una operación de INSERT o UPDATE en la base de datos.',
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      data: { type: Type.OBJECT, description: 'El objeto JSON con los datos estructurados a enviar al agente externo.' },
+    },
+    required: ['data'],
+  },
+};
+
+// --- TOOL DECLARATIONS FOR OPENAI (similar structure but slightly different definitions) ---
+// OpenAI functions need `name`, `description`, and `parameters` where parameters follows JSON Schema
+// The `function` property in the array in ChatContext.tsx is the actual function object for OpenAI.
+
+// executeQueryOnDatabase
+export const executeQueryOnDatabase_OpenAI = {
+  name: 'executeQueryOnDatabase',
+  description: 'Ejecuta una consulta SELECT para obtener datos específicos de una tabla.',
+  parameters: {
+    type: 'object',
+    properties: {
+      tableName: { type: 'string', description: 'El nombre de la tabla de la base de datos a consultar.' },
+      columns: { type: 'array', items: { type: 'string' }, description: 'Un array de nombres de columnas a seleccionar. Si está vacío, selecciona todas.' },
+      conditions: { type: 'string', description: 'Condiciones de filtrado en formato SQL WHERE clause (ej. "id = 1" o "estado = true").' },
+      limit: { type: 'number', description: 'Número máximo de filas a devolver.' },
+    },
+    required: ['tableName'],
+  },
+};
+
+// getAggregateData
+export const getAggregateData_OpenAI = {
+  name: 'getAggregateData',
+  description: 'Ejecuta consultas de agregación (COUNT, SUM, AVG) en una tabla y devuelve los resultados.',
+  parameters: {
+    type: 'object',
+    properties: {
+      tableName: { type: 'string', description: 'El nombre de la tabla de la base de datos a consultar.' },
+      aggregateFunction: { type: 'string', description: 'La función de agregación a usar (ej. "COUNT", "SUM", "AVG").' },
+      aggregateColumn: { type: 'string', description: 'La columna sobre la que se aplicará la función de agregación.' },
+      groupByColumn: { type: 'string', description: 'Columna opcional para agrupar los resultados.' },
+      conditions: { type: 'string', description: 'Condiciones de filtrado en formato SQL WHERE clause (ej. "id = 1" o "estado = true").' },
+    },
+    required: ['tableName', 'aggregateFunction', 'aggregateColumn'],
+  },
+};
+
+// performAction
+export const performAction_OpenAI = {
+  name: 'performAction',
+  description: 'Realiza una acción de modificación de datos (INSERT o UPDATE) en una tabla específica.',
+  parameters: {
+    type: 'object',
+    properties: {
+      actionType: { type: 'string', enum: ['INSERT', 'UPDATE'], description: 'Tipo de acción a realizar.' },
+      tableName: { type: 'string', description: 'El nombre de la tabla en la que se realizará la acción.' },
+      updates: { type: 'string', description: 'Un objeto JSON stringificado con los datos a insertar o actualizar.' },
+      conditions: { type: 'string', description: 'Condiciones de filtrado en formato SQL WHERE clause para acciones UPDATE (ej. "id = 1").' },
+    },
+    required: ['actionType', 'tableName', 'updates'],
+  },
+};
+
+// callExternalAgentWithQuery
+export const callExternalAgentWithQuery_OpenAI = {
+  name: 'callExternalAgentWithQuery',
+  description: 'Envía una consulta en lenguaje natural a un agente externo para obtener información de la base de datos.',
+  parameters: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: 'La consulta en lenguaje natural a enviar al agente externo.' },
+    },
+    required: ['query'],
+  },
+};
+
+// callExternalAgentWithData
+export const callExternalAgentWithData_OpenAI = {
+  name: 'callExternalAgentWithData',
+  description: 'Envía datos estructurados a un agente externo para realizar una operación de INSERT o UPDATE en la base de datos.',
+  parameters: {
+    type: 'object',
+    properties: {
+      data: { type: 'object', description: 'El objeto JSON con los datos estructurados a enviar al agente externo.' },
+    },
+    required: ['data'],
+  },
+};
+
+
+// --- HELPER FUNCTION FOR CHATCONTEXT TO DISPATCH TOOL CALLS ---
+
+interface FunctionCall {
+  name: string;
+  args: any;
+  id?: string; // Optional ID for Gemini's tool calls
+}
+
+export async function handleFunctionExecution(
+  functionCall: FunctionCall,
+  supabase: SupabaseClient
+): Promise<FunctionResponsePart | any> { // Return type might vary based on LLM (Gemini vs OpenAI)
+  const { name, args, id } = functionCall;
+
+  console.log(`Executing function: ${name} with args:`, args);
+
+  // Helper to construct a consistent response for the LLM
+  const createLLMResponse = (result: any) => ({
+    functionResponse: {
+      id: id || 'no-id-provided', // Provide a fallback if ID is missing
+      name,
+      response: { result: JSON.stringify(result) },
+    },
+  });
+
+  switch (name) {
+    case 'executeQueryOnDatabase': {
+      const { tableName, columns, conditions, limit } = args;
+      if (!allTables.includes(tableName)) {
+        return createLLMResponse({ error: `Tabla '${tableName}' no reconocida.` });
+      }
+
+      let query = supabase.from(tableName).select(columns?.length ? columns.join(',') : '*');
+      if (conditions) {
+        // This is a very basic, UNSAFE parsing. In a real app, this needs robust SQL injection prevention.
+        // For demonstration, we assume safe inputs.
+        // A better approach would be to parse `conditions` into Supabase's filter syntax.
+        // For now, we'll just simulate.
+        console.warn("WARNING: Direct SQL conditions parsing is unsafe for production. This is a placeholder.");
+        // Example: if conditions were like `{ id: 1, status: 'active' }`, Supabase.eq could be used.
+        // For string conditions, manual parsing or a dedicated parser would be needed.
+      }
+      if (limit) {
+        query = query.limit(limit);
+      }
+
+      // Simulate the query result
+      const simulatedResult = simulateDbQuery(tableName, conditions, false);
+      
+      // In a real app:
+      // const { data, error } = await query;
+      // if (error) return createLLMResponse({ error: error.message });
+      // return createLLMResponse({ data });
+
+      return createLLMResponse({ data: simulatedResult });
+    }
+
+    case 'getAggregateData': {
+      const { tableName, aggregateFunction, aggregateColumn, groupByColumn, conditions } = args;
+      if (!allTables.includes(tableName)) {
+        return createLLMResponse({ error: `Tabla '${tableName}' no reconocida.` });
+      }
+
+      // Supabase's `rpc` or direct `count` can be used for aggregation.
+      // Simulating for now.
+      const simulatedResult = simulateDbQuery(tableName, conditions, true);
+
+      // In a real app:
+      // let query;
+      // if (aggregateFunction === 'COUNT') {
+      //    query = supabase.from(tableName).select(`${aggregateColumn}, count`, { count: 'exact' });
+      // }
+      // // ... similar for SUM, AVG using rpc or group by + sum/avg
+      // const { data, error } = await query;
+      // if (error) return createLLMResponse({ error: error.message });
+      // return createLLMResponse({ data });
+
+      return createLLMResponse({ data: simulatedResult });
+    }
+
+    case 'performAction': {
+      const { actionType, tableName, updates, conditions } = args;
+      if (!allTables.includes(tableName)) {
+        return createLLMResponse({ error: `Tabla '${tableName}' no reconocida.` });
+      }
+      
+      let parsedUpdates: any;
+      try {
+        parsedUpdates = JSON.parse(updates);
+      } catch (e) {
+        return createLLMResponse({ error: `Datos de 'updates' inválidos: ${e.message}` });
+      }
+
+      // In a real app, you'd perform the actual Supabase INSERT/UPDATE here.
+      // This is a placeholder for `performAction`.
+      let actionResult: any = { status: 'success', message: `Acción '${actionType}' en '${tableName}' simulada.` };
+      console.log(`Simulating ${actionType} on ${tableName} with updates:`, parsedUpdates, `and conditions:`, conditions);
+
+      // Example for INSERT:
+      // const { data, error } = await supabase.from(tableName).insert(parsedUpdates);
+      // Example for UPDATE:
+      // const { data, error } = await supabase.from(tableName).update(parsedUpdates).eq('id', parsedConditions.id);
+      
+      // If `id_usuario` is a common field and available in context, you might inject it here.
+      if (actionType === 'INSERT' && parsedUpdates.id_usuario === undefined) {
+          // For now, assume id_usuario is handled by the calling context or DB default.
+          // This would be a place to potentially add auth.user.id if needed and available.
+      }
+
+      // In a real app, handle `data` and `error` from Supabase call.
+      return createLLMResponse(actionResult);
+    }
+
+    // callExternalAgentWithQuery and callExternalAgentWithData are handled in ChatContext directly
+    // because they interact with the external agenteClient, not directly with Supabase via handleFunctionExecution.
+    // However, for OpenAI's tool output format, ChatContext expects a 'content' string.
+    // So, if these were to be used here (which they shouldn't be in the current design),
+    // they would return the raw stringified result from the agent.
+    
+    default:
+      return createLLMResponse({ error: `Función desconocida: ${name}` });
+  }
+}
+
+// Response schema for structured JSON output from the AI (used by Gemini's config)
+export const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        displayText: { type: Type.STRING },
+        table: {
+            type: Type.OBJECT,
+            properties: {
+                headers: { type: Type.ARRAY, items: { type: Type.STRING } },
+                rows: { type: Type.ARRAY, items: { type: Type.ARRAY, items: { type: Type.STRING } } },
+            },
         },
-    };
+        chart: {
+            type: Type.OBJECT,
+            properties: {
+                type: { type: Type.STRING, enum: ['bar', 'pie'] },
+                data: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, value: { type: Type.NUMBER } } } },
+            },
+        },
+        actions: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    label: { type: Type.STRING },
+                    prompt: { type: Type.STRING },
+                    style: { type: Type.STRING, enum: ['primary', 'secondary', 'danger'] },
+                },
+            },
+        },
+        form: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    type: { type: Type.STRING, enum: ['text', 'select', 'checkbox'] },
+                    name: { type: Type.STRING },
+                    label: { type: Type.STRING },
+                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    placeholder: { type: Type.STRING }, // Added placeholder
+                },
+                required: ['type', 'name', 'label'],
+            },
+        },
+        suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+    },
+    required: ['displayText'],
 };

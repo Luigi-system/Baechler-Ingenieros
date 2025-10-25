@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import type { Chat } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
@@ -10,7 +11,7 @@ import {
     callExternalAgentWithQuery_OpenAI, callExternalAgentWithData_OpenAI, // New OpenAI agent tools
     handleFunctionExecution, agenteOrchestratorSystemInstruction
 } from '../services/aiService';
-import type { AIResponse, TableData } from '../types';
+import type { AIResponse, TableData, ConfirmationMessage } from '../types';
 
 export interface Message {
   sender: 'user' | 'ai';
@@ -18,6 +19,8 @@ export interface Message {
   // Add properties for OpenAI tool calls
   tool_calls?: any[];
   tool_call_id?: string;
+  // Temporary ID to help with replacing loading messages
+  tempId?: string;
 }
 
 interface ChatContextType {
@@ -77,40 +80,80 @@ const extractAndParseJson = (text: string): AIResponse | null => {
  * @returns An AIResponse object.
  */
 const mapAgentResponseToAIResponse = (rawAgentResponse: any): AIResponse => {
-    // Check if the response is directly an AIResponse (e.g., from an action confirmation)
-    if (rawAgentResponse && typeof rawAgentResponse === 'object' && rawAgentResponse.displayText) {
+    // If the raw response is already an AIResponse, return it directly.
+    if (rawAgentResponse && typeof rawAgentResponse === 'object' && 'displayText' in rawAgentResponse) {
         return rawAgentResponse as AIResponse;
     }
 
-    let displayText = "Aquí tienes la información solicitada:";
+    let displayText: string = "";
     let table: TableData | undefined;
+    let chart: any | undefined; // Using 'any' as chart type is more complex.
     let suggestions: string[] = ["¿Hay algo más en lo que pueda ayudarte?"];
+    let actions: any[] | undefined;
+    let statusDisplay: ConfirmationMessage | undefined; // New field
 
-    // Example mapping for a common agent response structure like {"maquinas": [...]}
-    const keys = Object.keys(rawAgentResponse);
-    if (keys.length === 1 && Array.isArray(rawAgentResponse[keys[0]])) {
-        const dataArray = rawAgentResponse[keys[0]];
-        const entityName = keys[0]; // e.g., "maquinas"
-
-        if (dataArray.length > 0) {
-            displayText = `Encontré ${dataArray.length} ${entityName}.`;
-            const headers = Object.keys(dataArray[0]);
-            const rows = dataArray.map((item: any) => headers.map(header => item[header]));
-            table = { headers, rows };
-            suggestions = [`Ver detalles de la primera ${entityName}`, `Filtrar ${entityName} por...`];
-        } else {
-            displayText = `No se encontraron ${entityName} que coincidan con tu consulta.`;
-        }
+    if (rawAgentResponse === null || typeof rawAgentResponse !== 'object') {
+        displayText = `Recibí una respuesta inesperada del agente: ${String(rawAgentResponse)}.`;
+        statusDisplay = { icon: 'error', title: 'Error Inesperado', message: 'La respuesta del agente no es válida o está vacía.' };
     } else if (rawAgentResponse.error) {
+        // Handle explicit error messages from the agent
         displayText = `El agente reportó un error: ${rawAgentResponse.error.message || rawAgentResponse.error}`;
+        statusDisplay = { icon: 'error', title: 'Error en la Operación', message: rawAgentResponse.error.message || String(rawAgentResponse.error) };
+        suggestions = ["¿Puedes reformular la pregunta?", "Contactar a soporte"];
+    } else if (rawAgentResponse.data && typeof rawAgentResponse.data === 'object' && Object.keys(rawAgentResponse.data).length > 0) {
+        // SUCCESS: Agent returned structured data, likely a new or updated record (e.g., {"data": {"id": 32, "nombre": "inkakola", ...}})
+        displayText = `¡Operación completada con éxito! Se ha registrado/actualizado el siguiente elemento:`;
+        statusDisplay = { icon: 'success', title: '¡Éxito!', message: 'El registro se ha guardado correctamente.' };
+        
+        // Convert the single data object into a simple table for display
+        const headers = Object.keys(rawAgentResponse.data);
+        const rows = [headers.map(header => {
+            const value = rawAgentResponse.data[header];
+            // Format dates/timestamps if they look like them
+            if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+                try {
+                    const date = new Date(value);
+                    if (!isNaN(date.getTime())) {
+                        return date.toLocaleString(); // Prettier date display
+                    }
+                } catch (e) { /* ignore */ }
+            }
+            return String(value);
+        })];
+        table = { headers, rows };
+
     } else if (rawAgentResponse.message) {
-        displayText = rawAgentResponse.message; // Generic message
+        // Handle generic success messages (e.g., {"message": "Company created successfully."})
+        displayText = rawAgentResponse.message;
+        statusDisplay = { icon: 'info', title: 'Información', message: rawAgentResponse.message };
     } else {
-        // Fallback for any other unexpected but valid JSON structure
-        displayText = `Recibí una respuesta del agente, pero no pude interpretarla completamente. Contenido: ${JSON.stringify(rawAgentResponse, null, 2)}`;
+        // Attempt to find lists or data to display as tables/charts (for query results from agent)
+        const keys = Object.keys(rawAgentResponse);
+        let foundDataToDisplay = false;
+
+        for (const key of keys) {
+            const value = rawAgentResponse[key];
+            if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'object') {
+                // Found an array of objects, assume it's tabular data
+                displayText = `Aquí están los ${key.replace(/_/g, ' ')} solicitados:`;
+                const headers = Object.keys(value[0]);
+                const rows = value.map((item: any) => headers.map(header => item[header]));
+                table = { headers, rows };
+                suggestions = [`Ver detalles de ${key} específicos`, `Filtrar ${key} por...`];
+                foundDataToDisplay = true;
+                break;
+            }
+            // Add more specific handling for charts or other types if expected from agent
+        }
+
+        if (!foundDataToDisplay) {
+            // If no recognizable data structure was found, stringify the whole response.
+            displayText = `Recibí una respuesta del agente, pero no pude interpretarla completamente. Contenido: \`\`\`json\n${JSON.stringify(rawAgentResponse, null, 2)}\n\`\`\``;
+            statusDisplay = { icon: 'warning', title: 'Respuesta Ambígüa', message: 'La respuesta del agente no se pudo interpretar completamente.' };
+        }
     }
 
-    return { displayText, table, suggestions };
+    return { displayText, table, chart, actions, suggestions, statusDisplay };
 };
 
 
@@ -171,6 +214,84 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             if (!supabase) throw new Error("La conexión a Supabase no está disponible.");
 
+            // --- PRE-PROCESS USER FORM SUBMISSION ---
+            // This logic allows the UI to directly send form data to the agent
+            // without the LLM needing to re-interpret the submission prompt.
+            const formSubmissionPattern = "El usuario ha completado el formulario con los siguientes datos: ";
+            if (isAgenteEnabled && agenteClient && prompt.startsWith(formSubmissionPattern)) {
+                console.log("Detectado envío de formulario. Procesando directamente con el agente externo...");
+                const jsonString = prompt.substring(formSubmissionPattern.length, prompt.indexOf(". Procede a crear el registro en la base de datos."));
+                let formData: any;
+                try {
+                    formData = JSON.parse(jsonString);
+                } catch (e: any) {
+                    throw new Error("Formato JSON inválido en el envío del formulario: " + e.message);
+                }
+
+                // Add a temporary loading message to provide immediate feedback
+                const tempLoadingMessageId = Date.now().toString(); // Unique ID for temporary message
+                const loadingMessageContent: AIResponse = { 
+                    displayText: 'El asistente está procesando los datos del formulario y guardando el registro en la base de datos...',
+                    // Optionally, you can add a temporary statusDisplay for visual loading feedback
+                    // statusDisplay: { icon: 'info', title: 'Procesando...', message: 'Enviando datos al agente externo...' }
+                };
+                setMessages(prev => [...prev, { sender: 'ai', content: loadingMessageContent, tempId: tempLoadingMessageId }]);
+                
+                let rawAgentResponse: any;
+                let agentError: any = null;
+
+                for (let attempt = 0; attempt <= MAX_AGENT_RETRIES; attempt++) {
+                    try {
+                        rawAgentResponse = await agenteClient.sendToAgent({ data: formData }, agenteWebhookUrl);
+                        // Ensure the response is actually an object before returning
+                        if (typeof rawAgentResponse !== 'object' || rawAgentResponse === null) {
+                            throw new Error("Respuesta del agente externo no es un objeto JSON válido.");
+                        }
+                        agentError = null; // Clear any previous errors on success
+                        break; // Exit loop on success
+                    } catch (retryError: any) {
+                        agentError = retryError; // Store the error
+                        console.error(`Intento ${attempt + 1}/${MAX_AGENT_RETRIES + 1} fallido para la llamada al agente con datos de formulario:`, retryError.message);
+                        if (attempt < MAX_AGENT_RETRIES) {
+                            await sleep(RETRY_DELAY_MS * (attempt + 1));
+                        } else {
+                            agentError = new Error("AGENT_EXTERNAL_FAILED_AFTER_RETRIES");
+                        }
+                    }
+                }
+                
+                // After agent response (or all retries exhausted), replace the temporary message.
+                setMessages(prev => {
+                    const newMessages = [...prev];
+                    const tempMessageIndex = newMessages.findIndex(msg => msg.tempId === tempLoadingMessageId);
+                    if (tempMessageIndex !== -1) {
+                        let finalContent: AIResponse;
+                        if (agentError) {
+                            let userFacingMessage = `Lo siento, el agente externo no pudo procesar tu solicitud después de varios intentos. Por favor, inténtalo de nuevo más tarde o reformula tu pregunta. Si el problema persiste, contacta a soporte técnico.`;
+                            if (agentError.message !== "AGENT_EXTERNAL_FAILED_AFTER_RETRIES") {
+                                userFacingMessage = `Lo siento, el agente externo reportó un problema: ${agentError.message}. Por favor, inténtalo de nuevo más tarde o reformula tu pregunta.`;
+                            }
+                            finalContent = { 
+                                displayText: userFacingMessage,
+                                statusDisplay: { icon: 'error', title: 'Error al Procesar', message: userFacingMessage }
+                            };
+                        } else {
+                             finalContent = mapAgentResponseToAIResponse(rawAgentResponse);
+                        }
+                        newMessages[tempMessageIndex] = { sender: 'ai', content: finalContent };
+                    } else {
+                        // Fallback: if somehow the loading message wasn't found, just append the final response.
+                        newMessages.push({ sender: 'ai', content: mapAgentResponseToAIResponse(rawAgentResponse) });
+                    }
+                    return newMessages;
+                });
+
+                setIsLoading(false);
+                return; // IMPORTANT: Exit here, as we've handled the message.
+            }
+            // --- END PRE-PROCESSING ---
+
+
             // --- 1. Determine which LLM to use as the orchestrator, and its configuration ---
             let activeLLMClient: any = null;
             let activeLLMModel: string;
@@ -200,7 +321,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 activeLLMModel = 'gpt-4o'; // Use a powerful OpenAI model
 
                 if (isAgentModeSelected) {
-                    activeLlmTools = [{ type: 'function', function: callExternalAgentWithQuery_OpenAI }, { type: 'function', function: callExternalAgentWithData_OpenAI }];
+                    activeLlmTools = [
+                        { type: 'function', function: callExternalAgentWithQuery_OpenAI }, 
+                        { type: 'function', function: callExternalAgentWithData_OpenAI }
+                    ];
                     activeSystemInstruction = agenteOrchestratorSystemInstruction;
                 } else { // Direct OpenAI mode
                     activeLlmTools = [
@@ -212,18 +336,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
                 // Build OpenAI message history for stateless calls.
+                // It's crucial to map messages to OpenAI's expected format correctly,
+                // especially for tool calls and responses.
                 openaiMessagesHistory = messages.map(msg => {
                     if (msg.sender === 'user') {
                         return { role: 'user', content: msg.content as string };
-                    } else if (typeof msg.content === 'object') {
+                    } else if (msg.sender === 'ai' && typeof msg.content === 'object') {
                         const aiContent = msg.content as AIResponse;
-                        // Correctly handle previous tool calls in history
+                        // If the previous AI message had tool_calls, include them for OpenAI history
                         if (msg.tool_calls && msg.tool_calls.length > 0) {
                             return { role: 'assistant', content: aiContent.displayText || null, tool_calls: msg.tool_calls };
                         }
                         return { role: 'assistant', content: aiContent.displayText || '' };
                     }
-                    return { role: 'assistant', content: msg.content as string };
+                    return { role: 'assistant', content: msg.content as string }; // Fallback for simple string AI messages
                 });
                 openaiMessagesHistory.unshift({ role: 'system', content: activeSystemInstruction });
                 openaiMessagesHistory.push({ role: 'user', content: prompt });
@@ -246,27 +372,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Gemini handles message history internally via the `chat` object
                 responseFromLLM = await (chat as Chat).sendMessage({ message: prompt });
             } else { // OpenAI (activeLLMClient is openaiClient)
-                responseFromLLM = await activeLLMClient.chat.completions.create({
+                const completion = await activeLLMClient.chat.completions.create({
                     model: activeLLMModel,
                     messages: openaiMessagesHistory,
                     tools: activeLlmTools,
                     tool_choice: 'auto',
                     response_format: { type: "json_object" }
                 });
-                responseFromLLM = responseFromLLM.choices[0].message;
+                responseFromLLM = completion.choices[0].message;
             }
 
             // --- 3. Handle function/tool calls in a loop ---
             let toolCalls = responseFromLLM.functionCalls || responseFromLLM.tool_calls || [];
             let functionResponseProcessed = false; // Flag to indicate if any tool was called
             let lastToolResponses: any[] = []; // Stores raw results from tool functions (e.g., direct agent JSON or {functionResponse: ...})
-            let lastToolResultsForLLM: any[] = []; // Stores results formatted for LLM's `parts` (e.g., {name, id, response: {result}})
 
             while (toolCalls && toolCalls.length > 0) {
                 functionResponseProcessed = true;
                 const toolExecutionPromises = toolCalls.map(async (call: any) => {
                     const functionName = call.name || call.function?.name;
-                    const functionArgs = call.args || JSON.parse(call.function?.arguments || '{}');
+                    // OpenAI's arguments are stringified JSON in call.function.arguments
+                    const functionArgs = call.args || (call.function?.arguments ? JSON.parse(call.function.arguments) : {});
                     const toolCallId = call.id || call.tool_call_id; // Get the ID for the response
 
                     if (agenteClient && (functionName === 'callExternalAgentWithQuery' || functionName === 'callExternalAgentWithData')) {
@@ -302,7 +428,20 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         throw new Error("Ruta de error inesperada para la llamada al agente."); 
 
                     } else if (!isAgentModeSelected) { // Direct Supabase tools, ONLY if NOT in agent mode
-                        return await handleFunctionExecution({ name: functionName, args: functionArgs, id: toolCallId }, supabase);
+                        // handleFunctionExecution returns { functionResponse: { id, name, response: { result: JSON_STRING } } }
+                        const toolResult = await handleFunctionExecution({ name: functionName, args: functionArgs, id: toolCallId }, supabase);
+                        // Ensure the result is correctly formatted to be a JSON string for the LLM.
+                        const resultString = typeof toolResult === 'object' && toolResult !== null
+                            ? (toolResult.functionResponse?.response?.result || JSON.stringify(toolResult))
+                            : String(toolResult);
+                        
+                        return { 
+                            functionResponse: { 
+                                id: toolCallId || 'no-id', 
+                                name: functionName, 
+                                response: { result: resultString } 
+                            } 
+                        };
                     } else {
                         throw new Error(`Función '${functionName}' no soportada o no implementada para el modo agente con ${isLLMGemini ? 'Gemini' : 'OpenAI'} como orquestador.`);
                     }
@@ -311,44 +450,51 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 lastToolResponses = await Promise.all(toolExecutionPromises); // These are the raw results from the tools
 
                 if (isLLMGemini) { // Gemini client is the orchestrator
-                    lastToolResultsForLLM = toolCalls.map((originalCall: any, i: number) => {
+                    const geminiFormattedToolResponses = toolCalls.map((originalCall: any, i: number) => {
                         const toolExecutionResult = lastToolResponses[i]; // This is the raw output from the tool
-                        // All agent-related calls will return raw JSON from the agent, so we wrap it.
-                        // Direct Supabase calls (if agent mode wasn't selected) return { functionResponse: ... }.
+                        
+                        // Ensure the `result` property of the function response is always a stringified JSON.
+                        const resultString = typeof toolExecutionResult === 'object' && toolExecutionResult !== null
+                            ? JSON.stringify(toolExecutionResult) 
+                            : String(toolExecutionResult);
+                        
                         return {
-                            name: originalCall.name,
-                            id: originalCall.id,
-                            response: { result: JSON.stringify(toolExecutionResult) }, // result must be stringified JSON
+                            functionResponse: {
+                                name: originalCall.name,
+                                id: originalCall.id,
+                                response: { result: resultString },
+                            }
                         };
                     });
-                    responseFromLLM = await (chat as Chat).sendMessage({ parts: lastToolResultsForLLM });
+                    responseFromLLM = await (chat as Chat).sendMessage({ parts: geminiFormattedToolResponses });
                 } else { // OpenAI client is the orchestrator
                     const newToolMessages = toolCalls.map((call: any, i: number) => {
                         const toolExecutionResult = lastToolResponses[i]; // This is the raw output from the tool
                         // Content for the tool message depends on whether it was an external agent call or a direct Supabase tool call.
-                        const content = (call.function?.name === 'callExternalAgentWithQuery' || call.function?.name === 'callExternalAgentWithData')
-                            ? JSON.stringify(toolExecutionResult) // Raw JSON from agent
-                            : toolExecutionResult.functionResponse.response.result; // Stringified JSON from handleFunctionExecution
-                        
+                        // Ensure the `content` property for OpenAI tool messages is a stringified JSON.
+                        const contentString = (typeof toolExecutionResult === 'object' && toolExecutionResult !== null)
+                            ? (toolExecutionResult.functionResponse?.response?.result || JSON.stringify(toolExecutionResult))
+                            : String(toolExecutionResult);
+
                         return {
                             tool_call_id: call.id || call.tool_call_id,
                             role: 'tool',
                             name: call.function?.name || call.name,
-                            content: content
+                            content: contentString
                         };
                     });
                     
                     openaiMessagesHistory.push(responseFromLLM); // Add AI's tool call request to history
                     openaiMessagesHistory.push(...newToolMessages); // Add tool outputs to history
                     
-                    responseFromLLM = await activeLLMClient.chat.completions.create({
+                    const completion = await activeLLMClient.chat.completions.create({
                         model: activeLLMModel,
                         messages: openaiMessagesHistory,
                         tools: activeLlmTools,
                         tool_choice: 'auto',
                         response_format: { type: "json_object" }
                     });
-                    responseFromLLM = responseFromLLM.choices[0].message;
+                    responseFromLLM = completion.choices[0].message;
                 }
                 toolCalls = responseFromLLM.functionCalls || responseFromLLM.tool_calls || []; // Update for next iteration
             }
@@ -360,7 +506,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (isAgentModeSelected && functionResponseProcessed && lastToolResponses.length > 0) {
                 // If agent was called, map its raw response (the *last* tool response) to AIResponse
                 const actualAgentResponse = lastToolResponses[lastToolResponses.length - 1];
-                parsedAIResponse = mapAgentResponseToAIResponse(actualAgentResponse);
+                // Ensure actualAgentResponse is a valid JSON object before mapping
+                if (typeof actualAgentResponse === 'object' && actualAgentResponse !== null) {
+                    parsedAIResponse = mapAgentResponseToAIResponse(actualAgentResponse);
+                } else {
+                    console.warn("Raw agent response was not a valid JSON object. Displaying as text. Response:", actualAgentResponse);
+                    parsedAIResponse = { 
+                        displayText: `He recibido una respuesta del agente, pero no es un JSON válido. Aquí está el contenido:\n\n---\n\n${String(actualAgentResponse)}`,
+                        statusDisplay: { icon: 'error', title: 'Error de Formato', message: 'La respuesta del agente no es un objeto JSON válido.' }
+                    };
+                }
             } else {
                 // For direct LLM responses or if agent mode was not active.
                 // Use the LLM's final content directly and try to parse it as AIResponse.
@@ -375,7 +530,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const fallbackMessage: Message = {
                     sender: 'ai', 
                     content: {
-                        displayText: `He recibido una respuesta, pero no tiene el formato JSON esperado. Aquí está el texto original:\n\n---\n\n${finalResponseContent}`
+                        displayText: `He recibido una respuesta, pero no tiene el formato JSON esperado. Aquí está el texto original:\n\n---\n\n${finalResponseContent}`,
+                        statusDisplay: { icon: 'error', title: 'Error de Formato', message: 'La respuesta de la IA no es un JSON válido.' }
                     }
                 };
                 setMessages(prev => [...prev, fallbackMessage]);
@@ -384,15 +540,24 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch (error: any) {
             console.error("Error getting AI response:", error);
             let userFacingMessage = `Lo siento, ocurrió un error: ${error.message}`;
+            let statusDisplay: ConfirmationMessage = { icon: 'error', title: 'Error General', message: userFacingMessage };
 
             if (error.message === "AGENT_EXTERNAL_FAILED_AFTER_RETRIES") {
                 userFacingMessage = "Lo siento, el agente externo no pudo procesar tu solicitud después de varios intentos. Por favor, inténtalo de nuevo más tarde o reformula tu pregunta. Si el problema persiste, contacta a soporte técnico.";
+                statusDisplay = { icon: 'error', title: 'Error de Conexión', message: userFacingMessage };
+            } else if (error.message.includes("ContentUnion is required")) {
+                 userFacingMessage = "Lo siento, hubo un problema al procesar la respuesta de la IA. Parece que el formato de los datos no es el esperado. Por favor, intenta reformular tu pregunta o notifica a soporte.";
+                 statusDisplay = { icon: 'error', title: 'Error de Formato Interno', message: userFacingMessage };
+            } else if (error.message.includes("client not initialized") || error.message.includes("not configured with a valid API key")) {
+                userFacingMessage = `El servicio de IA (${service}) no está configurado o no tiene una clave API válida. Por favor, revisa la sección de configuración.`;
+                statusDisplay = { icon: 'error', title: 'Error de Configuración', message: userFacingMessage };
             }
 
             const errorMessage: Message = { 
                 sender: 'ai', 
                 content: {
-                    displayText: userFacingMessage
+                    displayText: userFacingMessage,
+                    statusDisplay: statusDisplay
                 } 
             };
             setMessages(prev => [...prev, errorMessage]);
