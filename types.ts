@@ -249,3 +249,13 @@ export interface AIResponse {
   form?: FormField[];
   suggestions?: string[];
 }
+
+export interface GoogleAuthContextType {
+  isSignedIn: boolean;
+  currentUserEmail: string | null;
+  accessToken: string | null;
+  handleSignIn: () => Promise<void>;
+  handleSignOut: () => void;
+  gapiLoaded: boolean;
+  gisLoaded: boolean;
+}

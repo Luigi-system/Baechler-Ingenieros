@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useMemo, useCallback } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import Login from './components/auth/Login';
@@ -10,6 +9,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from './contexts/SupabaseContext';
 import { AiServiceProvider } from './contexts/AiServiceContext';
 import { ChatProvider } from './contexts/ChatContext';
+import { GoogleAuthContext, GoogleAuthProvider } from './contexts/GoogleAuthContext'; // Import new context and provider
 import type { User } from './types';
 
 const AppContent: React.FC = () => {
@@ -145,7 +145,9 @@ const App: React.FC = () => {
       <AiServiceProvider>
         <ThemeProvider>
           <ChatProvider>
-            <AppContent />
+            <GoogleAuthProvider> {/* Wrap AppContent with GoogleAuthProvider */}
+              <AppContent />
+            </GoogleAuthProvider>
           </ChatProvider>
         </ThemeProvider>
       </AiServiceProvider>

@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 type IconProps = React.SVGProps<SVGSVGElement>;
@@ -16,7 +17,7 @@ export const ReportsIcon: React.FC<IconProps> = (props) => (
 );
 
 export const AssistantIcon: React.FC<IconProps> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 8V4H8" />
     <rect width="16" height="12" x="4" y="8" rx="2" />
     <path d="M2 14h2" />
@@ -293,5 +294,21 @@ export const CpuChipIcon: React.FC<IconProps> = (props) => (
     <rect width="16" height="16" x="4" y="4" rx="2" />
     <rect width="6" height="6" x="9" y="9" rx="1" />
     <path d="M15 2v2" /><path d="M15 20v2" /><path d="M2 15h2" /><path d="M2 9h2" /><path d="M20 15h2" /><path d="M20 9h2" /><path d="M9 2v2" /><path d="M9 20v2" />
+  </svg>
+);
+
+export const DriveIcon: React.FC<IconProps> = (props) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10.45 19.34 3.91 13.86 1.5 18.01 8.04 23.5l2.41-4.16Z"/><path d="m22.5 18.01-2.41 4.16-6.54-5.48L15.97 12l6.53 6.01Z"/><path d="M8.04 23.5 15.97 12l-2.41-4.16L5.63 19.34l2.41 4.16Z"/><path d="M15.97 12 12 5.19 1.5 18.01 5.63 19.34 8.04 23.5 10.45 19.34 14.58 12.51 15.97 12Z"/><path d="M12 5.19 22.5 18.01l-4.13 1.33L8.04 23.5 3.91 13.86 12 5.19Z"/>
+  </svg>
+);
+
+export const DocumentIcon: React.FC<IconProps> = (props) => (
+  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="16" y1="13" x2="8" y2="13"/>
+    <line x1="16" y1="17" x2="8" y2="17"/>
+    <line x1="10" y1="9" x2="8" y2="9"/>
   </svg>
 );

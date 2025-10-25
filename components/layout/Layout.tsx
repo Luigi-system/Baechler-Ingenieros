@@ -1,6 +1,5 @@
 
 
-
 import React, { useState, useContext } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -27,6 +26,8 @@ import RoleManagement from '../settings/RoleManagement';
 import DataImporter from '../settings/DataImporter';
 import AccessManagement from '../settings/AccessManagement';
 import ProfileSettings from '../settings/ProfileSettings';
+import GoogleDriveSettings from '../settings/GoogleDriveSettings'; // New import
+import GoogleDocViewer from '../google-docs/GoogleDocViewer'; // New import
 
 const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
@@ -77,6 +78,8 @@ const Layout: React.FC = () => {
         return <VisitReportForm onBack={() => navigateTo('reports-visit')} />;
       case 'edit-report-visit':
         return <VisitReportForm reportId={editingReportId?.toString()} onBack={() => navigateTo('reports-visit')} />;
+      case 'google-doc-viewer': // New route
+        return <GoogleDocViewer />;
       
       // Management Pages
       case 'management-companies':
@@ -105,6 +108,8 @@ const Layout: React.FC = () => {
         return <DataImporter />;
       case 'settings-profile':
         return <ProfileSettings />;
+      case 'settings-google-drive': // New route
+        return <GoogleDriveSettings />;
         
       default:
         return <Dashboard />;
