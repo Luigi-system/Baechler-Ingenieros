@@ -1,56 +1,29 @@
-{{
-
-  "compilerOptions": {  "compilerOptions": {
-
-    "target": "ESNext",    "target": "ES2022",
-
-    "useDefineForClassFields": true,    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-
-    "lib": ["DOM", "DOM.Iterable", "ESNext"],    "module": "ESNext",
-
-    "allowJs": true,    "skipLibCheck": true,
-
-    "skipLibCheck": true,    "moduleResolution": "node",
-
-    "esModuleInterop": true,    "allowImportingTsExtensions": true,
-
-    "allowSyntheticDefaultImports": true,    "resolveJsonModule": true,
-
-    "strict": true,    "isolatedModules": true,
-
-    "forceConsistentCasingInFileNames": true,    "noEmit": true,
-
-    "module": "ESNext",    "jsx": "react-jsx",
-
-    "moduleResolution": "Node",    "strict": false,
-
-    "resolveJsonModule": true,    "noUnusedLocals": false,
-
-    "isolatedModules": true,    "noUnusedParameters": false,
-
-    "noEmit": true,    "noFallthroughCasesInSwitch": true,
-
-    "jsx": "react-jsx",    "allowJs": true,
-
-    "baseUrl": "./src",    "forceConsistentCasingInFileNames": true,
-
-    "paths": {    "types": ["vite/client"],
-
-      "@/*": ["./*"]    "baseUrl": "./src",
-
-    }    "paths": {
-
-  },      "@/*": ["./*"],
-
-  "include": ["src"],      "components/*": ["./components/*"],
-
-  "references": [{ "path": "./tsconfig.node.json" }]      "contexts/*": ["./contexts/*"],
-
-}      "services/*": ["./services/*"],
-      "constants/*": ["./constants/*"]
-    }
-  },
-  "include": ["src/**/*"],
-  "references": [{ "path": "./tsconfig.node.json" }]
-}
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
+    "module": "ESNext",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "skipLibCheck": true,
+    "types": [
+      "node"
+    ],
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "allowJs": true,
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "allowImportingTsExtensions": true,
+    "noEmit": true
+  }
 }
