@@ -263,17 +263,6 @@ export interface AIResponse {
   statusDisplay?: ConfirmationMessage; // New field for prominent status messages
 }
 
-export interface GoogleAuthContextType {
-  isSignedIn: boolean;
-  currentUserEmail: string | null;
-  accessToken: string | null;
-  handleSignIn: () => Promise<void>;
-  handleSignOut: () => void;
-  gapiLoaded: boolean;
-  gisLoaded: boolean;
-  isConfigured: boolean;
-}
-
 // FIX: Moved OpenAiClient interface definition here from AiServiceContext.tsx
 // Define a simple type for our custom fetch-based OpenAI client
 export interface OpenAiClient {
@@ -305,4 +294,15 @@ export interface AiServiceContextType {
     agenteWebhookUrl: string;
     updateApiKeys: (keys: AiApiKeys) => Promise<{error: Error | null}>;
     updateAgenteWebhookUrl: (url: string) => Promise<{error: Error | null}>;
+}
+// FIX: Added missing GoogleAuthContextType interface.
+export interface GoogleAuthContextType {
+  isSignedIn: boolean;
+  currentUserEmail: string | null;
+  accessToken: string | null;
+  handleSignIn: () => Promise<void>;
+  handleSignOut: () => void;
+  gapiLoaded: boolean;
+  gisLoaded: boolean;
+  isConfigured: boolean;
 }

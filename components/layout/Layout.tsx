@@ -26,8 +26,6 @@ import RoleManagement from '../settings/RoleManagement';
 import DataImporter from '../settings/DataImporter';
 import AccessManagement from '../settings/AccessManagement';
 import ProfileSettings from '../settings/ProfileSettings';
-import GoogleDriveSettings from '../settings/GoogleDriveSettings'; 
-import GoogleDocViewer from '../google-docs/GoogleDocViewer'; 
 import AgenteSettings from '../settings/AgenteSettings'; // Import the renamed component
 
 const Layout: React.FC = () => {
@@ -79,8 +77,6 @@ const Layout: React.FC = () => {
         return <VisitReportForm onBack={() => navigateTo('reports-visit')} />;
       case 'edit-report-visit':
         return <VisitReportForm reportId={editingReportId?.toString()} onBack={() => navigateTo('reports-visit')} />;
-      case 'google-doc-viewer': 
-        return <GoogleDocViewer />;
       
       // Management Pages
       case 'management-companies':
@@ -111,8 +107,6 @@ const Layout: React.FC = () => {
         return <DataImporter />;
       case 'settings-profile':
         return <ProfileSettings />;
-      case 'settings-google-drive': 
-        return <GoogleDriveSettings />;
         
       default:
         return <Dashboard />;

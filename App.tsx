@@ -9,7 +9,6 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from './contexts/SupabaseContext';
 import { AiServiceProvider } from './contexts/AiServiceContext';
 import { ChatProvider } from './contexts/ChatContext';
-import { GoogleAuthContext, GoogleAuthProvider } from './contexts/GoogleAuthContext'; // Import new context and provider
 import type { User } from './types';
 
 const AppContent: React.FC = () => {
@@ -145,9 +144,7 @@ const App: React.FC = () => {
       <AiServiceProvider>
         <ThemeProvider>
           <ChatProvider>
-            <GoogleAuthProvider> {/* Wrap AppContent with GoogleAuthProvider */}
-              <AppContent />
-            </GoogleAuthProvider>
+            <AppContent />
           </ChatProvider>
         </ThemeProvider>
       </AiServiceProvider>
