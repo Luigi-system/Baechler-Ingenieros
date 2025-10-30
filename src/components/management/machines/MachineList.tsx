@@ -84,7 +84,6 @@ const MachineList: React.FC = () => {
 
             const companyMatch = selectedCompany === 'all' || machine.id_empresa === parseInt(selectedCompany);
             const plantMatch = selectedPlant === 'all' || machine.id_planta === parseInt(selectedPlant);
-            // FIX: Replaced 'selected' with 'selectedBrand' to fix a typo causing a compilation error.
             const brandMatch = selectedBrand === 'all' || machine.marca === selectedBrand;
             
             const statusMatch = selectedStatus === 'all' ||
@@ -118,7 +117,6 @@ const MachineList: React.FC = () => {
         setEditingMachine(null);
     }
 
-    // FIX: Updated onSave to match the new signature of MachineForm's onSave prop.
     const onSave = (_machine: Machine) => {
         fetchData();
         handleCloseModal();
