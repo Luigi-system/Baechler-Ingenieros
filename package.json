@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "esbuild src/index.tsx --bundle --outfile=src/app.js --jsx=automatic"
+    "build": "esbuild src/index.tsx --bundle --outfile=src/app.js --jsx=automatic --external:react --external:react-dom/* --external:react/* --external:@google/genai --external:recharts --external:react-markdown --external:@supabase/supabase-js --external:jspdf --external:jspdf-autotable"
   },
   "devDependencies": {
     "esbuild": "^0.20.2"
