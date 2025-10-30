@@ -26,8 +26,14 @@ export default defineConfig(({ mode }) => {
           globals: {
             "@google/genai": "google.generativeai",
           },
+          format: "es",
         },
       },
+      target: "esnext",
+      sourcemap: true,
+    },
+    optimizeDeps: {
+      include: ["@emotion/react", "@emotion/styled", "@mui/material"],
     },
   };
 });
