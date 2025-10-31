@@ -297,12 +297,6 @@ export const CpuChipIcon: React.FC<IconProps> = (props) => (
   </svg>
 );
 
-export const DriveIcon: React.FC<IconProps> = (props) => (
-  <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M10.45 19.34 3.91 13.86 1.5 18.01 8.04 23.5l2.41-4.16Z"/><path d="m22.5 18.01-2.41 4.16-6.54-5.48L15.97 12l6.53 6.01Z"/><path d="M8.04 23.5 15.97 12l-2.41-4.16L5.63 19.34l2.41 4.16Z"/><path d="M15.97 12 12 5.19 1.5 18.01 5.63 19.34 8.04 23.5 10.45 19.34 14.58 12.51 15.97 12Z"/><path d="M12 5.19 22.5 18.01l-4.13 1.33L8.04 23.5 3.91 13.86 12 5.19Z"/>
-  </svg>
-);
-
 export const DocumentIcon: React.FC<IconProps> = (props) => (
   <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>

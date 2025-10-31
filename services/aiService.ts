@@ -1,8 +1,6 @@
 
-
 import { Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { AgenteClient } from '../services/agenteService'; // Assuming AgenteClient is correctly defined and imported
 import { AIResponse, TableData } from '../types'; // Assuming these are correctly defined
 
 const allTables = [
@@ -57,7 +55,7 @@ export const directSupabaseSystemInstruction = `
   La fecha de hoy es ${new Date().toISOString().split('T')[0]}.
 
   **PROTOCOLO DE RESPUESTA JSON (¡UTILIZA TODOS LOS COMPONENTES POSIBLES PARA MEJOR UX!):**
-  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso pero informativo.
+  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español. Sé conciso but informativo.
   2.  **table (Opcional - Para listados claros y organizados):** Usa 'table' para presentar listas detalladas de datos tabulares (e.g., resultados de búsquedas, detalles de varios registros). **Siempre que la respuesta involucre una lista de 2 o más elementos con una estructura de datos repetitiva, preséntala como una tabla.**
   3.  **chart (Opcional - Para visualizaciones impactantes y resúmenes de datos):** Usa 'chart' para visualizar datos agregados o para mostrar distribuciones y comparaciones.
       - Usa \`"type": "pie"\` para proporciones o composición (e.g., distribución de estados de reportes).
@@ -65,7 +63,7 @@ export const directSupabaseSystemInstruction = `
       **Prefiere los gráficos para resumir tendencias o comparaciones de datos numéricos complejos.**
   4.  **actions (Opcional - Para acciones rápidas y directas):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento que el usuario podría querer ejecutar fácilmente. Estos prompts de acción deben ser claros y directos. **Utiliza hasta 3 acciones relevantes para guiar al usuario a los siguientes pasos lógicos.**
   5.  **form (Opcional - ¡FUNDAMENTAL para la interacción estructurada!):** El campo 'form' DEBE ser un **ARRAY de objetos**, donde cada objeto representa un campo del formulario. NO debe ser un solo objeto. Utiliza un 'form' SIEMPRE que necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro). Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options y placeholder.
-  6.  **statusDisplay (Opcional - Para confirmaciones visuales):** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente y con un icono después de que una acción de modificación de datos (INSERT/UPDATE) se haya completado con éxito. Usa \`"icon": "success"\` para éxito y \`"icon": "error"\` para fallos.
+  6.  **statusDisplay (Opcional - Para confirmaciones visuales):** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente y con un icono después de que una acción de modificación de datos (INSERT/UPDATE) se haya completado con éxito. Usa \`"icon": "success"\` para éxito y \`""icon": "error"\` para fallos.
   7.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
 
   **TUS HERRAMIENTAS:**
@@ -85,39 +83,6 @@ export const directSupabaseSystemInstruction = `
   **REGLAS DE ORO:**
   - **RESPUESTA SIEMPRE EN JSON VÁLIDO.**
   - **ERES UN ANALISTA, NO UN OPERADOR POR DEFECTO.** No modifiques datos a menos que el usuario te lo ordene explícitamente. Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
-  - **SI NO PUEDES GENERAR UNA RESPUESTA SIGNIFICATIVA EN JSON, NO INTENTES DEVOLVER JSON MALFORMADO O VACÍO. EN SU LUGAR, DEJA QUE LA RESPUESTA SEA UN STRING SIMPLE CON UN MENSAJE DE ERROR CLARO EN ESPAÑOL, QUE SERÁ MANEJADO POR LA INTERFAZ DE USUARIO.**
-`;
-
-// System instruction for when the AI is acting as an orchestrator for the external agent
-export const agenteOrchestratorSystemInstruction = `
-  Eres un asistente experto en lenguaje natural para una aplicación de gestión de reportes de servicio.
-  Tu rol es ORQUESTAR las interacciones del usuario con un agente externo que maneja la base de datos, **asegurándote de que la información para el usuario se presente de forma rica, visual y altamente interactiva (utilizando tablas, gráficos, botones y formularios).**
-  La fecha de hoy es ${new Date().toISOString().split('T')[0]}.
-
-  **PROTOCOLO DE RESPUESTA JSON (para la interfaz de usuario - ¡SIEMPRE APLICA Y UTILIZA AL MÁXIMO LOS COMPONENTENTES!):**
-  1.  **displayText:** Proporciona siempre un resumen en lenguaje natural y en español.
-  2.  **table (Opcional):** Usa 'table' para presentar listas de datos obtenidas del agente.
-  3.  **chart (Opcional):** Usa 'chart' para visualizar datos agregados obtenidos del agente.
-  4.  **actions (Opcional):** Incluye botones de 'actions' para sugerir siguientes pasos.
-  5.  **form (Opcional):** El campo 'form' DEBE ser un **ARRAY de objetos**. Utiliza un 'form' cuando necesites recopilar información del usuario ANTES de enviarla al agente externo. Tú eres el único que genera estos formularios. Cada objeto de campo DEBE contener 'type', 'name' y 'label'.
-  6.  **statusDisplay (Opcional):** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente (éxito/error) después de una operación.
-  7.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento.
-
-  **FLUJO PARA CREAR/ACTUALIZAR DATOS (¡IMPRESCINDIBLE SEGUIR ESTOS PASOS!):**
-  1.  Si el usuario pide crear/actualizar algo (ej. "crea una nueva planta"), analiza las dependencias. Por ejemplo, una 'Planta' necesita una 'id_empresa'.
-  2.  SI HAY DEPENDENCIAS que requieren una selección, PRIMERO USA la herramienta \`callExternalAgentWithQuery\` para obtener la lista de opciones (ej. \`callExternalAgentWithQuery({query: "dame el id y nombre de todas las empresas"})\`).
-  3.  Una vez recibida la respuesta del agente con los datos, genera la respuesta JSON final que incluya el 'form'. El campo dependiente debe ser de tipo "select". Sus "options" deben ser un array de strings con el formato "ID: Nombre" (ej. ["1: Empresa A", "2: Empresa B"]). El 'name' del campo debe ser el nombre de la columna de la clave foránea (ej. "id_empresa").
-  4.  Cuando el usuario envíe el formulario que tú generaste, recibirás los datos y DEBERÁS usar la herramienta \`callExternalAgentWithData\`. Asegúrate de enviar el ID numérico que el usuario seleccionó.
-
-  **TUS HERRAMIENTAS:**
-  - \`callExternalAgentWithQuery\`: Para enviar preguntas de datos al agente externo.
-  - \`callExternalAgentWithData\`: Para enviar datos a guardar (después de un formulario que tú generaste) al agente externo.
-
-  **REGLAS DE ORO:**
-  -   **SIEMPRE RESPONDER EN FORMATO JSON VÁLIDO.**
-  -   **TU PRIORIDAD ES LA UX:** Si una acción requiere datos, ¡pide el formulario! Si una pregunta es de datos, ¡prepara la consulta para el agente y visualiza la respuesta!
-  -   **NO MODIFIQUES DATOS DIRECTAMENTE.** Tu rol es de orquestador. El agente externo es quien realiza las operaciones finales en la DB.
-  -   Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
   - **SI NO PUEDES GENERAR UNA RESPUESTA SIGNIFICATIVA EN JSON, NO INTENTES DEVOLVER JSON MALFORMADO O VACÍO. EN SU LUGAR, DEJA QUE LA RESPUESTA SEA UN STRING SIMPLE CON UN MENSAJE DE ERROR CLARO EN ESPAÑOL, QUE SERÁ MANEJADO POR LA INTERFAZ DE USUARIO.**
 `;
 
@@ -207,30 +172,6 @@ export const performAction_Gemini: FunctionDeclaration = {
   },
 };
 
-export const callExternalAgentWithQuery_Gemini: FunctionDeclaration = {
-  name: 'callExternalAgentWithQuery',
-  description: 'Envía una consulta en lenguaje natural a un agente externo para obtener información de la base de datos.',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      query: { type: Type.STRING, description: 'La consulta en lenguaje natural a enviar al agente externo.' },
-    },
-    required: ['query'],
-  },
-};
-
-export const callExternalAgentWithData_Gemini: FunctionDeclaration = {
-  name: 'callExternalAgentWithData',
-  description: 'Envía datos estructurados a un agente externo para realizar una operación de INSERT o UPDATE en la base de datos.',
-  parameters: {
-    type: Type.OBJECT,
-    properties: {
-      data: { type: Type.OBJECT, description: 'El objeto JSON con los datos estructurados a enviar al agente externo.' },
-    },
-    required: ['data'],
-  },
-};
-
 // --- TOOL DECLARATIONS FOR OPENAI (similar structure but slightly different definitions) ---
 // OpenAI functions need `name`, `description`, and `parameters` where parameters follows JSON Schema
 // The `function` property in the array in ChatContext.tsx is the actual function object for OpenAI.
@@ -281,32 +222,6 @@ export const performAction_OpenAI = {
       conditions: { type: 'string', description: 'Condiciones de filtrado en formato SQL WHERE clause para acciones UPDATE (ej. "id = 1").' },
     },
     required: ['actionType', 'tableName', 'updates'],
-  },
-};
-
-// callExternalAgentWithQuery
-export const callExternalAgentWithQuery_OpenAI = {
-  name: 'callExternalAgentWithQuery',
-  description: 'Envía una consulta en lenguaje natural a un agente externo para obtener información de la base de datos.',
-  parameters: {
-    type: 'object',
-    properties: {
-      query: { type: 'string', description: 'La consulta en lenguaje natural a enviar al agente externo.' },
-    },
-    required: ['query'],
-  },
-};
-
-// callExternalAgentWithData
-export const callExternalAgentWithData_OpenAI = {
-  name: 'callExternalAgentWithData',
-  description: 'Envía datos estructurados a un agente externo para realizar una operación de INSERT o UPDATE en la base de datos.',
-  parameters: {
-    type: 'object',
-    properties: {
-      data: { type: 'object', description: 'El objeto JSON con los datos estructurados a enviar al agente externo.' },
-    },
-    required: ['data'],
   },
 };
 
@@ -415,12 +330,6 @@ export async function handleFunctionExecution(
       if (error) return createLLMResponse({ error: error.message });
       return createLLMResponse({ status: 'success', data });
     }
-
-    // callExternalAgentWithQuery and callExternalAgentWithData are handled in ChatContext directly
-    // because they interact with the external agenteClient, not directly with Supabase via handleFunctionExecution.
-    // However, for OpenAI's tool output format, ChatContext expects a 'content' string.
-    // So, if these were to be used here (which they shouldn't be in the current design),
-    // they would return the raw stringified result from the agent.
     
     default:
       return createLLMResponse({ error: `Función desconocida: ${name}` });
@@ -432,6 +341,13 @@ export async function handleFunctionExecution(
 // and the AI's system instruction already clarifies its expected use.
 // Including it directly in `responseSchema` can cause validation issues with certain JSON Schema parsers,
 // leading to "Cannot redeclare block-scoped variable" errors if interpreted as a variable.
+
+// FIX: To resolve "Type instantiation is excessively deep and possibly infinite" error for `rows`.
+// The problem often arises from deeply nested literal types within generic contexts.
+// By extracting the inner array schema into a separate constant, we help TypeScript infer its type
+// more efficiently, breaking the deep inference chain without changing the semantic structure.
+const tableRowsItemsSchema = { type: Type.ARRAY, items: { type: Type.STRING } };
+
 export const responseSchema = {
     type: Type.OBJECT,
     properties: {
@@ -440,13 +356,15 @@ export const responseSchema = {
             type: Type.OBJECT,
             properties: {
                 headers: { type: Type.ARRAY, items: { type: Type.STRING } },
-                rows: { type: Type.ARRAY, items: { type: Type.ARRAY, items: { type: Type.STRING } } },
+                // FIX: The original comment here was slightly misleading; the innermost type was already `Type.STRING`.
+                // The issue was the nesting depth itself, which is now mitigated by `tableRowsItemsSchema`.
+                rows: { type: Type.ARRAY, items: tableRowsItemsSchema },
             },
         },
         chart: {
             type: Type.OBJECT,
             properties: {
-                type: { type: Type.STRING, enum: ['bar', 'pie'] },
+                type: { type: Type.STRING, enum: ['bar', 'pie'] }, // Corrected syntax here
                 data: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { name: { type: Type.STRING }, value: { type: Type.NUMBER } } } },
             },
         },

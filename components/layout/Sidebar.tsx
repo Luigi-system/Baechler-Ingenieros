@@ -1,11 +1,10 @@
 
-
 import React, { useContext, useState } from 'react';
 import { 
     DashboardIcon, ReportsIcon, SettingsIcon, 
     ChevronLeftIcon, MenuIcon, BuildingIcon, IndustryIcon, 
     CogIcon, UserCircleIcon, PaletteIcon, DatabaseIcon, 
-    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon, DriveIcon, LinkIcon 
+    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon, LinkIcon 
 } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AuthContext } from '../../contexts/AuthContext'; // Import AuthContext
@@ -56,11 +55,10 @@ const navItems = [
     { 
         id: 'integrations',
         label: 'Integraciones',
-        icon: DriveIcon, 
+        icon: LinkIcon, 
         permission: 'settings', 
         subItems: [
             { id: 'settings-ai', label: 'Servicios de IA', icon: CpuChipIcon, permission: 'settings' },
-            { id: 'settings-agente', label: 'Agente AI Externo', icon: LinkIcon, permission: 'settings' }, // New sub-item for Agente
         ]
     },
 ];

@@ -26,7 +26,6 @@ import RoleManagement from '../settings/RoleManagement';
 import DataImporter from '../settings/DataImporter';
 import AccessManagement from '../settings/AccessManagement';
 import ProfileSettings from '../settings/ProfileSettings';
-import AgenteSettings from '../settings/AgenteSettings'; // Import the renamed component
 
 const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
@@ -93,8 +92,6 @@ const Layout: React.FC = () => {
         return <CustomizationSettings />;
       case 'settings-ai':
         return <AiSettings />;
-      case 'settings-agente': // Route to AgenteSettings for Agente config
-        return <AgenteSettings />; 
       case 'settings-database':
         return <DatabaseSettings />;
       case 'settings-users':

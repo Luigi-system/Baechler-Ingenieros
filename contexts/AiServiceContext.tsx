@@ -3,31 +3,24 @@
 import React, { createContext, useState, useContext, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
-import { AgenteClient, createAgenteClient } from '../services/agenteService';
-import type { AiServiceContextType, AiService, AiApiKeys, OpenAiClient } from '../types'; // FIX: Import OpenAiClient from types.ts
+import type { AiServiceContextType, AiService, AiApiKeys, OpenAiClient } from '../types';
 
 const AiServiceContext = createContext<AiServiceContextType | undefined>(undefined);
 
-const DEFAULT_AGENTE_WEBHOOK_URL = 'https://hook.us2.make.com/d81q23ojiyenuysslld4naomb6q4be2r';
+const DEFAULT_N8N_WEBHOOK_URL = '';
 
 export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { supabase } = useSupabase();
-    const [service, setServiceState] = useState<AiService>('gemini'); // Now only 'gemini' or 'openai'
+    const [service, setServiceState] = useState<AiService>('gemini');
     const [apiKeys, setApiKeys] = useState<AiApiKeys>({});
-    const [agenteWebhookUrl, setAgenteWebhookUrlState] = useState<string>(DEFAULT_AGENTE_WEBHOOK_URL);
+    const [n8nWebhookUrl, setN8nWebhookUrlState] = useState<string>(DEFAULT_N8N_WEBHOOK_URL);
     
     const [geminiClient, setGeminiClient] = useState<GoogleGenAI | null>(null);
     const [openaiClient, setOpenaiClient] = useState<OpenAiClient | null>(null);
-    const [agenteClient, setAgenteClient] = useState<AgenteClient | null>(null);
 
-    // isAgenteEnabled is now derived from agenteWebhookUrl
-    const isAgenteEnabled = useMemo(() => !!agenteWebhookUrl, [agenteWebhookUrl]);
-
-    // Fetch all configurations on mount (API keys and Agente webhook URL)
     const fetchConfigs = useCallback(async () => {
         if (!supabase) return;
 
-        // Fetch AI API keys
         const { data: apiKeysData, error: apiKeysError } = await supabase
             .from('Configuracion')
             .select('value')
@@ -44,21 +37,20 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }
         }
 
-        // Fetch Agente webhook URL
         const { data: webhookData, error: webhookError } = await supabase
             .from('Configuracion')
             .select('value')
-            .eq('key', 'agente_webhook_url')
+            .eq('key', 'n8n_webhook_url')
             .is('id_usuario', null)
             .maybeSingle();
         if (webhookError) {
-            console.warn("Could not fetch Agente webhook URL:", webhookError.message);
+            console.warn("Could not fetch N8N webhook URL:", webhookError.message);
         } else if (webhookData && webhookData.value) {
             try {
                 const parsedUrl = JSON.parse(webhookData.value)?.webhookUrl;
-                if (parsedUrl) setAgenteWebhookUrlState(parsedUrl);
+                if (parsedUrl) setN8nWebhookUrlState(parsedUrl);
             } catch (e) {
-                console.error("Failed to parse Agente webhook URL JSON from DB.", e);
+                console.error("Failed to parse N8N webhook URL JSON from DB.", e);
             }
         }
     }, [supabase]);
@@ -67,17 +59,15 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         fetchConfigs();
     }, [fetchConfigs]);
 
-    // Load selected AI service from local storage
     useEffect(() => {
         const storedService = localStorage.getItem('ai_service') as AiService | null;
-        if (storedService && (storedService === 'gemini' || storedService === 'openai')) { // Ensure it's a valid service
+        if (storedService && ['gemini', 'openai', 'n8n'].includes(storedService)) {
             setServiceState(storedService);
         } else {
-            setServiceState('gemini'); // Default to gemini if stored value is invalid or 'agente'
+            setServiceState('gemini');
         }
     }, []);
 
-    // Initialize Gemini client when API key changes
     useEffect(() => {
         const geminiKey = apiKeys.gemini;
         if (geminiKey) {
@@ -92,7 +82,6 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     }, [apiKeys.gemini]);
 
-    // Initialize OpenAI client when API key changes
     useEffect(() => {
         const openaiKey = apiKeys.openai;
         if (openaiKey) {
@@ -123,21 +112,8 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     }, [apiKeys.openai]);
 
-    // Initialize Agente client when webhook URL changes
-    useEffect(() => {
-        if (agenteWebhookUrl) {
-            // No direct dependencies on specific keys for AgenteClient, it's generic
-            setAgenteClient(createAgenteClient());
-        } else {
-            setAgenteClient(null);
-        }
-    }, [agenteWebhookUrl]);
-
-
-    // Set selected AI service and persist to local storage
     const setService = (newService: AiService) => {
-        // Only allow valid AI service types to be set
-        if (newService === 'gemini' || newService === 'openai') {
+        if (['gemini', 'openai', 'n8n'].includes(newService)) {
             localStorage.setItem('ai_service', newService);
             setServiceState(newService);
         } else {
@@ -145,15 +121,13 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     };
 
-    // Check if a service is configured (has an API key or webhook URL)
     const isConfigured = useCallback((serviceToCheck: AiService): boolean => {
         if (serviceToCheck === 'gemini') return !!apiKeys.gemini;
         if (serviceToCheck === 'openai') return !!apiKeys.openai;
-        // 'agente' is now checked via 'isAgenteEnabled', not as a direct service type
+        if (serviceToCheck === 'n8n') return !!n8nWebhookUrl;
         return false;
-    }, [apiKeys]);
+    }, [apiKeys, n8nWebhookUrl]);
 
-    // Update AI API keys (Gemini/OpenAI) and persist to DB
     const updateApiKeys = async (newKeys: AiApiKeys): Promise<{error: Error | null}> => {
         const optimisticKeys = { ...apiKeys, ...newKeys };
         setApiKeys(optimisticKeys);
@@ -193,9 +167,8 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     };
 
-    // Update Agente webhook URL and persist to DB
-    const updateAgenteWebhookUrl = async (newUrl: string): Promise<{error: Error | null}> => {
-        setAgenteWebhookUrlState(newUrl); // Optimistic update
+    const updateN8nWebhookUrl = async (newUrl: string): Promise<{error: Error | null}> => {
+        setN8nWebhookUrlState(newUrl); // Optimistic update
         if (!supabase) {
             const error = new Error("Supabase client not available");
             return { error };
@@ -205,13 +178,13 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             const { data: existing, error: selectError } = await supabase
                 .from('Configuracion')
                 .select('id')
-                .eq('key', 'agente_webhook_url')
+                .eq('key', 'n8n_webhook_url')
                 .is('id_usuario', null)
                 .maybeSingle();
             
             if (selectError) throw selectError;
             
-            const urlToSave = { webhookUrl: newUrl }; // Store as an object
+            const urlToSave = { webhookUrl: newUrl };
             if (existing) {
                 const { error: updateError } = await supabase
                     .from('Configuracion')
@@ -221,12 +194,12 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             } else {
                 const { error: insertError } = await supabase
                     .from('Configuracion')
-                    .insert({ key: 'agente_webhook_url', value: JSON.stringify(urlToSave), id_usuario: null });
+                    .insert({ key: 'n8n_webhook_url', value: JSON.stringify(urlToSave), id_usuario: null });
                 if (insertError) throw insertError;
             }
             return { error: null };
         } catch (error: any) {
-            console.error("Failed to save Agente webhook URL to DB:", error);
+            console.error("Failed to save N8N webhook URL to DB:", error);
             fetchConfigs(); // Revert to fetched state on error
             return { error };
         }
@@ -236,15 +209,13 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         service, 
         setService, 
         isConfigured, 
-        isAgenteEnabled, // Expose new state
         geminiClient, 
         openaiClient, 
-        agenteClient, 
         apiKeys, 
-        agenteWebhookUrl, 
+        n8nWebhookUrl, 
         updateApiKeys, 
-        updateAgenteWebhookUrl 
-    }), [service, isConfigured, isAgenteEnabled, geminiClient, openaiClient, agenteClient, apiKeys, agenteWebhookUrl, updateApiKeys, updateAgenteWebhookUrl]); // Add updateApiKeys and updateAgenteWebhookUrl to dependencies
+        updateN8nWebhookUrl 
+    }), [service, isConfigured, geminiClient, openaiClient, apiKeys, n8nWebhookUrl, updateApiKeys, updateN8nWebhookUrl]);
 
     return (
         <AiServiceContext.Provider value={value}>

@@ -1,7 +1,6 @@
 
 
-import { GoogleGenAI } from '@google/genai'; // FIX: Import GoogleGenAI from @google/genai
-import { AgenteClient } from './services/agenteService'; // FIX: Import AgenteClient from its definition file
+import { GoogleGenAI } from '@google/genai';
 
 export enum UserRole {
   ADMIN = 'Administrador',
@@ -273,36 +272,23 @@ export interface OpenAiClient {
     };
 }
 
-// Modified AiService type to only include 'gemini' and 'openai'
-export type AiService = 'gemini' | 'openai';
+// Modified AiService type to include 'n8n'
+export type AiService = 'gemini' | 'openai' | 'n8n';
 
 export interface AiApiKeys {
     gemini?: string;
     openai?: string;
 }
 
-// Updated AiServiceContextType to include `isAgenteEnabled`
+// Updated AiServiceContextType to include n8n settings
 export interface AiServiceContextType {
     service: AiService;
     setService: (service: AiService) => void;
     isConfigured: (service: AiService) => boolean;
-    isAgenteEnabled: boolean; // New property to indicate if the external agent is configured
     geminiClient: GoogleGenAI | null;
     openaiClient: OpenAiClient | null;
-    agenteClient: AgenteClient | null;
     apiKeys: AiApiKeys;
-    agenteWebhookUrl: string;
+    n8nWebhookUrl: string;
     updateApiKeys: (keys: AiApiKeys) => Promise<{error: Error | null}>;
-    updateAgenteWebhookUrl: (url: string) => Promise<{error: Error | null}>;
-}
-// FIX: Added missing GoogleAuthContextType interface.
-export interface GoogleAuthContextType {
-  isSignedIn: boolean;
-  currentUserEmail: string | null;
-  accessToken: string | null;
-  handleSignIn: () => Promise<void>;
-  handleSignOut: () => void;
-  gapiLoaded: boolean;
-  gisLoaded: boolean;
-  isConfigured: boolean;
+    updateN8nWebhookUrl: (url: string) => Promise<{error: Error | null}>;
 }
