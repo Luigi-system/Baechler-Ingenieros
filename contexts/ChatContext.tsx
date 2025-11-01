@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import type { Chat } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
@@ -13,6 +12,7 @@ import {
 } from '../services/aiService';
 import { consultarAgente } from '../services/agenteService';
 import type { AIResponse, TableData, ConfirmationMessage } from '../types';
+// import { extractAndParseJson } from '../utils/jsonParser'; // Imported from new location // Removed as parsing is now in agenteService.ts
 
 export interface Message {
   sender: 'user' | 'ai';
@@ -50,6 +50,7 @@ const WELCOME_MESSAGE: Message = {
  * @param text The string that may contain a JSON object.
  * @returns The parsed AIResponse object, or null if no valid JSON is found.
  */
+/* MOVED TO utils/jsonParser.ts
 const extractAndParseJson = (text: string): AIResponse | null => {
     try {
         return JSON.parse(text) as AIResponse;
@@ -66,6 +67,7 @@ const extractAndParseJson = (text: string): AIResponse | null => {
     }
     return null;
 };
+*/
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { supabase } = useSupabase();
@@ -199,7 +201,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
 
             const finalResponseContent: string = responseFromLLM.text || responseFromLLM.content;
-            let parsedAIResponse: AIResponse | null = extractAndParseJson(finalResponseContent);
+            let parsedAIResponse: AIResponse | null = null; // No longer directly calling extractAndParseJson here for LLMs
+
+            // For Gemini/OpenAI, assume the response from the LLM is directly the AIResponse object because of responseSchema config
+            if (finalResponseContent) {
+                try {
+                    parsedAIResponse = JSON.parse(finalResponseContent) as AIResponse;
+                } catch (jsonError) {
+                    console.error("Failed to parse LLM's final response as JSON:", jsonError);
+                    parsedAIResponse = { displayText: finalResponseContent }; // Fallback to plain text display
+                }
+            } else {
+                 parsedAIResponse = { displayText: "No se recibió contenido de la IA." };
+            }
 
             if (parsedAIResponse) {
                 setMessages(prev => [...prev, { sender: 'ai', content: parsedAIResponse, tool_calls: responseFromLLM.tool_calls }]);

@@ -1,4 +1,5 @@
 
+
 import { Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AIResponse, TableData } from '../types'; // Assuming these are correctly defined
@@ -29,8 +30,7 @@ const DATABASE_SCHEMA = `
     - Relaciones: Planta (id_planta), Empresa (id_empresa)
 
   - Encargado:
-    - id (PK), nombre (TEXT), apellido (TEXT), email (TEXT), celular (TEXT), id_planta (FK -> Planta.id), id_empresa (FK -> Empresa.id)
-    - Relaciones: Planta (id_planta), Empresa (id_empresa)
+    - id (PK), nombre (TEXT), apellido (TEXT), dni (TEXT), nacimiento (DATE), email (TEXT), celular (INTEGER), cargo (TEXT), nombreEmpresa (TEXT), nombrePlanta (TEXT)
 
   - Usuarios:
     - id (PK), nombres (TEXT), email (TEXT), rol (FK -> Roles.id), dni (TEXT), celular (TEXT)
@@ -63,7 +63,7 @@ export const directSupabaseSystemInstruction = `
       **Prefiere los gráficos para resumir tendencias o comparaciones de datos numéricos complejos.**
   4.  **actions (Opcional - Para acciones rápidas y directas):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento que el usuario podría querer ejecutar fácilmente. Estos prompts de acción deben ser claros y directos. **Utiliza hasta 3 acciones relevantes para guiar al usuario a los siguientes pasos lógicos.**
   5.  **form (Opcional - ¡FUNDAMENTAL para la interacción estructurada!):** El campo 'form' DEBE ser un **ARRAY de objetos**, donde cada objeto representa un campo del formulario. NO debe ser un solo objeto. Utiliza un 'form' SIEMPRE que necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro). Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options y placeholder.
-  6.  **statusDisplay (Opcional - Para confirmaciones visuales):** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente y con un icono después de que una acción de modificación de datos (INSERT/UPDATE) se haya completado con éxito. Usa \`"icon": "success"\` para éxito y \`""icon": "error"\` para fallos.
+  6.  **statusDisplay (Opcional - Para confirmaciones visuales)::** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente y con un icono después de que una acción de modificación de datos (INSERT/UPDATE) se haya completado con éxito. Usa \`"icon": "success"\` para éxito y \`""icon": "error"\` para fallos.
   7.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
 
   **TUS HERRAMIENTAS:**
@@ -75,7 +75,7 @@ export const directSupabaseSystemInstruction = `
   1.  Si el usuario pide crear/actualizar algo (ej. "crea una nueva planta", "edita la máquina X"), analiza las dependencias de la tabla del esquema de datos. Por ejemplo, una 'Planta' necesita una 'id_empresa'.
   2.  SI HAY DEPENDENCIAS que requieren una selección (como seleccionar una empresa para una planta), PRIMERO USA la herramienta \`executeQueryOnDatabase\` para obtener la lista de opciones (ej. \`executeQueryOnDatabase({tableName: 'Empresa', columns: ['id', 'nombre']})\`).
   3.  DESPUÉS de obtener los datos de la herramienta, GENERA LA RESPUESTA JSON FINAL CON EL 'form'. El campo dependiente debe ser de \`"type": "select"\`. Sus \`"options"\` deben ser un array de strings, cada uno con el formato "ID: Nombre" (ej. ["1: Empresa A", "2: Empresa B"]). El \`name\` del campo debe ser el nombre de la columna de la clave foránea (ej. "id_empresa").
-  4.  Una vez que el usuario envíe el formulario, recibirás sus datos y DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` o \`'UPDATE'\`. En el \`updates\`, asegúrate de enviar el ID numérico que el usuario seleccionó.
+  4.  Once que el usuario envíe el formulario, recibirás sus datos y DEBERÁS llamar a \`performAction\` con \`actionType: 'INSERT'\` o \`'UPDATE'\`. En el \`updates\`, asegúrate de enviar el ID numérico que el usuario seleccionó.
 
   **ESQUEMA DE DATOS:**
   ${DATABASE_SCHEMA}
@@ -336,12 +336,6 @@ export async function handleFunctionExecution(
   }
 }
 
-// FIX: Removed non-standard JSON schema keyword 'placeholder' from the `responseSchema` definition for 'form' items.
-// The `placeholder` is a UI hint defined in the `FormField` interface in `types.ts`, 
-// and the AI's system instruction already clarifies its expected use.
-// Including it directly in `responseSchema` can cause validation issues with certain JSON Schema parsers,
-// leading to "Cannot redeclare block-scoped variable" errors if interpreted as a variable.
-
 // FIX: To resolve "Type instantiation is excessively deep and possibly infinite" error for `rows`.
 // The problem often arises from deeply nested literal types within generic contexts.
 // By extracting the inner array schema into a separate constant, we help TypeScript infer its type
@@ -352,12 +346,10 @@ export const responseSchema = {
     type: Type.OBJECT,
     properties: {
         displayText: { type: Type.STRING },
-        table: {
+        table: { // Existing table format (FilterableTable)
             type: Type.OBJECT,
             properties: {
                 headers: { type: Type.ARRAY, items: { type: Type.STRING } },
-                // FIX: The original comment here was slightly misleading; the innermost type was already `Type.STRING`.
-                // The issue was the nesting depth itself, which is now mitigated by `tableRowsItemsSchema`.
                 rows: { type: Type.ARRAY, items: tableRowsItemsSchema },
             },
         },
@@ -375,7 +367,9 @@ export const responseSchema = {
                 properties: {
                     label: { type: Type.STRING },
                     prompt: { type: Type.STRING },
-                    style: { type: Type.STRING, enum: ['primary', 'secondary', 'danger'] },
+                    style: { type: Type.STRING, enum: ['primary', 'secondary', 'danger', 'ghost'] }, // Added 'ghost'
+                    api: { type: Type.STRING }, // For N8N button's API call
+                    method: { type: Type.STRING }, // For N8N button's API method
                 },
             },
         },
@@ -384,10 +378,16 @@ export const responseSchema = {
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    type: { type: Type.STRING, enum: ['text', 'select', 'checkbox'] },
+                    type: { type: Type.STRING, enum: ['text', 'select', 'checkbox', 'hidden', 'file_upload', 'field', 'combobox'] }, // Expanded types
                     name: { type: Type.STRING },
                     label: { type: Type.STRING },
-                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    inputType: { type: Type.STRING }, // For type 'field'
+                    options: { type: Type.ARRAY, items: { type: Type.STRING } }, // e.g. ["value: Label"]
+                    placeholder: { type: Type.STRING },
+                    value: { type: Type.STRING }, // Consolidate initialValue to value
+                    checked: { type: Type.BOOLEAN }, // For checkbox
+                    mimeType: { type: Type.STRING }, // For file_upload
+                    selected: { type: Type.STRING }, // For combobox
                 },
                 required: ['type', 'name', 'label'],
             },
@@ -401,6 +401,96 @@ export const responseSchema = {
             },
         },
         suggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
+        
+        // New components based on UI_SCHEMA_RULES
+        imageViewer: {
+            type: Type.OBJECT,
+            properties: {
+                src: { type: Type.STRING },
+                alt: { type: Type.STRING },
+                width: { type: Type.NUMBER },
+                height: { type: Type.NUMBER },
+                clickAction: { type: Type.STRING },
+            },
+            required: ['src', 'alt'],
+        },
+        fileViewer: {
+            type: Type.OBJECT,
+            properties: {
+                src: { type: Type.STRING },
+                fileName: { type: Type.STRING },
+                mimeType: { type: Type.STRING },
+                downloadable: { type: Type.BOOLEAN },
+            },
+            required: ['src', 'fileName', 'mimeType'],
+        },
+        videoPlayer: {
+            type: Type.OBJECT,
+            properties: {
+                src: { type: Type.STRING },
+                autoplay: { type: Type.BOOLEAN },
+                controls: { type: Type.BOOLEAN },
+                loop: { type: Type.BOOLEAN },
+            },
+            required: ['src'],
+        },
+        audioPlayer: {
+            type: Type.OBJECT,
+            properties: {
+                src: { type: Type.STRING },
+                controls: { type: Type.BOOLEAN },
+                autoplay: { type: Type.BOOLEAN },
+                loop: { type: Type.BOOLEAN },
+            },
+            required: ['src'],
+        },
+        tableComponent: { // New table component for richer data display
+            type: Type.OBJECT,
+            properties: {
+                columns: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            header: { type: Type.STRING },
+                            accessor: { type: Type.STRING },
+                        },
+                        required: ['header', 'accessor'],
+                    },
+                },
+                data: { type: Type.ARRAY, items: { type: Type.OBJECT } }, // Array of generic objects
+                pagination: { type: Type.BOOLEAN },
+                actions: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { label: { type: Type.STRING }, prompt: { type: Type.STRING } } } },
+            },
+            required: ['columns', 'data'],
+        },
+        recordView: {
+            type: Type.OBJECT,
+            properties: {
+                fields: {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            label: { type: Type.STRING },
+                            value: { type: Type.STRING }, // Value can be any type, but string for schema simplicity
+                        },
+                        required: ['label', 'value'],
+                    },
+                },
+                editable: { type: Type.BOOLEAN },
+            },
+            required: ['fields'],
+        },
+        list: {
+            type: Type.OBJECT,
+            properties: {
+                title: { type: Type.STRING },
+                items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                itemTemplate: { type: Type.OBJECT }, // Placeholder, complex rendering not directly in chat
+            },
+            required: ['items'],
+        },
     },
     required: ['displayText'],
 };

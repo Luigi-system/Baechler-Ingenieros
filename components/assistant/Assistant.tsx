@@ -3,12 +3,12 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { BarChart, Bar, PieChart, Pie, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { SendIcon, AssistantIcon, XIcon, CheckCircleIcon, AlertTriangleIcon, SearchIcon } from '../ui/Icons';
+import { SendIcon, AssistantIcon, XIcon, CheckCircleIcon, AlertTriangleIcon, SearchIcon, DownloadIcon, DocumentIcon, ImageIcon, CameraIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import { useChat, Message } from '../../contexts/ChatContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAiService } from '../../contexts/AiServiceContext';
-import type { AIResponse, TableData, ChartData, Action, FormField, ConfirmationMessage } from '../../types';
+import type { AIResponse, TableData, ChartData, Action, FormField, ConfirmationMessage, ImageViewer, FileViewer, VideoPlayer, AudioPlayer, TableComponentData, RecordViewData, ColumnDefinition } from '../../types';
 
 interface AssistantProps {
   isOpen: boolean;
@@ -75,6 +75,93 @@ const FilterableTable: React.FC<{ data: TableData }> = ({ data }) => {
     );
 };
 
+const TableComponent: React.FC<{ data: TableComponentData }> = ({ data }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
+
+    const filteredData = useMemo(() => {
+        if (!searchTerm.trim()) return data.data;
+        return data.data.filter(row =>
+            Object.values(row).some(value =>
+                String(value).toLowerCase().includes(searchTerm.toLowerCase())
+            )
+        );
+    }, [searchTerm, data.data]);
+
+    const paginatedData = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        return filteredData.slice(startIndex, endIndex);
+    }, [currentPage, filteredData, itemsPerPage]);
+
+    const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+    return (
+        <div className="mt-3 space-y-2">
+            <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <SearchIcon className="h-4 w-4 text-neutral" />
+                </div>
+                <input
+                    type="text"
+                    placeholder={`Filtrar en ${data.data.length} filas...`}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="block w-full text-sm pl-9 pr-3 py-1.5 input-style"
+                />
+            </div>
+            <div className="overflow-auto max-h-96 border border-base-border rounded-lg custom-scrollbar">
+                <table className="min-w-full text-sm">
+                    <thead className="bg-base-100 dark:bg-base-300 sticky top-0 z-10">
+                        <tr>
+                            {data.columns.map((col, i) => (
+                                <th key={i} className="px-3 py-2 text-left font-semibold">{col.header}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-base-border">
+                        {paginatedData.length > 0 ? (
+                            paginatedData.map((row, i) => (
+                                <tr key={i} className="hover:bg-base-100 dark:hover:bg-base-300/50">
+                                    {data.columns.map((col, j) => (
+                                        <td key={j} className="px-3 py-2 whitespace-pre-wrap">{String(row[col.accessor])}</td>
+                                    ))}
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan={data.columns.length} className="px-3 py-4 text-center text-neutral">
+                                    No se encontraron resultados para "{searchTerm}".
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            {data.pagination && totalPages > 1 && (
+                <div className="flex justify-center items-center mt-2 space-x-2">
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        className="px-3 py-1 text-sm bg-base-300 rounded-md hover:bg-base-100 disabled:opacity-50"
+                    >
+                        Anterior
+                    </button>
+                    <span className="text-sm">Página {currentPage} de {totalPages}</span>
+                    <button
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        className="px-3 py-1 text-sm bg-base-300 rounded-md hover:bg-base-100 disabled:opacity-50"
+                    >
+                        Siguiente
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const BarChartComponent: React.FC<{ data: any[] }> = ({ data }) => {
     const { themeMode } = useTheme();
@@ -110,6 +197,60 @@ const PieChartComponent: React.FC<{ data: any[] }> = ({ data }) => {
     );
 };
 
+const ImageViewerComponent: React.FC<{ data: ImageViewer }> = ({ data }) => (
+    <div className="mt-3 flex justify-center p-2 bg-base-100 rounded-lg border border-base-border">
+        <img 
+            src={data.src} 
+            alt={data.alt} 
+            className="max-w-full h-auto rounded-md object-contain" 
+            style={{ maxWidth: data.width, maxHeight: data.height }} 
+        />
+    </div>
+);
+
+const FileViewerComponent: React.FC<{ data: FileViewer }> = ({ data }) => (
+    <div className="mt-3 p-3 border border-base-border rounded-lg flex items-center justify-between bg-base-100">
+        <div className="flex items-center space-x-2">
+            {data.mimeType?.startsWith('image/') ? <ImageIcon className="h-5 w-5 text-neutral" /> : <DocumentIcon className="h-5 w-5 text-neutral" />}
+            <span className="text-sm font-medium">{data.fileName}</span>
+        </div>
+        {data.downloadable && data.src && (
+            <a href={data.src} download={data.fileName} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center space-x-1">
+                <DownloadIcon className="h-4 w-4" />
+                <span>Descargar</span>
+            </a>
+        )}
+        {!data.downloadable && data.src && (
+            <a href={data.src} target="_blank" rel="noopener noreferrer" className="text-info hover:underline flex items-center space-x-1">
+                 <span>Abrir</span>
+            </a>
+        )}
+    </div>
+);
+
+const VideoPlayerComponent: React.FC<{ data: VideoPlayer }> = ({ data }) => (
+    <div className="mt-3 flex justify-center p-2 bg-base-100 rounded-lg border border-base-border">
+        <video src={data.src} controls={data.controls} autoPlay={data.autoplay} loop={data.loop} className="max-w-full h-auto rounded-md shadow-md"></video>
+    </div>
+);
+
+const AudioPlayerComponent: React.FC<{ data: AudioPlayer }> = ({ data }) => (
+    <div className="mt-3 flex justify-center p-2 bg-base-100 rounded-lg border border-base-border">
+        <audio src={data.src} controls={data.controls} autoPlay={data.autoplay} loop={data.loop} className="w-full max-w-sm"></audio>
+    </div>
+);
+
+const RecordViewComponent: React.FC<{ data: RecordViewData }> = ({ data }) => (
+    <div className="mt-3 p-3 border border-base-border rounded-lg bg-base-100 space-y-2">
+        {data.fields.map((field, i) => (
+            <div key={i} className="flex justify-between items-center text-sm">
+                <span className="font-medium text-neutral">{field.label}:</span>
+                <span className="text-base-content">{String(field.value)}</span>
+            </div>
+        ))}
+    </div>
+);
+
 const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
   const { service, isConfigured } = useAiService();
   const { messages, isLoading, sendMessage, setHasUnreadMessage } = useChat();
@@ -123,6 +264,17 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   
   useEffect(() => {
+    if (isOpen) {
+        // A short delay ensures the slide-up animation completes before scrolling.
+        const timerId = setTimeout(() => {
+            scrollToBottom();
+        }, 350); // Animation duration is 300ms.
+        
+        return () => clearTimeout(timerId); // Cleanup the timeout if the component unmounts or re-renders
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     scrollToBottom();
     // Find the last message from the AI that contains a form
     const lastAiMessageWithForm = [...messages].reverse().find(msg => msg.sender === 'ai' && (msg.content as AIResponse).form);
@@ -132,11 +284,11 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
         const formContent = (lastAiMessageWithForm.content as AIResponse).form;
         let fields: FormField[] | undefined;
 
+        // Ensure formContent is an array
         if (Array.isArray(formContent)) {
-            // Standard, correct case
             fields = formContent;
         } else if (formContent && typeof formContent === 'object' && Array.isArray((formContent as any).fields)) {
-            // Handle malformed AI response: { title: '...', fields: [...] }
+            // Handle malformed AI response: { title: '...', fields: [...] } if it happens again
             console.warn("AI returned a non-standard form object. Adapting to its structure.");
             fields = (formContent as any).fields;
         }
@@ -146,7 +298,20 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
             if (activeForm?.messageIndex !== messageIndex) {
                 setActiveForm({ messageIndex, fields });
                 const initialValues = fields.reduce((acc, field) => {
-                    acc[field.name] = field.type === 'checkbox' ? false : '';
+                    if (field.type === 'checkbox') {
+                        acc[field.name] = field.checked !== undefined ? field.checked : (field.value !== undefined ? !!field.value : false);
+                    } else if (field.type === 'hidden' || field.type === 'text' || field.type === 'field') {
+                        acc[field.name] = field.value !== undefined ? field.value : '';
+                    } else if (field.type === 'select' || field.type === 'combobox') {
+                        // For select/combobox, initial value should be the full "value: Label" string from options if it exists,
+                        // or the 'selected' attribute if provided, falling back to an empty string.
+                        // If selected is "España" and options are ["España: España", ...], we want "España".
+                        const selectedVal = field.selected !== undefined ? field.selected : (field.value !== undefined ? field.value : '');
+                        const foundOption = field.options?.find(option => option.split(':')[0].trim() === selectedVal);
+                        acc[field.name] = foundOption || selectedVal; // Use the full option string if found, otherwise just the value
+                    } else if (field.type === 'file_upload') {
+                         acc[field.name] = ''; // No interactive file upload in chat form yet
+                    }
                     return acc;
                 }, {} as Record<string, any>);
                 setFormValues(initialValues);
@@ -194,7 +359,7 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
     handleSend(actionPrompt);
   };
   
-  const handleFormInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleFormInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       const { name, value, type } = e.target;
       const isCheckbox = type === 'checkbox';
       const checked = (e.target as HTMLInputElement).checked;
@@ -204,14 +369,19 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
   const handleFormSubmit = async () => {
       if (!activeForm) return;
       
-      // For select fields, we need to extract the ID from "ID: Name" format.
+      // For select/combobox fields, we need to extract the actual value if options were "ID: Name"
       const processedFormValues = { ...formValues };
       activeForm.fields.forEach(field => {
-          if (field.type === 'select') {
+          if (field.type === 'select' || field.type === 'combobox') {
               const selectedValue = formValues[field.name];
               if (typeof selectedValue === 'string' && selectedValue.includes(':')) {
+                  // If the value is in "ID: Name" format, extract ID
                   processedFormValues[field.name] = selectedValue.split(':')[0].trim();
+              } else if (typeof selectedValue === 'string' && selectedValue === '') {
+                  // If no option is selected, ensure it's treated as null or undefined if required by backend
+                  processedFormValues[field.name] = null; // Or undefined, depending on API expectation
               }
+              // If selectedValue is already just the ID (e.g. from initial 'selected' attr), keep it as is
           }
       });
 
@@ -278,33 +448,121 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                                     </div>
                                 )}
 
-                                <div className="prose prose-sm max-w-none prose-zinc dark:prose-invert text-base-content"><ReactMarkdown>{aiContent.displayText}</ReactMarkdown></div>
+                                {aiContent.displayText && <div className="prose prose-sm max-w-none prose-zinc dark:prose-invert text-base-content"><ReactMarkdown>{aiContent.displayText}</ReactMarkdown></div>}
                                 {aiContent.table && <FilterableTable data={aiContent.table} />}
                                 {aiContent.chart && aiContent.chart.type === 'bar' && <BarChartComponent data={aiContent.chart.data} />}
                                 {aiContent.chart && aiContent.chart.type === 'pie' && <PieChartComponent data={aiContent.chart.data} />}
+                                
+                                {aiContent.imageViewer && <ImageViewerComponent data={aiContent.imageViewer} />}
+                                {aiContent.fileViewer && <FileViewerComponent data={aiContent.fileViewer} />}
+                                {aiContent.videoPlayer && <VideoPlayerComponent data={aiContent.videoPlayer} />}
+                                {aiContent.audioPlayer && <AudioPlayerComponent data={aiContent.audioPlayer} />}
+                                {aiContent.tableComponent && <TableComponent data={aiContent.tableComponent} />}
+                                {aiContent.recordView && <RecordViewComponent data={aiContent.recordView} />}
+                                {aiContent.list && (
+                                    <div className="mt-3 p-2 bg-base-100 rounded-lg border border-base-border">
+                                        {aiContent.list.title && <h5 className="font-semibold text-base-content mb-1">{aiContent.list.title}</h5>}
+                                        <ul className="list-disc list-inside text-sm text-base-content">
+                                            {aiContent.list.items.map((item, i) => (
+                                                <li key={i}>{item}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+
+
                                 {aiContent.actions && (
                                     <div className="mt-3 flex flex-wrap gap-2">
                                         {aiContent.actions.map((action, i) => (
-                                            <button key={i} onClick={() => handleActionClick(action.prompt)} className="px-3 py-1.5 text-xs font-semibold bg-primary text-white rounded-lg hover:bg-primary-focus transition-colors">
+                                            <button 
+                                                key={i} 
+                                                onClick={() => handleActionClick(action.prompt)} 
+                                                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors 
+                                                    ${action.style === 'danger' ? 'bg-error text-white hover:bg-error/80' : 
+                                                    action.style === 'secondary' ? 'bg-secondary text-white hover:bg-secondary/80' :
+                                                    action.style === 'ghost' ? 'bg-transparent text-primary hover:bg-primary/10 border border-primary' : // New ghost style
+                                                    'bg-primary text-white hover:bg-primary-focus'}
+                                                `}
+                                            >
                                                 {action.label}
                                             </button>
                                         ))}
                                     </div>
                                 )}
                                 {aiContent.form && activeForm?.messageIndex === index && (
-                                    <form onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }} className="mt-4 space-y-3 p-3 bg-base-100/50 rounded-lg">
+                                    <form onSubmit={(e) => { e.preventDefault(); handleFormSubmit(); }} className="mt-4 space-y-3 p-3 bg-base-100/50 rounded-lg border border-base-border">
                                         <p className="text-sm font-semibold text-base-content">Por favor, completa el formulario:</p>
                                         {activeForm.fields.map(field => (
                                             <div key={field.name}>
-                                                <label htmlFor={field.name} className="block text-xs font-medium mb-1">{field.label}</label>
-                                                {field.type === 'text' && <input type="text" id={field.name} name={field.name} value={formValues[field.name] || ''} onChange={handleFormInputChange} className="w-full text-sm input-style" required placeholder={field.placeholder || ''}/>}
-                                                {field.type === 'select' && (
-                                                    <select id={field.name} name={field.name} value={formValues[field.name] || ''} onChange={handleFormInputChange} className="w-full text-sm input-style" required>
+                                                {field.type !== 'hidden' && ( // Don't display hidden fields
+                                                    <label htmlFor={field.name} className="block text-xs font-medium mb-1">{field.label}</label>
+                                                )}
+                                                {(field.type === 'text' || field.type === 'field') && 
+                                                    (field.inputType === 'textarea' ? (
+                                                        <textarea 
+                                                            id={field.name} 
+                                                            name={field.name} 
+                                                            value={formValues[field.name] || ''} 
+                                                            onChange={handleFormInputChange} 
+                                                            className="w-full text-sm input-style min-h-[60px]" 
+                                                            // FIX: Removed redundant `&& field.type !== 'hidden'` check.
+                                                            required={!field.value} 
+                                                            placeholder={field.placeholder || ''}
+                                                        />
+                                                    ) : (
+                                                        <input 
+                                                            type={field.inputType || 'text'} 
+                                                            id={field.name} 
+                                                            name={field.name} 
+                                                            value={formValues[field.name] || ''} 
+                                                            onChange={handleFormInputChange} 
+                                                            className="w-full text-sm input-style" 
+                                                            // FIX: Removed redundant `&& field.type !== 'hidden'` check.
+                                                            required={!field.value} 
+                                                            placeholder={field.placeholder || ''}
+                                                        />
+                                                    ))
+                                                }
+                                                {(field.type === 'select' || field.type === 'combobox') && (
+                                                    <select 
+                                                        id={field.name} 
+                                                        name={field.name} 
+                                                        value={formValues[field.name] || ''} 
+                                                        onChange={handleFormInputChange} 
+                                                        className="w-full text-sm input-style" 
+                                                        // FIX: Removed redundant `&& field.type !== 'hidden'` check.
+                                                        required={!field.value}
+                                                    >
                                                         <option value="" disabled>{field.placeholder || 'Selecciona...'}</option>
-                                                        {field.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                        {field.options?.map(opt => {
+                                                            const [val, label] = opt.split(': ', 2);
+                                                            return <option key={val} value={val}>{label || val}</option>
+                                                        })}
                                                     </select>
                                                 )}
-                                                {field.type === 'checkbox' && <input type="checkbox" id={field.name} name={field.name} checked={formValues[field.name] || false} onChange={handleFormInputChange} className="rounded text-primary focus:ring-primary"/>}
+                                                {field.type === 'checkbox' && 
+                                                    <div className="flex items-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            id={field.name} 
+                                                            name={field.name} 
+                                                            checked={formValues[field.name] || false} 
+                                                            onChange={handleFormInputChange} 
+                                                            className="rounded text-primary focus:ring-primary border-base-border"
+                                                        />
+                                                        <label htmlFor={field.name} className="ml-2 block text-sm">{field.label}</label>
+                                                    </div>
+                                                }
+                                                {field.type === 'hidden' && (
+                                                    <input type="hidden" id={field.name} name={field.name} value={formValues[field.name] || ''} />
+                                                )}
+                                                {field.type === 'file_upload' && (
+                                                    // Placeholder for file upload - actual interactive upload would require more complex UI
+                                                    <div className="flex items-center gap-2 p-2 bg-base-200 rounded-md text-sm text-neutral italic border border-base-border">
+                                                        <CameraIcon className="h-4 w-4 shrink-0"/>
+                                                        <span>Campo de carga de archivo: "{field.label}" (MimeType: {field.mimeType || 'any'}). La carga interactiva no está disponible directamente en el chat.</span>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                         <button type="submit" className="w-full text-sm font-semibold bg-primary text-white rounded-md py-2 hover:bg-primary-focus transition-colors">

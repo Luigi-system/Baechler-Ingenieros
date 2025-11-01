@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { Type } from "@google/genai";
 import { UploadIcon, SparklesIcon, BackIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
@@ -208,7 +209,18 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     // Memoized lists for dependent dropdowns and suggestions
     const filteredPlants = useMemo(() => plants.filter(p => p.id_empresa === formData.id_empresa), [plants, formData.id_empresa]);
     const filteredMachines = useMemo(() => machines.filter(m => m.id_planta === formData.id_planta), [machines, formData.id_planta]);
-    const filteredSupervisors = useMemo(() => supervisors.filter(s => s.id_planta === formData.id_planta), [supervisors, formData.id_planta]);
+    
+    const filteredSupervisors = useMemo(() => {
+        if (!formData.id_empresa || !formData.id_planta) return [];
+        const selectedCompany = companies.find(c => c.id === formData.id_empresa);
+        const selectedPlant = plants.find(p => p.id === formData.id_planta);
+        if (!selectedCompany || !selectedPlant) return [];
+
+        return supervisors.filter(s =>
+            s.nombreEmpresa === selectedCompany.nombre &&
+            s.nombrePlanta === selectedPlant.nombre
+        );
+    }, [formData.id_empresa, formData.id_planta, companies, plants, supervisors]);
     
     const companySuggestions = useMemo(() => companySearchText ? companies.filter(c => (c.nombre || '').toLowerCase().includes(companySearchText.toLowerCase())).slice(0, 5) : [], [companySearchText, companies]);
     const plantSuggestions = useMemo(() => plantSearchText ? filteredPlants.filter(p => (p.nombre || '').toLowerCase().includes(plantSearchText.toLowerCase())).slice(0, 5) : [], [plantSearchText, filteredPlants]);
@@ -441,6 +453,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         }
     };
     
+    const selectedCompanyForNewSupervisor = useMemo(() => companies.find(c => c.id === formData.id_empresa), [formData.id_empresa, companies]);
+    const selectedPlantForNewSupervisor = useMemo(() => plants.find(p => p.id === formData.id_planta), [formData.id_planta, plants]);
+
     if (isDataLoading) return <div className="flex justify-center items-center h-full"><Spinner /> Cargando datos...</div>
 
   return (
@@ -632,7 +647,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
       <Modal isOpen={isNewMachineModalOpen} onClose={() => setIsNewMachineModalOpen(false)} title="Añadir Nueva Máquina"><MachineForm machine={null} onSave={handleMachineSaved} onCancel={() => setIsNewMachineModalOpen(false)}/></Modal>
       <Modal isOpen={isMachineSearchModalOpen} onClose={() => setIsMachineSearchModalOpen(false)} title="Buscar Máquina"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredMachines.map(m => <li key={m.id} onClick={() => handleSelectMachine(m)} className="p-3 cursor-pointer hover:bg-base-300">{m.serie} - {m.modelo}</li>)}</ul></Modal>
 
-      <Modal isOpen={isNewSupervisorModalOpen} onClose={() => setIsNewSupervisorModalOpen(false)} title="Añadir Nuevo Encargado"><SupervisorForm supervisor={null} onSave={handleSupervisorSaved} onCancel={() => setIsNewSupervisorModalOpen(false)}/></Modal>
+      <Modal isOpen={isNewSupervisorModalOpen} onClose={() => setIsNewSupervisorModalOpen(false)} title="Añadir Nuevo Encargado"><SupervisorForm supervisor={null} onSave={handleSupervisorSaved} onCancel={() => setIsNewSupervisorModalOpen(false)} defaultCompanyName={selectedCompanyForNewSupervisor?.nombre} defaultPlantName={selectedPlantForNewSupervisor?.nombre} /></Modal>
       <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredSupervisors.map(s => <li key={s.id} onClick={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}</ul></Modal>
     </div>
   );

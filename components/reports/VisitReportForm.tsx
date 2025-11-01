@@ -133,7 +133,18 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     
     // Memoized lists for dependent dropdowns
     const filteredPlants = useMemo(() => plants.filter(p => p.id_empresa === Number(formData.id_empresa)), [plants, formData.id_empresa]);
-    const filteredSupervisors = useMemo(() => supervisors.filter(s => s.id_planta === Number(formData.id_planta)), [supervisors, formData.id_planta]);
+    // FIX: Corrected filtering logic for supervisors based on company and plant names, not a non-existent `id_planta`.
+    const filteredSupervisors = useMemo(() => {
+        if (!formData.id_empresa || !formData.id_planta) return [];
+        const selectedCompany = companies.find(c => c.id === Number(formData.id_empresa));
+        const selectedPlant = plants.find(p => p.id === Number(formData.id_planta));
+        if (!selectedCompany || !selectedPlant) return [];
+
+        return supervisors.filter(s =>
+            s.nombreEmpresa === selectedCompany.nombre &&
+            s.nombrePlanta === selectedPlant.nombre
+        );
+    }, [supervisors, plants, companies, formData.id_empresa, formData.id_planta]);
 
     if (isDataLoading) return <div className="flex justify-center items-center h-full"><Spinner /> Cargando datos...</div>
 

@@ -1,5 +1,7 @@
 
 
+
+
 import { GoogleGenAI } from '@google/genai';
 
 export enum UserRole {
@@ -213,12 +215,13 @@ export interface Supervisor {
     created_at?: string;
     nombre: string;
     apellido?: string;
+    dni?: string;
+    nacimiento?: string; // date as string
     email?: string;
     celular?: number;
-    id_planta: number;
-    planta_nombre?: string;
-    id_empresa: number;
-    empresa_nombre?: string;
+    cargo?: string;
+    nombreEmpresa?: string;
+    nombrePlanta?: string;
 }
 
 // Types for AI Assistant
@@ -235,15 +238,69 @@ export interface ChartData {
 export interface Action {
   label: string;
   prompt: string;
-  style?: 'primary' | 'secondary' | 'danger';
+  style?: 'primary' | 'secondary' | 'danger' | 'ghost'; // Added 'ghost' style
+  api?: string; // New: For N8N button's API call
+  method?: string; // New: For N8N button's API method
 }
 
+// Updated FormField to reflect UI_SCHEMA_RULES
 export interface FormField {
-    type: 'text' | 'select' | 'checkbox';
-    name: string;
+    type: 'text' | 'select' | 'checkbox' | 'hidden' | 'file_upload' | 'field' | 'combobox'; // Expanded types
+    name: string; // Required for form fields
     label: string;
-    options?: string[];
-    placeholder?: string; // Added placeholder
+    inputType?: string; // For type 'field'
+    options?: string[]; // For type 'select' or 'combobox' (e.g., "value: Label")
+    placeholder?: string;
+    value?: any; // Consolidate initialValue and value, use 'value'
+    checked?: boolean; // For checkbox
+    mimeType?: string; // For file_upload
+    selected?: string; // For combobox initial selection (the 'value' part of options)
+}
+
+export interface ImageViewer {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  clickAction?: string;
+}
+
+export interface FileViewer {
+  src: string;
+  fileName: string;
+  mimeType: string;
+  downloadable?: boolean;
+}
+
+export interface VideoPlayer {
+  src: string;
+  autoplay?: boolean;
+  controls?: boolean;
+  loop?: boolean;
+}
+
+export interface AudioPlayer {
+  src: string;
+  controls?: boolean;
+  autoplay?: boolean;
+  loop?: boolean;
+}
+
+export interface ColumnDefinition {
+  header: string;
+  accessor: string; // Key in your data object
+}
+
+export interface TableComponentData {
+  columns: ColumnDefinition[];
+  data: Record<string, any>[]; // Array of objects, each representing a row
+  pagination?: boolean;
+  actions?: Action[]; // Actions specific to table rows, if any
+}
+
+export interface RecordViewData {
+  fields: { label: string; value: any; }[]; // Array of key-value pairs to display
+  editable?: boolean;
 }
 
 export interface ConfirmationMessage {
@@ -253,13 +310,22 @@ export interface ConfirmationMessage {
 }
 
 export interface AIResponse {
-  displayText: string;
-  table?: TableData;
+  displayText?: string; // Made optional as other components can be the primary content
+  table?: TableData; // Existing table format
   chart?: ChartData;
   actions?: Action[];
   form?: FormField[];
   suggestions?: string[];
   statusDisplay?: ConfirmationMessage; // New field for prominent status messages
+
+  // New components based on UI_SCHEMA_RULES
+  imageViewer?: ImageViewer;
+  fileViewer?: FileViewer;
+  videoPlayer?: VideoPlayer;
+  audioPlayer?: AudioPlayer;
+  tableComponent?: TableComponentData; // New table format
+  recordView?: RecordViewData;
+  list?: { title?: string; items: any[]; itemTemplate?: Record<string, any> }; // List with basic rendering, items can be any[]
 }
 
 // FIX: Moved OpenAiClient interface definition here from AiServiceContext.tsx
@@ -268,7 +334,7 @@ export interface OpenAiClient {
     chat: {
         completions: {
             create: (payload: any) => Promise<any>;
-        };
+        >;
     };
 }
 

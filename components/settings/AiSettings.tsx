@@ -1,9 +1,7 @@
 
-
-
 import React, { useState, useEffect } from 'react';
 import { useAiService } from '../../contexts/AiServiceContext';
-import { SparklesIcon, CpuChipIcon, KeyIcon, SaveIcon, LinkIcon } from '../ui/Icons'; 
+import { SparklesIcon, CogIcon, KeyIcon, SaveIcon, DocumentIcon, CpuChipIcon } from '../ui/Icons'; 
 import Spinner from '../ui/Spinner';
 
 const AiSettings: React.FC = () => {
@@ -134,7 +132,7 @@ const AiSettings: React.FC = () => {
                     <div onClick={() => setService('openai')} className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${service === 'openai' ? 'border-primary shadow-md scale-105 bg-base-100' : 'border-base-border bg-base-200 hover:border-primary/70'}`}>
                          {service === 'openai' && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-primary animate-pulse"></div>}
                          <div className="flex items-center">
-                             <img src="https://jhhlrndxepowacrndhni.supabase.co/storage/v1/object/public/assets/openai-logo.png" alt="OpenAI Logo" className="h-8 w-8 mr-3"/>
+                             <DocumentIcon className="h-8 w-8 mr-3 text-cyan-500" /> {/* Changed from CpuChipIcon to DocumentIcon */}
                             <div className="text-sm">
                                 <span className="font-medium text-base-content">OpenAI</span>
                                 <p className={`text-neutral text-xs ${isConfigured('openai') ? 'text-success' : 'text-warning'}`}>
@@ -147,7 +145,7 @@ const AiSettings: React.FC = () => {
                     <div onClick={() => setService('n8n')} className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 ${service === 'n8n' ? 'border-primary shadow-md scale-105 bg-base-100' : 'border-base-border bg-base-200 hover:border-primary/70'}`}>
                          {service === 'n8n' && <div className="absolute top-2 right-2 h-3 w-3 rounded-full bg-primary animate-pulse"></div>}
                          <div className="flex items-center">
-                             <img src="https://jhhlrndxepowacrndhni.supabase.co/storage/v1/object/public/assets/n8n-logo.png" alt="N8N Logo" className="h-8 w-8 mr-3"/>
+                             <CogIcon className="h-8 w-8 mr-3 text-green-500" /> {/* Changed from LinkIcon to CogIcon */}
                             <div className="text-sm">
                                 <span className="font-medium text-base-content">N8N</span>
                                 <p className={`text-neutral text-xs ${isConfigured('n8n') ? 'text-success' : 'text-warning'}`}>

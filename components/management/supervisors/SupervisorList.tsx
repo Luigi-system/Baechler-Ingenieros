@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useSupabase } from '../../../contexts/SupabaseContext';
 import type { Supervisor } from '../../../types';
@@ -21,18 +22,13 @@ const SupervisorList: React.FC = () => {
         setIsLoading(true);
         const { data, error } = await supabase
             .from('Encargado')
-            .select('*, planta:Planta(nombre), empresa:Empresa(nombre)')
+            .select('*')
             .order('apellido');
             
         if (error) {
             setError(error.message);
         } else {
-            const formattedData = data.map((s: any) => ({
-                ...s, 
-                planta_nombre: s.planta?.nombre,
-                empresa_nombre: s.empresa?.nombre
-            }));
-            setSupervisors(formattedData as Supervisor[]);
+            setSupervisors(data as Supervisor[]);
         }
         setIsLoading(false);
     };
@@ -44,8 +40,8 @@ const SupervisorList: React.FC = () => {
     const filteredSupervisors = supervisors.filter(s =>
         (`${s.nombre || ''} ${s.apellido || ''}`.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (s.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.empresa_nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.planta_nombre || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (s.nombreEmpresa || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (s.nombrePlanta || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleEdit = (supervisor: Supervisor) => {
@@ -128,8 +124,8 @@ const SupervisorList: React.FC = () => {
                                 <tr key={s.id}>
                                     <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white break-words">{s.nombre} {s.apellido}</td>
                                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 break-words">{s.email || 'N/A'}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 break-words">{s.empresa_nombre || 'N/A'}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 break-words">{s.planta_nombre || 'N/A'}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 break-words">{s.nombreEmpresa || 'N/A'}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 break-words">{s.nombrePlanta || 'N/A'}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                                         <button onClick={() => handleEdit(s)} className="text-primary hover:text-primary-dark p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
                                         <button onClick={() => handleDelete(s.id)} className="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-red-500/10 transition"><TrashIcon className="h-5 w-5"/></button>
