@@ -1,15 +1,31 @@
-import React, { useState, useContext } from 'react';
+
+import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { EmailIcon, LockIcon, LoginIcon, AlertTriangleIcon } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState(''); // Changed email to username
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false); // New state for "Remember Me"
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const auth = useContext(AuthContext);
   const { logoUrl } = useTheme();
+
+  // Load remembered username and password from localStorage on component mount
+  useEffect(() => {
+    const rememberedUsername = localStorage.getItem('remembered_username');
+    const rememberedPassword = localStorage.getItem('remembered_password'); // New: Load remembered password
+    if (rememberedUsername) {
+      setUsername(rememberedUsername);
+      if (rememberedPassword) { // New: Set password if found
+        setPassword(rememberedPassword);
+      }
+      setRememberMe(true); // Automatically check "Remember Me" if username is found
+      console.warn("SECURITY WARNING: Plaintext passwords are being stored in localStorage. This is highly insecure. For production, consider using secure authentication methods like hashed passwords and session management.");
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,14 +34,22 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      await auth.login(email, password);
-      // On success, the onAuthStateChange listener in App.tsx will handle navigation.
+      await auth.login(username, password); // Changed email to username
+      // On successful login:
+      if (rememberMe) {
+        localStorage.setItem('remembered_username', username);
+        localStorage.setItem('remembered_password', password); // New: Save password to localStorage
+      } else {
+        localStorage.removeItem('remembered_username');
+        localStorage.removeItem('remembered_password'); // New: Remove password from localStorage
+      }
+      // App.tsx will handle setting the user after successful login.
     } catch (err: any) {
       const message = err.message;
-      if (message === 'Invalid login credentials') {
-        setError('Credenciales de inicio de sesión inválidas.');
+      if (message === 'Credenciales de inicio de sesión inválidas.') {
+        setError('Credenciales de inicio de sesión inválidas. Por favor, verifica tu usuario y contraseña.');
       } else {
-        setError(message || 'Ocurrió un error desconocido.');
+        setError(message || 'Ocurrió un error desconocido durante el inicio de sesión.');
       }
       setIsLoading(false);
     }
@@ -62,15 +86,15 @@ const Login: React.FC = () => {
               <EmailIcon className="h-5 w-5 text-neutral" />
             </div>
             <input
-              id="email-address"
-              name="email"
-              type="email"
-              autoComplete="email"
+              id="username"
+              name="username"
+              type="text" // Type set to text as requested
+              autoComplete="username"
               required
               className="appearance-none relative block w-full pl-10 pr-3 py-3 sm:text-sm input-style"
-              placeholder="Correo electrónico"
-              value={email}
-              onChange={handleInputChange(setEmail)}
+              placeholder="Usuario" // Placeholder changed
+              value={username} // Changed email to username
+              onChange={handleInputChange(setUsername)} // Changed setEmail to setUsername
             />
           </div>
           <div className="relative">
@@ -90,10 +114,26 @@ const Login: React.FC = () => {
             />
           </div>
 
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <input
+                id="remember-me"
+                name="remember-me"
+                type="checkbox"
+                className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <label htmlFor="remember-me" className="ml-2 block text-sm text-neutral">
+                Recordarme
+              </label>
+            </div>
+          </div>
+
           <div>
             <button
               type="submit"
-              disabled={isLoading || !email || !password}
+              disabled={isLoading || !username || !password} // Changed email to username
               className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-focus disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors"
             >
               {isLoading ? (

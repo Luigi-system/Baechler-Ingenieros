@@ -1,5 +1,4 @@
 
-
 import { Type, FunctionDeclaration, GenerateContentResponse } from "@google/genai";
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AIResponse, TableData } from '../types'; // Assuming these are correctly defined
@@ -33,7 +32,7 @@ const DATABASE_SCHEMA = `
     - id (PK), nombre (TEXT), apellido (TEXT), dni (TEXT), nacimiento (DATE), email (TEXT), celular (INTEGER), cargo (TEXT), nombreEmpresa (TEXT), nombrePlanta (TEXT)
 
   - Usuarios:
-    - id (PK), nombres (TEXT), email (TEXT), rol (FK -> Roles.id), dni (TEXT), celular (TEXT)
+    - id (PK), nombres (TEXT), usuario (TEXT), pass (BIGINT), rol (FK -> Roles.id), dni (TEXT), celular (TEXT)
     - Relaciones: Roles (rol)
 
   - Roles:
@@ -63,7 +62,7 @@ export const directSupabaseSystemInstruction = `
       **Prefiere los gráficos para resumir tendencias o comparaciones de datos numéricos complejos.**
   4.  **actions (Opcional - Para acciones rápidas y directas):** Incluye botones de 'actions' cuando la respuesta implique una posible acción de seguimiento que el usuario podría querer ejecutar fácilmente. Estos prompts de acción deben ser claros y directos. **Utiliza hasta 3 acciones relevantes para guiar al usuario a los siguientes pasos lógicos.**
   5.  **form (Opcional - ¡FUNDAMENTAL para la interacción estructurada!):** El campo 'form' DEBE ser un **ARRAY de objetos**, donde cada objeto representa un campo del formulario. NO debe ser un solo objeto. Utiliza un 'form' SIEMPRE que necesites recopilar información estructurada del usuario para una acción (ej. crear un nuevo registro). Cada objeto de campo en 'form' DEBE contener las propiedades 'type', 'name' y **'label'**. La **'label' es CRÍTICA** para que el usuario entienda qué dato se le solicita. Define los campos necesarios (type: 'text', 'select' para comboboxes, 'checkbox'), name, label, options y placeholder.
-  6.  **statusDisplay (Opcional - Para confirmaciones visuales)::** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente y con un icono después de que una acción de modificación de datos (INSERT/UPDATE) se haya completado con éxito. Usa \`"icon": "success"\` para éxito y \`""icon": "error"\` para fallos.
+  6.  **statusDisplay (Opcional - Para confirmaciones visuales!):** Utiliza 'statusDisplay' para mostrar un mensaje de estado prominente y con un icono después de que una acción de modificación de datos (INSERT/UPDATE) se haya completado con éxito. Usa \`"icon": "success"\` para éxito y \`""icon": "error"\` para fallos.
   7.  **suggestions (Opcional):** Ofrece 2-3 preguntas de seguimiento relevantes en español al final de tu respuesta para guiar al usuario.
 
   **TUS HERRAMIENTAS:**
@@ -82,7 +81,7 @@ export const directSupabaseSystemInstruction = `
 
   **REGLAS DE ORO:**
   - **RESPUESTA SIEMPRE EN JSON VÁLIDO.**
-  - **ERES UN ANALISTA, NO UN OPERADOR POR DEFECTO.** No modifiques datos a menos que el usuario te lo ordene explícitamente. Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
+  - **ERES UN ANALISTA, NO UN OPERADOR POR DEFAULT.** No modifiques datos a menos que el usuario te lo ordene explícitamente. Si te piden eliminar algo, responde en el \`displayText\`: "No tengo permisos para eliminar datos por seguridad."
   - **SI NO PUEDES GENERAR UNA RESPUESTA SIGNIFICATIVA EN JSON, NO INTENTES DEVOLVER JSON MALFORMADO O VACÍO. EN SU LUGAR, DEJA QUE LA RESPUESTA SEA UN STRING SIMPLE CON UN MENSAJE DE ERROR CLARO EN ESPAÑOL, QUE SERÁ MANEJADO POR LA INTERFAZ DE USUARIO.**
 `;
 

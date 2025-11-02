@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from '@google/genai';
 
 export enum UserRole {
@@ -10,7 +11,8 @@ export enum UserRole {
 export interface User {
   id: string;
   nombres: string;
-  email: string;
+  usuario: string; // Changed from email
+  email?: string; // Kept as optional for other uses if needed
   rol: number;
   roleName: string;
   permissions: string[];
@@ -19,6 +21,7 @@ export interface User {
   app_title?: string;
   logo_url?: string;
   color_palette_name?: string;
+  pass?: number | null; // Changed from password and type to number | null
 }
 
 export interface Report {

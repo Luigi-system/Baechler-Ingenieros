@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import type { Plant, Company } from '../../../types';
 import { useSupabase } from '../../../contexts/SupabaseContext';

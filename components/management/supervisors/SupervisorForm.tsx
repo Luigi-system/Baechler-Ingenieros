@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { Supervisor, Company, Plant } from '../../../types';
 import { useSupabase } from '../../../contexts/SupabaseContext';
@@ -85,11 +86,13 @@ const SupervisorForm: React.FC<SupervisorFormProps> = ({ supervisor, onSave, onC
                 if (currentCompany) {
                     setSelectedCompanyId(currentCompany.id);
                     setCompanySearchText(currentCompany.nombre);
+                    setFormData(prev => ({ ...prev, nombreEmpresa: currentCompany.nombre }));
                 }
                 const currentPlant = fetchedPlants.find(p => p.nombre === supervisor.nombrePlanta && (currentCompany ? p.id_empresa === currentCompany.id : true));
                 if (currentPlant) {
                     setSelectedPlantId(currentPlant.id);
                     setPlantSearchText(currentPlant.nombre);
+                    setFormData(prev => ({ ...prev, nombrePlanta: currentPlant.nombre }));
                 }
             } else {
                 // For new supervisor, use defaults from props if available
@@ -98,7 +101,7 @@ const SupervisorForm: React.FC<SupervisorFormProps> = ({ supervisor, onSave, onC
                     if (defaultComp) {
                         setSelectedCompanyId(defaultComp.id);
                         setCompanySearchText(defaultComp.nombre);
-                        formData.nombreEmpresa = defaultComp.nombre;
+                        setFormData(prev => ({ ...prev, nombreEmpresa: defaultComp.nombre }));
                     }
                 }
                 if (defaultPlantName) {
@@ -106,24 +109,24 @@ const SupervisorForm: React.FC<SupervisorFormProps> = ({ supervisor, onSave, onC
                     if (defaultPlt) {
                         setSelectedPlantId(defaultPlt.id);
                         setPlantSearchText(defaultPlt.nombre);
-                        formData.nombrePlanta = defaultPlt.nombre;
+                        setFormData(prev => ({ ...prev, nombrePlanta: defaultPlt.nombre }));
                     }
                 }
             }
             setIsLoadingData(false);
         };
         loadData();
-    }, [supabase, supervisor, defaultCompanyName, defaultPlantName, fetchAllCompaniesAndPlants]);
+    }, [supabase, supervisor, defaultCompanyName, defaultPlantName, fetchAllCompaniesAndPlants, formData.nombreEmpresa, formData.nombrePlanta, selectedCompanyId]);
     
     // Filtered plants for selection based on selected company
-    const filteredPlants = useMemo(() => {
+    const filteredPlantsOptions = useMemo(() => {
         if (!selectedCompanyId) return [];
         return plants.filter(p => p.id_empresa === selectedCompanyId);
     }, [selectedCompanyId, plants]);
 
     // Suggestions for company and plant search inputs
     const companySuggestions = useMemo(() => companySearchText ? companies.filter(c => (c.nombre || '').toLowerCase().includes(companySearchText.toLowerCase())).slice(0, 5) : [], [companySearchText, companies]);
-    const plantSuggestions = useMemo(() => plantSearchText ? filteredPlants.filter(p => (p.nombre || '').toLowerCase().includes(plantSearchText.toLowerCase())).slice(0, 5) : [], [plantSearchText, filteredPlants]);
+    const plantSuggestions = useMemo(() => plantSearchText ? filteredPlantsOptions.filter(p => (p.nombre || '').toLowerCase().includes(plantSearchText.toLowerCase())).slice(0, 5) : [], [plantSearchText, filteredPlantsOptions]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -228,7 +231,7 @@ const SupervisorForm: React.FC<SupervisorFormProps> = ({ supervisor, onSave, onC
                 </div>
                 <div>
                     <label htmlFor="celular" className="block text-sm font-medium">Celular</label>
-                    <input type="number" name="celular" id="celular" value={formData.celular || ''} onChange={handleChange} className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                    <input type="number" name="celular" id="celular" value={formData.celular?.toString() || ''} onChange={handleChange} className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600" />
                 </div>
                 <div>
                     <label htmlFor="cargo" className="block text-sm font-medium">Cargo</label>
@@ -300,8 +303,8 @@ const SupervisorForm: React.FC<SupervisorFormProps> = ({ supervisor, onSave, onC
             </Modal>
             <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta">
                 <ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">
-                    {filteredPlants.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}
-                    {filteredPlants.length === 0 && selectedCompanyId && (
+                    {filteredPlantsOptions.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}
+                    {filteredPlantsOptions.length === 0 && selectedCompanyId && (
                         <li className="px-3 py-2 text-center text-neutral">No hay plantas para la empresa seleccionada.</li>
                     )}
                     {!selectedCompanyId && (
