@@ -1,5 +1,3 @@
-
-
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ServiceReport, VisitReport } from '../types';
@@ -250,37 +248,101 @@ export const generateVisitReport = async (
      autoTable(doc, {
         startY: finalY,
         body: [
-            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa?.nombre ?? 'N/A'],
-            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.planta?.nombre ?? 'N/A'],
-            [{ content: 'RESPONSABLE', styles: { fontStyle: 'bold' } }, `${report.encargado?.nombre ?? ''} ${report.encargado?.apellido ?? ''}`.trim() || 'N/A'],
+            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa ?? 'N/A'],
+            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.planta ?? 'N/A'],
             [{ content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
-            [{ content: 'REALIZADO POR', styles: { fontStyle: 'bold' } }, report.usuario?.nombres ?? 'N/A']
+            [{ content: 'HORAS', styles: { fontStyle: 'bold' } }, `Ingreso: ${report.hora_ingreso ?? '--:--'} - Salida: ${report.hora_salida ?? '--:--'}`],
         ],
         theme: 'grid',
         styles: { fontSize: 9, cellPadding: 2 },
         columnStyles: { 0: { cellWidth: 40 } },
     });
     finalY = (doc as any).lastAutoTable.finalY;
+    
+    // --- CONTACTS TABLE ---
+    autoTable(doc, {
+        startY: finalY + 2,
+        head: [[{ content: 'CONTACTOS', colSpan: 2, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
+        body: [
+            ['Encargado de Planta', `${report.nombre_encargado || 'N/A'} | Cel: ${report.celular_encargado || 'N/A'} | Email: ${report.email_encargado || 'N/A'}`],
+            ['Operador de Máquina', `${report.nombre_operador || 'N/A'} | Cel: ${report.celular_operador || 'N/A'}`],
+        ],
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 2 },
+        columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold' } },
+    });
+    finalY = (doc as any).lastAutoTable.finalY;
+
+
+    // --- CHECKLIST & MACHINES ---
+    if (finalY > doc.internal.pageSize.height - 60) { doc.addPage(); finalY = pageContentStartY; }
+    autoTable(doc, {
+        startY: finalY + 5,
+        head: [[{ content: 'CHECKLIST TÉCNICO', colSpan: 6, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
+        body: [[
+            'Voltaje Estable', `(${report.voltaje_establecido ? 'SI' : 'NO'})`,
+            'Presurización', `(${report.presurizacion ? 'SI' : 'NO'})`,
+            'Transformador', `(${report.transformador ? 'SI' : 'NO'})`,
+        ]],
+        theme: 'grid',
+        styles: { fontSize: 9, cellPadding: 1.5, halign: 'center' },
+    });
+    finalY = (doc as any).lastAutoTable.finalY;
+
+    if (report.selected_maquinas_pdf && report.selected_maquinas_pdf.length > 0) {
+        if (finalY > doc.internal.pageSize.height - 80) { // Check space for table header and at least one row
+            doc.addPage();
+            finalY = pageContentStartY;
+        }
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['Máquina (Serie / Modelo / Marca)', 'Observaciones']],
+            body: report.selected_maquinas_pdf.map(item => [item.machineLabel, item.observations]),
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+            columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 'auto' } },
+            didDrawPage: (data) => {
+                if (data.pageNumber > doc.internal.pages.length) {
+                  finalY = pageContentStartY;
+                }
+            }
+        });
+        finalY = (doc as any).lastAutoTable.finalY;
+    } else {
+        autoTable(doc, {
+            startY: finalY + 5,
+            head: [['MÁQUINAS ATENDIDAS']],
+            body: report.maquinas && report.maquinas.length > 0 ? report.maquinas.map(m => [m]) : [['N/A']],
+            theme: 'grid',
+            styles: { fontSize: 9, cellPadding: 2 },
+        });
+        finalY = (doc as any).lastAutoTable.finalY;
+    }
+
+    // Start subsequent content on a new page.
+    doc.addPage();
+    finalY = pageContentStartY;
+
 
     // --- DYNAMIC SECTIONS HELPER ---
-    const drawSection = (title: string, content: string | undefined) => {
-         if (finalY > doc.internal.pageSize.height - 60) { doc.addPage(); finalY = pageContentStartY; }
+    const drawSection = (title: string, content: string | undefined, images: string[] | undefined) => {
+         if (finalY > doc.internal.pageSize.height - 105) { doc.addPage(); finalY = pageContentStartY; }
         autoTable(doc, {
             startY: finalY + 5,
             head: [[title]],
             headStyles: { fontStyle: 'bold', fillColor: '#EAEAEA', textColor: '#333' },
-            body: [[content || 'N/A']],
+            body: [[content || (images && images.length > 0 ? '' : 'N/A')]],
             theme: 'grid',
             didDrawPage: (data) => { finalY = data.cursor?.y ?? finalY; }
         });
         finalY = (doc as any).lastAutoTable.finalY;
+        if (images && images.length > 0) {
+            finalY = addImageGallery(doc, images, finalY + 3);
+        }
     };
     
-    drawSection('MOTIVO DE LA VISITA', report.motivo_visita);
-    drawSection('TEMAS TRATADOS', report.temas_tratados);
-    drawSection('ACUERDOS', report.acuerdos);
-    drawSection('PENDIENTES', report.pendientes);
-    drawSection('OBSERVACIONES', report.observaciones);
+    drawSection('OBSERVACIONES / FOTOS GENERALES', undefined, report.fotosObservacionesBase64);
+    drawSection('SUGERENCIAS', report.sugerencias, report.fotosSugerenciasBase64);
 
     // --- SIGNATURES ---
     if (finalY > doc.internal.pageSize.height - 60) { doc.addPage(); finalY = pageContentStartY; }
@@ -295,7 +357,7 @@ export const generateVisitReport = async (
      autoTable(doc, {
         startY: finalY + 5,
         body: [
-            [{ content: `REALIZADO POR:\n${report.usuario?.nombres ?? 'N/A'}`, styles: { halign: 'center' } }, { content: `CONFORMIDAD CLIENTE:\n${report.nombre_firmante ?? 'N/A'}`, styles: { halign: 'center' } }],
+            [{ content: `REALIZADO POR:\n${report.usuario?.nombres ?? 'N/A'}`, styles: { halign: 'center' } }, { content: `CONFORMIDAD CLIENTE:\n${report.nombre_encargado ?? 'N/A'}`, styles: { halign: 'center' } }],
         ],
         theme: 'grid',
         styles: { minCellHeight: 35, valign: 'bottom', fontStyle: 'bold', fontSize: 9 },
@@ -307,11 +369,10 @@ export const generateVisitReport = async (
         }
     });
     
-    // --- ADD HEADERS AND FOOTERS TO ALL PAGES ---
     await addHeaderAndFooter(doc, logoUrl, 'REPORTE DE VISITA');
 
     if (outputType === 'save') {
-        doc.save(`reporte-visita-${report.codigo_reporte || 'NUEVO'}.pdf`);
+        doc.save(`reporte-visita-${new Date().toISOString().split('T')[0]}.pdf`);
     } else {
         return doc.output('datauristring');
     }

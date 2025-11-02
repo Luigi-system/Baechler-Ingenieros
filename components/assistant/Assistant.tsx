@@ -75,7 +75,7 @@ const FilterableTable: React.FC<{ data: TableData }> = ({ data }) => {
     );
 };
 
-const TableComponent: React.FC<{ data: TableComponentData }> = ({ data }) => {
+const TableComponent: React.FC<{ data: TableComponentData; onAction: (prompt: string) => void; }> = ({ data, onAction }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -90,12 +90,21 @@ const TableComponent: React.FC<{ data: TableComponentData }> = ({ data }) => {
     }, [searchTerm, data.data]);
 
     const paginatedData = useMemo(() => {
+        if (!data.pagination) return filteredData;
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
         return filteredData.slice(startIndex, endIndex);
-    }, [currentPage, filteredData, itemsPerPage]);
+    }, [currentPage, filteredData, itemsPerPage, data.pagination]);
 
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+    const handleAction = (action: Action, row: Record<string, any>) => {
+        const interpolatedPrompt = action.prompt.replace(/\{([^}]+)\}/g, (match, key) => {
+            const trimmedKey = key.trim();
+            return row[trimmedKey] !== undefined ? String(row[trimmedKey]) : match;
+        });
+        onAction(interpolatedPrompt);
+    };
 
     return (
         <div className="mt-3 space-y-2">
@@ -118,6 +127,9 @@ const TableComponent: React.FC<{ data: TableComponentData }> = ({ data }) => {
                             {data.columns.map((col, i) => (
                                 <th key={i} className="px-3 py-2 text-left font-semibold">{col.header}</th>
                             ))}
+                             {data.actions && data.actions.length > 0 && (
+                                <th className="px-3 py-2 text-left font-semibold">Acciones</th>
+                            )}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-base-border">
@@ -127,11 +139,31 @@ const TableComponent: React.FC<{ data: TableComponentData }> = ({ data }) => {
                                     {data.columns.map((col, j) => (
                                         <td key={j} className="px-3 py-2 whitespace-pre-wrap">{String(row[col.accessor])}</td>
                                     ))}
+                                    {data.actions && data.actions.length > 0 && (
+                                        <td className="px-3 py-2 whitespace-nowrap">
+                                            <div className="flex items-center space-x-2">
+                                                {data.actions.map((action, k) => (
+                                                    <button
+                                                        key={k}
+                                                        onClick={() => handleAction(action, row)}
+                                                        className={`px-2 py-1 text-xs font-semibold rounded-md transition-colors 
+                                                            ${action.style === 'danger' ? 'bg-error text-white hover:bg-error/80' : 
+                                                            action.style === 'secondary' ? 'bg-secondary text-white hover:bg-secondary/80' :
+                                                            action.style === 'ghost' ? 'bg-transparent text-primary hover:bg-primary/10 border border-primary' :
+                                                            'bg-primary text-white hover:bg-primary-focus'}
+                                                        `}
+                                                    >
+                                                        {action.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </td>
+                                    )}
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={data.columns.length} className="px-3 py-4 text-center text-neutral">
+                                <td colSpan={data.columns.length + (data.actions && data.actions.length > 0 ? 1 : 0)} className="px-3 py-4 text-center text-neutral">
                                     No se encontraron resultados para "{searchTerm}".
                                 </td>
                             </tr>
@@ -457,7 +489,7 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
                                 {aiContent.fileViewer && <FileViewerComponent data={aiContent.fileViewer} />}
                                 {aiContent.videoPlayer && <VideoPlayerComponent data={aiContent.videoPlayer} />}
                                 {aiContent.audioPlayer && <AudioPlayerComponent data={aiContent.audioPlayer} />}
-                                {aiContent.tableComponent && <TableComponent data={aiContent.tableComponent} />}
+                                {aiContent.tableComponent && <TableComponent data={aiContent.tableComponent} onAction={handleActionClick} />}
                                 {aiContent.recordView && <RecordViewComponent data={aiContent.recordView} />}
                                 {aiContent.list && (
                                     <div className="mt-3 p-2 bg-base-100 rounded-lg border border-base-border">

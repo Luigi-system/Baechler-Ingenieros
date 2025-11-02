@@ -53,15 +53,12 @@ const RoleManagement: React.FC = () => {
         if (!supabase || !roleName.trim()) return;
 
         const roleData = { nombre: roleName.trim() };
-        let error;
+        
+        const request = currentRole
+            ? supabase.from('Roles').update(roleData).eq('id', currentRole.id)
+            : supabase.from('Roles').insert([roleData]);
 
-        if (currentRole) {
-            // Update
-            ({ error } = await supabase.from('Roles').update(roleData).eq('id', currentRole.id));
-        } else {
-            // Create
-            ({ error } = await supabase.from('Roles').insert([roleData]));
-        }
+        const { error } = await request.select().single();
 
         if (error) {
             alert(error.message);

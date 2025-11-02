@@ -10,6 +10,7 @@ import ReportForm from '../reports/ReportForm';
 import VisitReportForm from '../reports/VisitReportForm';
 import { AssistantIcon } from '../ui/Icons';
 import { useChat } from '../../contexts/ChatContext';
+import VisitReportList from '../reports/VisitReportList';
 
 // Management Components
 import CompanyList from '../management/companies/CompanyList';
@@ -66,7 +67,7 @@ const Layout: React.FC = () => {
       case 'reports-service':
         return <ReportList reportType="service" onCreateReport={() => handleCreateReport('service')} onEditReport={(id) => handleEditReport(id, 'service')} />;
       case 'reports-visit':
-        return <VisitReportForm onBack={() => navigateTo('dashboard')} />;
+        return <VisitReportList onCreateReport={() => handleCreateReport('visit')} onEditReport={(id) => handleEditReport(id, 'visit')} />;
       case 'create-report-service':
         return <ReportForm onBack={() => navigateTo('reports-service')} />;
       case 'edit-report-service':

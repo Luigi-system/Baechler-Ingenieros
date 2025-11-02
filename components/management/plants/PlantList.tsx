@@ -58,7 +58,7 @@ const PlantList: React.FC = () => {
         setEditingPlant(null);
     }
 
-    const onSave = () => {
+    const onSave = (_plant: Plant) => {
         fetchPlants();
         handleCloseModal();
     }

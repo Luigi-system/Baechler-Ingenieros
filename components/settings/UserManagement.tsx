@@ -69,8 +69,6 @@ const UserManagement: React.FC = () => {
         e.preventDefault();
         if (!supabase || !currentUser) return;
         
-        // In a real app, you'd handle password separately and securely.
-        // For this management form, we're editing user details, not password.
         const userData = {
             nombres: currentUser.nombres,
             email: currentUser.email,
@@ -79,24 +77,19 @@ const UserManagement: React.FC = () => {
             rol: currentUser.rol
         };
 
-        let error;
         if (currentUser.id) {
             // Update
-            ({ error } = await supabase.from('Usuarios').update(userData).eq('id', currentUser.id));
+            const { error } = await supabase.from('Usuarios').update(userData).eq('id', currentUser.id).select().single();
+            if (error) {
+                alert(error.message);
+            } else {
+                handleCloseModal();
+                fetchUsersAndRoles();
+            }
         } else {
             // Create
-            // This would typically be handled by Supabase Auth for new sign-ups.
-            // This form is more for admin-level user creation.
-            // A default password would be needed here.
             alert("La creación de usuarios a través de este formulario no está completamente implementada por razones de seguridad.");
             return;
-        }
-
-        if (error) {
-            alert(error.message);
-        } else {
-            handleCloseModal();
-            fetchUsersAndRoles();
         }
     };
 

@@ -59,7 +59,7 @@ const SupervisorList: React.FC = () => {
         setEditingSupervisor(null);
     }
 
-    const onSave = () => {
+    const onSave = (_supervisor: Supervisor) => {
         fetchSupervisors();
         handleCloseModal();
     }

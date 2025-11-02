@@ -419,7 +419,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         delete payload.celular_firmante;
         delete payload.id_planta;
 
-        const { error } = reportId ? await supabase.from('Reporte_Servicio').update(payload).eq('id', reportId) : await supabase.from('Reporte_Servicio').insert(payload);
+        const request = reportId
+            ? supabase.from('Reporte_Servicio').update(payload).eq('id', reportId)
+            : supabase.from('Reporte_Servicio').insert(payload);
+
+        const { error } = await request.select().single();
         
         setIsSubmitting(false);
         if (error) {

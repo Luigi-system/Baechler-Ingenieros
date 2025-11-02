@@ -1,7 +1,3 @@
-
-
-
-
 import { GoogleGenAI } from '@google/genai';
 
 export enum UserRole {
@@ -110,34 +106,61 @@ export interface ServiceReport {
 export interface VisitReport {
   id?: number;
   created_at?: string;
-  codigo_reporte?: string;
   fecha?: string; // YYYY-MM-DD
+  hora_ingreso?: string; // HH:MM
+  hora_salida?: string; // HH:MM
 
-  // Linked IDs
-  id_empresa?: number;
-  id_planta?: number;
-  id_encargado?: number;
+  // Client/Location Info (denormalized in DB)
+  empresa?: string;
+  cliente?: string; // Per schema, will populate with same as empresa
+  planta?: string;
 
-  // Visit Details
-  motivo_visita?: string;
-  temas_tratados?: string;
-  acuerdos?: string;
-  pendientes?: string;
-  observaciones?: string;
+  // Contact Info (denormalized in DB)
+  nombre_encargado?: string;
+  celular_encargado?: string;
+  email_encargado?: string;
+  nombre_operador?: string;
+  celular_operador?: string;
 
-  // Sign-off
-  nombre_firmante?: string;
-  fotoFirmaBase64?: string; // for PDF generator
+  // Technical Checklist
+  voltaje_establecido?: boolean;
+  presurizacion?: boolean;
+  transformador?: boolean;
+  
+  // Machine Info
+  maquinas?: string[]; // Stored as text[] in DB
 
+  // Details
+  sugerencias?: string;
+
+  // Files - these store URLs in DB in schema, but we'll handle File objects
+  foto_observaciones?: string;
+  foto_sugerencias?: string;
+  firma?: string;
+  
+  // For passing base64 to PDF generator
+  fotosObservacionesBase64?: string[];
+  fotosSugerenciasBase64?: string[];
+  fotoFirmaBase64?: string;
+  
   // Meta
   id_usuario?: string;
   url_pdf?: string;
 
-  // Joined data for PDF
+  // --- For form state management & PDF generation ---
+  // Store IDs from dropdowns to manage state
+  form_id_empresa?: number;
+  form_id_planta?: number;
+  form_id_encargado?: number;
+  // Hold full objects for PDF
   usuario?: { nombres: string } | null;
-  empresa?: Company | null;
-  encargado?: Supervisor | null;
-  planta?: { nombre: string } | null;
+  selected_empresa_pdf?: Company | null;
+  selected_planta_pdf?: Plant | null;
+  selected_encargado_pdf?: Supervisor | null;
+  selected_maquinas_pdf?: {
+    machineLabel: string;
+    observations: string;
+  }[];
 }
 
 
