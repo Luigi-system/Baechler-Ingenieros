@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import Login from './components/auth/Login';
@@ -99,12 +98,39 @@ const AppContent: React.FC = () => {
         };
     };
 
+    // Effect for initial session check on component mount
+    useEffect(() => {
+        const checkInitialSession = async () => {
+            if (!supabase) return;
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) {
+                    console.error("Error getting initial session:", error);
+                    setUser(null);
+                } else if (session) {
+                    const profile = await fetchUserProfile(session.user);
+                    setUser(profile);
+                } else {
+                    setUser(null);
+                }
+            } catch (error) {
+                console.error("An error occurred during initial session check:", error);
+                setUser(null);
+            } finally {
+                setIsLoadingAuth(false);
+            }
+        };
+
+        checkInitialSession();
+    }, [supabase]); // Run once on mount when supabase client is available
+
+
     // Effect to handle Supabase authentication state changes
     useEffect(() => {
         if (!supabase) return;
 
         const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-            if (session) {
+            if (event === 'SIGNED_IN' && session) {
                 try {
                     const profile = await fetchUserProfile(session.user);
                     setUser(profile);
@@ -112,10 +138,11 @@ const AppContent: React.FC = () => {
                     console.error("Error fetching user profile after auth state change:", error);
                     setUser(null);
                 }
-            } else {
+            } else if (event === 'SIGNED_OUT') {
                 setUser(null);
             }
-            setIsLoadingAuth(false);
+            // Do not set isLoadingAuth here, as the initial check handles it.
+            // This listener is for subsequent changes.
         });
 
         // Cleanup the subscription on component unmount
