@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
-import { Type } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { useSupabase } from '../../contexts/SupabaseContext';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -13,6 +13,7 @@ import Modal from '../ui/Modal';
 import CompanyForm from '../management/companies/CompanyForm';
 import PlantForm from '../management/plants/PlantForm';
 import SupervisorForm from '../management/supervisors/SupervisorForm';
+import MachineForm from '../management/machines/MachineForm'; // Import MachineForm
 
 interface ReportFormProps {
   reportId?: string | null;
@@ -30,9 +31,18 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const { supabase } = useSupabase();
     const auth = useContext(AuthContext);
     const { logoUrl } = useTheme();
-    const { service, geminiClient, openaiClient, isConfigured } = useAiService();
+    const { autocompleteService, geminiClient, openaiClient, isAutocompleteServiceConfigured } = useAiService();
 
-    const [formData, setFormData] = useState<Partial<VisitReport>>({ fecha: new Date().toISOString().split('T')[0] });
+    // FIX: Explicitly initializing optional fields in formData to ensure TypeScript recognizes them.
+    const [formData, setFormData] = useState<Partial<VisitReport>>({
+        fecha: new Date().toISOString().split('T')[0],
+        id_empresa: undefined, // Explicitly include for type recognition
+        id_planta: undefined,  // Explicitly include for type recognition
+        id_encargado: undefined, // Explicitly include for type recognition
+        form_id_empresa: undefined, // Explicitly include for type recognition
+        form_id_planta: undefined,  // Explicitly include for type recognition
+        form_id_encargado: undefined, // Explicitly include for type recognition
+    });
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // Relational Data
@@ -78,6 +88,9 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const [isPlantSearchModalOpen, setIsPlantSearchModalOpen] = useState(false);
     const [isNewSupervisorModalOpen, setIsNewSupervisorModalOpen] = useState(false);
     const [isSupervisorSearchModalOpen, setIsSupervisorSearchModalOpen] = useState(false);
+    // New states for Machine Modals
+    const [isNewMachineModalOpen, setIsNewMachineModalOpen] = useState(false);
+    const [isMachineSearchModalOpen, setIsMachineSearchModalOpen] = useState(false);
 
     const fetchDropdownData = useCallback(async () => {
         if (!supabase) return { companies: [], plants: [], supervisors: [], machines: [] };
@@ -86,18 +99,24 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 supabase.from('Empresa').select('*'),
                 supabase.from('Planta').select('*'),
                 supabase.from('Encargado').select('*'),
-                supabase.from('Maquinas').select('*'),
+                supabase.from('Maquinas').select('*, planta:Planta(nombre), empresa:Empresa(nombre)'), // Fetch joined data for machine
             ]);
             if (companyRes.error) throw companyRes.error;
             if (plantRes.error) throw plantRes.error;
             if (supervisorRes.error) throw supervisorRes.error;
             if (machineRes.error) throw machineRes.error;
             
+            const formattedMachines = machineRes.data.map((m: any) => ({
+                ...m, 
+                planta_nombre: m.planta?.nombre,
+                empresa_nombre: m.empresa?.nombre
+            }));
+
             setCompanies(companyRes.data);
             setPlants(plantRes.data);
             setSupervisors(supervisorRes.data);
-            setMachines(machineRes.data);
-            return { companies: companyRes.data, plants: plantRes.data, supervisors: supervisorRes.data, machines: machineRes.data };
+            setMachines(formattedMachines); // Use formatted machines
+            return { companies: companyRes.data, plants: plantRes.data, supervisors: supervisorRes.data, machines: formattedMachines };
         } catch (error: any) {
              console.error("Error fetching dropdown data", error);
              return { companies: [], plants: [], supervisors: [], machines: [] };
@@ -114,7 +133,13 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 if (error) {
                     console.error("Error fetching visit report for editing:", error);
                 } else if (reportData) {
-                    setFormData(reportData);
+                    // FIX: Ensure form_id_empresa, form_id_planta, and form_id_encargado are set from DB IDs
+                    setFormData({
+                        ...reportData,
+                        form_id_empresa: reportData.id_empresa,
+                        form_id_planta: reportData.id_planta,
+                        form_id_encargado: reportData.id_encargado,
+                    });
                     
                     if (reportData.maquinas && Array.isArray(reportData.maquinas)) {
                         const parsedMaquinas = reportData.maquinas.map(maquinaString => {
@@ -229,6 +254,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             form_id_empresa: company.id,
             empresa: company.nombre,
             cliente: company.nombre,
+            // Reset related fields when company changes
             form_id_planta: undefined,
             planta: undefined,
             form_id_encargado: undefined,
@@ -250,6 +276,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             ...prev,
             form_id_planta: plant.id,
             planta: plant.nombre,
+            // Reset related fields when plant changes
             form_id_encargado: undefined,
             nombre_encargado: undefined,
             celular_encargado: undefined,
@@ -275,6 +302,17 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setIsSupervisorSearchModalOpen(false);
     }, []);
 
+    const handleSelectMachine = useCallback((machine: Machine) => {
+        // Add the selected machine to the list if not already present
+        if (!selectedMaquinas.some(item => item.machine.id === machine.id)) {
+            setSelectedMaquinas(prev => [...prev, { machine, observaciones: '' }]);
+        }
+        setMachineSearch(''); // Clear search text after selection
+        setShowMachineSuggestions(false);
+        setIsNewMachineModalOpen(false); // Close modal if opened from there
+        setIsMachineSearchModalOpen(false); // Close search modal if opened from there
+    }, [selectedMaquinas]);
+
     const handleCompanySaved = useCallback(async (newCompany: Company) => {
         await fetchDropdownData();
         handleSelectCompany(newCompany);
@@ -293,8 +331,191 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setIsNewSupervisorModalOpen(false);
     }, [fetchDropdownData, handleSelectSupervisor]);
 
+    const handleMachineSaved = useCallback(async (newMachine: Machine) => {
+        await fetchDropdownData(); // Re-fetch all data to get the new machine
+        handleSelectMachine(newMachine); // Select the newly created machine
+        setIsNewMachineModalOpen(false); // Close the new machine modal
+    }, [fetchDropdownData, handleSelectMachine]);
+
     const handleAiFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        // AI logic remains the same
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        setFileName(file.name);
+        setIsAiLoading(true);
+        setAiError(null);
+
+        if (!isAutocompleteServiceConfigured()) {
+            setAiError(`El servicio de IA para autocompletado (${autocompleteService}) no está configurado. Por favor, asegúrate de que la clave API esté configurada en la sección de Servicios Autocompletado.`);
+            setIsAiLoading(false);
+            return;
+        }
+
+        try {
+            const base64Data = await fileToBase64(file);
+            const textPrompt = `Del documento adjunto, extrae la siguiente información y proporciona la salida en formato JSON:
+- fecha (YYYY-MM-DD)
+- hora_ingreso (HH:MM)
+- hora_salida (HH:MM)
+- empresa (nombre de la empresa)
+- planta (nombre de la planta/sede)
+- nombre_encargado (nombre completo del encargado de planta)
+- celular_encargado
+- email_encargado
+- nombre_operador (nombre completo del operador de máquina)
+- celular_operador
+- voltaje_establecido (¿se verificó el voltaje establecido? Responde "SI" o "NO")
+- presurizacion (¿se verificó la presurización? Responde "SI" o "NO")
+- transformador (¿se verificó el transformador? Responde "SI" o "NO")
+- maquinas (un array de strings, cada string debe contener "N° de Serie - Modelo: Observaciones", por ejemplo: ["SERIE-123 - MODELO-ABC: Se encontró fuga de aceite", "SERIE-456 - MODELO-DEF: Limpieza general"])
+- sugerencias
+`;
+            
+            let parsed: any;
+
+            if (autocompleteService === 'gemini' && geminiClient) {
+                 const response = await geminiClient.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
+                    config: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: Type.OBJECT,
+                            properties: {
+                                fecha: { type: Type.STRING },
+                                hora_ingreso: { type: Type.STRING },
+                                hora_salida: { type: Type.STRING },
+                                empresa: { type: Type.STRING },
+                                planta: { type: Type.STRING },
+                                nombre_encargado: { type: Type.STRING },
+                                celular_encargado: { type: Type.STRING },
+                                email_encargado: { type: Type.STRING },
+                                nombre_operador: { type: Type.STRING },
+                                celular_operador: { type: Type.STRING },
+                                voltaje_establecido: { type: Type.STRING }, // AI returns "SI"/"NO"
+                                presurizacion: { type: Type.STRING },      // AI returns "SI"/"NO"
+                                transformador: { type: Type.STRING },     // AI returns "SI"/"NO"
+                                maquinas: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                sugerencias: { type: Type.STRING },
+                            }
+                        }
+                    },
+                });
+                parsed = JSON.parse(response.text);
+            } else if (autocompleteService === 'openai' && openaiClient) {
+                const response = await openaiClient.chat.completions.create({
+                    model: "gpt-4o",
+                    messages: [
+                        {
+                            role: "user",
+                            content: [
+                                { type: "text", text: textPrompt },
+                                { 
+                                    type: "image_url",
+                                    image_url: {
+                                        url: base64Data, // Full data URI with prefix
+                                        detail: "low"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    response_format: { type: "json_object" }
+                });
+                const content = response.choices[0]?.message?.content;
+                if (!content) throw new Error("OpenAI returned an empty response.");
+                parsed = JSON.parse(content);
+            } else {
+                 throw new Error(`Servicio de IA desconocido o no configurado para autocompletado: ${autocompleteService}`);
+            }
+            
+            // Map parsed data to form state
+            const newFormData: Partial<VisitReport> = {};
+
+            if (parsed.fecha) newFormData.fecha = parsed.fecha;
+            if (parsed.hora_ingreso) newFormData.hora_ingreso = parsed.hora_ingreso;
+            if (parsed.hora_salida) newFormData.hora_salida = parsed.hora_salida;
+            if (parsed.nombre_operador) newFormData.nombre_operador = parsed.nombre_operador;
+            if (parsed.celular_operador) newFormData.celular_operador = parsed.celular_operador;
+            if (parsed.sugerencias) newFormData.sugerencias = parsed.sugerencias;
+            
+            // Boolean conversions
+            newFormData.voltaje_establecido = parsed.voltaje_establecido?.toLowerCase() === 'si';
+            newFormData.presurizacion = parsed.presurizacion?.toLowerCase() === 'si';
+            newFormData.transformador = parsed.transformador?.toLowerCase() === 'si';
+
+            // Relational data mapping and auto-selection
+            let selectedCompany: Company | undefined;
+            if (parsed.empresa) {
+                const companyNameToFind = parsed.empresa.toLowerCase();
+                selectedCompany = companies.find(c => (c.nombre || '').toLowerCase().includes(companyNameToFind));
+                if (selectedCompany) {
+                    handleSelectCompany(selectedCompany);
+                    newFormData.form_id_empresa = selectedCompany.id;
+                    newFormData.empresa = selectedCompany.nombre;
+                    newFormData.cliente = selectedCompany.nombre; // cliente is same as empresa for visit report
+                }
+            }
+
+            let selectedPlant: Plant | undefined;
+            if (parsed.planta && newFormData.form_id_empresa) { // << Accessing newFormData.form_id_empresa here
+                const plantNameToFind = parsed.planta.toLowerCase();
+                selectedPlant = plants.find(p => p.id_empresa === newFormData.form_id_empresa && (p.nombre || '').toLowerCase().includes(plantNameToFind));
+                if (selectedPlant) {
+                    // Use a timeout to ensure company state is updated before selecting plant,
+                    // or directly call internal logic if handleSelectPlant is not strictly needed for UI interaction.
+                    // For now, let's update form data directly and then trigger the search text.
+                    newFormData.form_id_planta = selectedPlant.id;
+                    newFormData.planta = selectedPlant.nombre;
+                    setPlantSearchText(selectedPlant.nombre); // Update search text after setting form data
+                }
+            }
+
+            if (parsed.nombre_encargado && newFormData.form_id_empresa && newFormData.form_id_planta) {
+                const supervisorNameToFind = parsed.nombre_encargado.toLowerCase();
+                const selectedSupervisor = supervisors.find(s => 
+                    s.nombreEmpresa === selectedCompany?.nombre &&
+                    s.nombrePlanta === selectedPlant?.nombre &&
+                    `${s.nombre || ''} ${s.apellido || ''}`.trim().toLowerCase() === (parsed.nombre_encargado || '').toLowerCase()
+                );
+                if (selectedSupervisor) {
+                    newFormData.form_id_encargado = selectedSupervisor.id;
+                    newFormData.nombre_encargado = `${selectedSupervisor.nombre} ${selectedSupervisor.apellido || ''}`.trim();
+                    newFormData.celular_encargado = selectedSupervisor.celular?.toString();
+                    newFormData.email_encargado = selectedSupervisor.email;
+                    setSupervisorSearchText(newFormData.nombre_encargado); // Update search text
+                }
+            }
+
+            // Maquinas parsing
+            if (parsed.maquinas && Array.isArray(parsed.maquinas)) {
+                const parsedSelectedMaquinas: { machine: Machine, observaciones: string }[] = [];
+                for (const machineString of parsed.maquinas) {
+                    const parts = machineString.split(': ');
+                    const machineLabel = parts[0]; // e.g., "SERIE-123 - MODELO-ABC"
+                    const observations = parts.slice(1).join(': '); // The rest is observations
+
+                    const serieMatch = machineLabel.match(/SERIE-([^ ]+)/);
+                    if (serieMatch && serieMatch[1]) {
+                        const serie = serieMatch[1];
+                        const foundMachine = machines.find(m => m.serie === serie && m.id_planta === newFormData.form_id_planta);
+                        if (foundMachine) {
+                            parsedSelectedMaquinas.push({ machine: foundMachine, observaciones: observations });
+                        }
+                    }
+                }
+                setSelectedMaquinas(parsedSelectedMaquinas);
+            }
+            
+            // Only update parts of formData that are not already handled by handleSelectCompany/Plant/Supervisor
+            setFormData(prev => ({ ...prev, ...newFormData }));
+
+        } catch (e: any) {
+            console.error(e);
+            setAiError(`Error al procesar con ${autocompleteService}: ${e.message || "Por favor, inténtalo de nuevo."}`);
+        } finally {
+            setIsAiLoading(false);
+        }
     };
 
 
@@ -303,11 +524,17 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setIsSubmitting(true);
         if (!supabase) return;
 
+        // FIX: Map form state IDs (form_id_*) to database IDs (id_*) directly in the payload creation.
+        // This ensures TypeScript correctly recognizes these properties on the payload object.
         const payload: Partial<VisitReport> = { 
             ...formData, 
-             maquinas: selectedMaquinas.map(item => `${item.machine.serie} - ${item.machine.modelo || ''}: ${item.observaciones}`),
+            maquinas: selectedMaquinas.map(item => `${item.machine.serie} - ${item.machine.modelo || ''}: ${item.observaciones}`),
+            id_empresa: formData.form_id_empresa,
+            id_planta: formData.form_id_planta,
+            id_encargado: formData.form_id_encargado,
         };
         
+        // Clean up temporary form state fields before sending to DB
         delete payload.form_id_empresa;
         delete payload.form_id_planta;
         delete payload.form_id_encargado;
@@ -329,6 +556,9 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     
     const selectedCompanyForNewSupervisor = useMemo(() => companies.find(c => c.id === formData.form_id_empresa), [formData.form_id_empresa, companies]);
     const selectedPlantForNewSupervisor = useMemo(() => plants.find(p => p.id === formData.form_id_planta), [formData.form_id_planta, plants]);
+    
+    const selectedCompanyForNewMachine = useMemo(() => companies.find(c => c.id === formData.form_id_empresa), [formData.form_id_empresa, companies]);
+    const selectedPlantForNewMachine = useMemo(() => plants.find(p => p.id === formData.form_id_planta), [formData.form_id_planta, plants]);
 
     if (isDataLoading) return <div className="flex justify-center items-center h-full"><Spinner /> Cargando datos...</div>
 
@@ -345,7 +575,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     <div className="mt-4">
                     <label htmlFor="ai-file-upload" className="relative cursor-pointer bg-base-200 rounded-md font-medium text-primary hover:text-primary-focus focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
                         <div className="flex items-center justify-center w-full px-6 py-4 border-2 border-base-border border-dashed rounded-md"><UploadIcon className="h-8 w-8 text-neutral mr-3" /><span className="text-neutral">{fileName || "Haz clic para subir un documento"}</span></div>
-                        <input id="ai-file-upload" name="ai-file-upload" type="file" className="sr-only" onChange={handleAiFileChange} accept="image/*,application/pdf" disabled={isAiLoading || !isConfigured(service)}/>
+                        <input id="ai-file-upload" name="ai-file-upload" type="file" className="sr-only" onChange={handleAiFileChange} accept="image/*,application/pdf" disabled={isAiLoading || !isAutocompleteServiceConfigured()}/>
                     </label>
                     {isAiLoading && <div className="mt-2 flex items-center"><Spinner /><span className="ml-2">La IA está analizando tu documento...</span></div>}
                     {aiError && <p className="mt-2 text-sm text-error">{aiError}</p>}
@@ -384,6 +614,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             <div onBlur={() => setTimeout(() => setShowPlantSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
+                                        {/* FIX: Use formData.form_id_empresa */}
                                         <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => setPlantSearchText(e.target.value)} onFocus={() => setShowPlantSuggestions(true)} disabled={!formData.form_id_empresa} placeholder="Seleccionar Planta" className="w-full input-style" autoComplete="off" />
                                         {showPlantSuggestions && plantSuggestions.length > 0 && (
                                             <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
@@ -391,7 +622,9 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                             </ul>
                                         )}
                                     </div>
+                                    {/* FIX: Use formData.form_id_empresa */}
                                     <button type="button" onClick={() => setIsNewPlantModalOpen(true)} disabled={!formData.form_id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Planta"><PlusIcon className="h-5 w-5"/></button>
+                                    {/* FIX: Use formData.form_id_empresa */}
                                     <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formData.form_id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Planta"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
@@ -408,6 +641,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             <div onBlur={() => setTimeout(() => setShowSupervisorSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
+                                        {/* FIX: Use formData.form_id_planta */}
                                         <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formData.form_id_planta} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
                                         {showSupervisorSuggestions && supervisorSuggestions.length > 0 && (
                                             <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
@@ -415,12 +649,28 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                             </ul>
                                         )}
                                     </div>
+                                    {/* FIX: Use formData.form_id_planta */}
                                     <button type="button" onClick={() => setIsNewSupervisorModalOpen(true)} disabled={!formData.form_id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nuevo Encargado"><UserPlusIcon className="h-5 w-5"/></button>
+                                    {/* FIX: Use formData.form_id_planta */}
                                     <button type="button" onClick={() => setIsSupervisorSearchModalOpen(true)} disabled={!formData.form_id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Encargado"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                         </div>
-                        <div><label className="block text-sm font-medium text-neutral">Datos del Encargado</label><input type="text" value={`Cel: ${formData.celular_encargado || 'N/A'} | Email: ${formData.email_encargado || 'N/A'}`} disabled className="mt-1 block w-full input-style bg-base-300"/></div>
+                        {/* New separate fields for supervisor */}
+                        <div>
+                            <label htmlFor="nombre_encargado" className="block text-sm font-medium">Nombre del Encargado</label>
+                            <input type="text" name="nombre_encargado" value={formData.nombre_encargado || ''} className="mt-1 block w-full input-style bg-base-300" disabled />
+                        </div>
+                        <div>
+                            <label htmlFor="celular_encargado" className="block text-sm font-medium">Celular del Encargado</label>
+                            <input type="text" name="celular_encargado" value={formData.celular_encargado || ''} className="mt-1 block w-full input-style bg-base-300" disabled />
+                        </div>
+                        <div>
+                            <label htmlFor="email_encargado" className="block text-sm font-medium">Email del Encargado</label>
+                            <input type="email" name="email_encargado" value={formData.email_encargado || ''} className="mt-1 block w-full input-style bg-base-300" disabled />
+                        </div>
+                        {/* End new fields */}
+
                         <div><label htmlFor="nombre_operador" className="block text-sm font-medium">Nombre Operador</label><input type="text" name="nombre_operador" value={formData.nombre_operador || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div><label htmlFor="celular_operador" className="block text-sm font-medium">Celular Operador</label><input type="text" name="celular_operador" value={formData.celular_operador || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                     </div>
@@ -442,33 +692,34 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     <div>
                         <label htmlFor="machine-search" className="block text-sm font-medium">Máquinas Atendidas</label>
                         <div onBlur={() => setTimeout(() => setShowMachineSuggestions(false), 100)}>
-                            <div className="relative mt-1">
-                                <input 
-                                    id="machine-search"
-                                    type="text"
-                                    value={machineSearch}
-                                    onChange={e => setMachineSearch(e.target.value)}
-                                    onFocus={() => setShowMachineSuggestions(true)}
-                                    placeholder="Buscar máquina por serie o modelo para añadir..."
-                                    className="w-full input-style"
-                                    disabled={!formData.form_id_planta}
-                                />
-                                {showMachineSuggestions && machineSuggestions.length > 0 && (
-                                    <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
-                                        {machineSuggestions.map(machine => (
-                                            <li 
-                                                key={machine.id} 
-                                                onMouseDown={() => {
-                                                    setSelectedMaquinas(prev => [...prev, { machine, observaciones: '' }]);
-                                                    setMachineSearch('');
-                                                }}
-                                                className="px-3 py-2 cursor-pointer hover:bg-base-300"
-                                            >
-                                                {machine.serie} - {machine.modelo}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                )}
+                            <div className="flex items-center gap-2 mt-1">
+                                <div className="relative flex-grow">
+                                    <input 
+                                        id="machine-search"
+                                        type="text"
+                                        value={machineSearch}
+                                        onChange={e => setMachineSearch(e.target.value)}
+                                        onFocus={() => setShowMachineSuggestions(true)}
+                                        placeholder="Buscar máquina por serie o modelo para añadir..."
+                                        className="w-full input-style"
+                                        disabled={!formData.form_id_planta}
+                                    />
+                                    {showMachineSuggestions && machineSuggestions.length > 0 && (
+                                        <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
+                                            {machineSuggestions.map(machine => (
+                                                <li 
+                                                    key={machine.id} 
+                                                    onMouseDown={() => handleSelectMachine(machine)}
+                                                    className="px-3 py-2 cursor-pointer hover:bg-base-300"
+                                                >
+                                                    {machine.serie} - {machine.modelo}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                                <button type="button" onClick={() => setIsNewMachineModalOpen(true)} disabled={!formData.form_id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Máquina"><PlusIcon className="h-5 w-5"/></button>
+                                <button type="button" onClick={() => setIsMachineSearchModalOpen(true)} disabled={!formData.form_id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Máquina"><SearchIcon className="h-5 w-5"/></button>
                             </div>
                         </div>
                         
@@ -547,13 +798,36 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
 
         {/* Modals */}
         <Modal isOpen={isNewCompanyModalOpen} onClose={() => setIsNewCompanyModalOpen(false)} title="Añadir Nueva Empresa"><CompanyForm company={null} onSave={handleCompanySaved} onCancel={() => setIsNewCompanyModalOpen(false)}/></Modal>
-        <Modal isOpen={isCompanySearchModalOpen} onClose={() => setIsCompanySearchModalOpen(false)} title="Buscar Empresa"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{companies.map(c => <li key={c.id} onClick={() => handleSelectCompany(c)} className="p-3 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}</ul></Modal>
+        <Modal isOpen={isCompanySearchModalOpen} onClose={() => setIsCompanySearchModalOpen(false)} title="Buscar Empresa"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{companies.map(c => <li key={c.id} onMouseDown={() => handleSelectCompany(c)} className="p-3 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}</ul></Modal>
         
         <Modal isOpen={isNewPlantModalOpen} onClose={() => setIsNewPlantModalOpen(false)} title="Añadir Nueva Planta"><PlantForm plant={null} onSave={handlePlantSaved} onCancel={() => setIsNewPlantModalOpen(false)}/></Modal>
-        <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredPlants.map(p => <li key={p.id} onClick={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}</ul></Modal>
+        <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredPlants.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}</ul></Modal>
 
         <Modal isOpen={isNewSupervisorModalOpen} onClose={() => setIsNewSupervisorModalOpen(false)} title="Añadir Nuevo Encargado"><SupervisorForm supervisor={null} onSave={handleSupervisorSaved} onCancel={() => setIsNewSupervisorModalOpen(false)} defaultCompanyName={selectedCompanyForNewSupervisor?.nombre} defaultPlantName={selectedPlantForNewSupervisor?.nombre} /></Modal>
-        <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredSupervisors.map(s => <li key={s.id} onClick={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}</ul></Modal>
+        <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredSupervisors.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}</ul></Modal>
+        
+        {/* New Modals for Machine management in VisitReportForm */}
+        <Modal isOpen={isNewMachineModalOpen} onClose={() => setIsNewMachineModalOpen(false)} title="Añadir Nueva Máquina">
+            <MachineForm 
+                machine={null} 
+                onSave={handleMachineSaved} 
+                onCancel={() => setIsNewMachineModalOpen(false)} 
+                defaultCompanyId={selectedCompanyForNewMachine?.id} // Pass selected company to pre-fill
+                defaultPlantId={selectedPlantForNewMachine?.id} // Pass selected plant to pre-fill
+            />
+        </Modal>
+        <Modal isOpen={isMachineSearchModalOpen} onClose={() => setIsMachineSearchModalOpen(false)} title="Buscar Máquina">
+            <ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">
+                {availableMachinesForPlant.map(m => ( // Show only machines for the selected plant
+                    <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">
+                        {m.serie} - {m.modelo} ({m.marca})
+                    </li>
+                ))}
+                {availableMachinesForPlant.length === 0 && (
+                    <li className="px-3 py-2 text-center text-neutral">No hay máquinas disponibles para esta planta.</li>
+                )}
+            </ul>
+        </Modal>
     </div>
   );
 };

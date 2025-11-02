@@ -58,7 +58,7 @@ const navItems = [
         icon: LinkIcon, 
         permission: 'settings', 
         subItems: [
-            { id: 'settings-ai', label: 'Servicios de IA', icon: CpuChipIcon, permission: 'settings' },
+            { id: 'settings-ai', label: 'Servicios de IA y Autocompletado', icon: CpuChipIcon, permission: 'settings' },
         ]
     },
 ];

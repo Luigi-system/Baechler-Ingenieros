@@ -284,7 +284,7 @@ const RecordViewComponent: React.FC<{ data: RecordViewData }> = ({ data }) => (
 );
 
 const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
-  const { service, isConfigured } = useAiService();
+  const { service, isChatServiceConfigured } = useAiService();
   const { messages, isLoading, sendMessage, setHasUnreadMessage } = useChat();
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
@@ -427,14 +427,14 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   const assistantContent = () => {
-    if (!isConfigured(service)) {
+    if (!isChatServiceConfigured()) {
         return (
             <div className="flex flex-col h-full justify-center items-center text-center p-4">
                 <h3 className="text-lg font-semibold">Servicio No Configurado</h3>
                 <p className="text-neutral mt-2 text-sm">
-                    El servicio de IA ('{service}') no está configurado.
+                    El servicio de IA para el asistente ('{service === 'n8n' ? 'Agente AI' : service}') no está configurado.
                     <br />
-                    Por favor, ve a Configuración &gt; Servicios de IA para seleccionarlo y asegúrate que la API Key esté disponible.
+                    Por favor, ve a Configuración &gt; Servicios de IA y Autocompletado para seleccionarlo y asegúrate que la API Key/URL del Webhook esté disponible.
                 </p>
             </div>
         );

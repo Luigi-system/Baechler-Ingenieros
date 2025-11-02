@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import Login from './components/auth/Login';
 import Layout from './components/layout/Layout';
@@ -8,10 +8,12 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from './contexts/SupabaseContext';
 import { AiServiceProvider } from './contexts/AiServiceContext';
 import { ChatProvider } from './contexts/ChatContext';
+import Spinner from './components/ui/Spinner'; // Import Spinner
 import type { User } from './types';
 
 const AppContent: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
+    const [isLoadingAuth, setIsLoadingAuth] = useState(true); // New state for authentication loading
     const { supabase } = useSupabase();
 
     const fetchUserProfile = async (supabaseUser: SupabaseUser): Promise<User> => {
@@ -97,25 +99,45 @@ const AppContent: React.FC = () => {
         };
     };
 
+    // Effect to handle Supabase authentication state changes
+    useEffect(() => {
+        if (!supabase) return;
+
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session) {
+                try {
+                    const profile = await fetchUserProfile(session.user);
+                    setUser(profile);
+                } catch (error) {
+                    console.error("Error fetching user profile after auth state change:", error);
+                    setUser(null);
+                }
+            } else {
+                setUser(null);
+            }
+            setIsLoadingAuth(false);
+        });
+
+        // Cleanup the subscription on component unmount
+        return () => {
+            authListener?.subscription.unsubscribe();
+        };
+    }, [supabase]);
+
+
     const login = async (email: string, password: string): Promise<void> => {
         if (!supabase) throw new Error("Cliente Supabase no inicializado.");
         
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        // `onAuthStateChange` listener will handle setting the user after successful sign-in
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
         if (signInError) throw signInError;
-
-        if (data.user) {
-            const profile = await fetchUserProfile(data.user);
-            setUser(profile);
-        } else {
-            throw new Error("No se pudo obtener la información del usuario después del inicio de sesión.");
-        }
     };
 
     const logout = async () => {
         if (!supabase) return;
         const { error } = await supabase.auth.signOut();
         if (error) console.error("Error al cerrar sesión:", error);
-        setUser(null);
+        setUser(null); // Explicitly clear user on logout
     };
 
     const updateUser = useCallback((updates: Partial<User>) => {
@@ -126,6 +148,15 @@ const AppContent: React.FC = () => {
     }, []);
     
     const authContextValue = useMemo(() => ({ user, login, logout, updateUser }), [user, updateUser]);
+
+    if (isLoadingAuth) {
+        return (
+            <div className="flex justify-center items-center min-h-screen bg-base-100">
+                <Spinner />
+                <span className="ml-2 text-base-content">Cargando sesión...</span>
+            </div>
+        );
+    }
 
     return (
         <AuthContext.Provider value={authContextValue}>

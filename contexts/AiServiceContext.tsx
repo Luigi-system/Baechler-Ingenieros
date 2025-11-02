@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useState, useContext, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
@@ -8,12 +7,20 @@ import type { AiServiceContextType, AiService, AiApiKeys, OpenAiClient } from '.
 const AiServiceContext = createContext<AiServiceContextType | undefined>(undefined);
 
 const DEFAULT_N8N_WEBHOOK_URL = '';
+const DEFAULT_AUTOCOMPLETE_SERVICE: 'gemini' | 'openai' = 'gemini';
 
 export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { supabase } = useSupabase();
+    
+    // States for Chat/Agent AI
     const [service, setServiceState] = useState<AiService>('gemini');
-    const [apiKeys, setApiKeys] = useState<AiApiKeys>({});
     const [n8nWebhookUrl, setN8nWebhookUrlState] = useState<string>(DEFAULT_N8N_WEBHOOK_URL);
+
+    // States for Autocompletion AI
+    const [autocompleteService, setAutocompleteServiceState] = useState<'gemini' | 'openai'>(DEFAULT_AUTOCOMPLETE_SERVICE);
+    
+    // Unified API Keys for all services (Gemini, OpenAI)
+    const [apiKeys, setApiKeys] = useState<AiApiKeys>({});
     
     const [geminiClient, setGeminiClient] = useState<GoogleGenAI | null>(null);
     const [openaiClient, setOpenaiClient] = useState<OpenAiClient | null>(null);
@@ -21,6 +28,7 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const fetchConfigs = useCallback(async () => {
         if (!supabase) return;
 
+        // Fetch API Keys
         const { data: apiKeysData, error: apiKeysError } = await supabase
             .from('Configuracion')
             .select('value')
@@ -37,6 +45,7 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }
         }
 
+        // Fetch N8N Webhook URL (for Chat/Agent)
         const { data: webhookData, error: webhookError } = await supabase
             .from('Configuracion')
             .select('value')
@@ -59,6 +68,7 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         fetchConfigs();
     }, [fetchConfigs]);
 
+    // Load Chat/Agent service from local storage
     useEffect(() => {
         const storedService = localStorage.getItem('ai_service') as AiService | null;
         if (storedService && ['gemini', 'openai', 'n8n'].includes(storedService)) {
@@ -68,6 +78,17 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     }, []);
 
+    // Load Autocompletion service from local storage
+    useEffect(() => {
+        const storedAutocompleteService = localStorage.getItem('ai_autocomplete_service') as 'gemini' | 'openai' | null;
+        if (storedAutocompleteService && ['gemini', 'openai'].includes(storedAutocompleteService)) {
+            setAutocompleteServiceState(storedAutocompleteService);
+        } else {
+            setAutocompleteServiceState(DEFAULT_AUTOCOMPLETE_SERVICE);
+        }
+    }, []);
+
+    // Initialize Gemini Client
     useEffect(() => {
         const geminiKey = apiKeys.gemini;
         if (geminiKey) {
@@ -82,6 +103,7 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     }, [apiKeys.gemini]);
 
+    // Initialize OpenAI Client
     useEffect(() => {
         const openaiKey = apiKeys.openai;
         if (openaiKey) {
@@ -112,21 +134,41 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     }, [apiKeys.openai]);
 
+    // Setter for Chat/Agent service
     const setService = (newService: AiService) => {
         if (['gemini', 'openai', 'n8n'].includes(newService)) {
             localStorage.setItem('ai_service', newService);
             setServiceState(newService);
         } else {
-            console.warn(`Attempted to set invalid AI service: ${newService}`);
+            console.warn(`Attempted to set invalid AI service for chat: ${newService}`);
         }
     };
 
-    const isConfigured = useCallback((serviceToCheck: AiService): boolean => {
-        if (serviceToCheck === 'gemini') return !!apiKeys.gemini;
-        if (serviceToCheck === 'openai') return !!apiKeys.openai;
-        if (serviceToCheck === 'n8n') return !!n8nWebhookUrl;
+    // Setter for Autocompletion service
+    const setAutocompleteService = (newService: 'gemini' | 'openai') => {
+        if (['gemini', 'openai'].includes(newService)) {
+            localStorage.setItem('ai_autocomplete_service', newService);
+            setAutocompleteServiceState(newService);
+        } else {
+            console.warn(`Attempted to set invalid AI service for autocompletion: ${newService}`);
+        }
+    };
+
+    // Check if Chat/Agent service is configured
+    const isChatServiceConfigured = useCallback((): boolean => {
+        if (service === 'gemini') return !!apiKeys.gemini;
+        if (service === 'openai') return !!apiKeys.openai;
+        if (service === 'n8n') return !!n8nWebhookUrl;
         return false;
-    }, [apiKeys, n8nWebhookUrl]);
+    }, [service, apiKeys, n8nWebhookUrl]);
+
+    // Check if Autocompletion service is configured
+    const isAutocompleteServiceConfigured = useCallback((): boolean => {
+        if (autocompleteService === 'gemini') return !!apiKeys.gemini;
+        if (autocompleteService === 'openai') return !!apiKeys.openai;
+        return false;
+    }, [autocompleteService, apiKeys]);
+
 
     const updateApiKeys = async (newKeys: AiApiKeys): Promise<{error: Error | null}> => {
         const optimisticKeys = { ...apiKeys, ...newKeys };
@@ -208,14 +250,32 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const value = useMemo(() => ({ 
         service, 
         setService, 
-        isConfigured, 
+        isChatServiceConfigured, 
+        
+        autocompleteService, 
+        setAutocompleteService, 
+        isAutocompleteServiceConfigured,
+
         geminiClient, 
         openaiClient, 
         apiKeys, 
         n8nWebhookUrl, 
         updateApiKeys, 
         updateN8nWebhookUrl 
-    }), [service, isConfigured, geminiClient, openaiClient, apiKeys, n8nWebhookUrl, updateApiKeys, updateN8nWebhookUrl]);
+    }), [
+        service, 
+        setService, 
+        isChatServiceConfigured, 
+        autocompleteService, 
+        setAutocompleteService, 
+        isAutocompleteServiceConfigured,
+        geminiClient, 
+        openaiClient, 
+        apiKeys, 
+        n8nWebhookUrl, 
+        updateApiKeys, 
+        updateN8nWebhookUrl
+    ]);
 
     return (
         <AiServiceContext.Provider value={value}>

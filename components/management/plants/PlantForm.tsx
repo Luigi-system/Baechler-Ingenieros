@@ -8,15 +8,16 @@ interface PlantFormProps {
     plant: Plant | null;
     onSave: (plant: Plant) => Promise<void> | void;
     onCancel: () => void;
+    defaultCompanyId?: number; // New prop for default company
 }
 
-const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel }) => {
+const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel, defaultCompanyId }) => {
     const { supabase } = useSupabase();
     const [formData, setFormData] = useState<Partial<Plant>>(plant || {
         nombre: '',
         direccion: '',
         estado: true,
-        id_empresa: undefined,
+        id_empresa: defaultCompanyId, // Initialize with defaultCompanyId
     });
     const [companies, setCompanies] = useState<Company[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -29,14 +30,15 @@ const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel }) => {
             const { data, error } = await supabase.from('Empresa').select('id, nombre');
             if (!error && data) {
                 setCompanies(data as Company[]);
-                if (!plant && data.length > 0) {
-                    setFormData(prev => ({...prev, id_empresa: data[0]?.id}))
+                // Set default company if creating a new plant and defaultCompanyId is provided, or if no plant and companies exist
+                if (!plant && formData.id_empresa === undefined && (defaultCompanyId !== undefined || data.length > 0)) {
+                    setFormData(prev => ({ ...prev, id_empresa: defaultCompanyId || data[0]?.id }));
                 }
             }
             setIsLoadingCompanies(false);
         };
         fetchCompanies();
-    }, [supabase, plant]);
+    }, [supabase, plant, defaultCompanyId, formData.id_empresa]);
     
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

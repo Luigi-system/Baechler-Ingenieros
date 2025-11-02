@@ -74,7 +74,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const auth = useContext(AuthContext);
     const { 
         service, geminiClient, openaiClient, 
-        isConfigured, apiKeys, n8nWebhookUrl
+        isChatServiceConfigured, apiKeys, n8nWebhookUrl
     } = useAiService();
     const [chat, setChat] = useState<Chat | null>(null);
 
@@ -118,8 +118,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (!supabase) throw new Error("La conexión a Supabase no está disponible.");
 
             if (service === 'n8n') {
-                if (!isConfigured('n8n')) {
-                    throw new Error("N8N no está configurado. Por favor, añade la URL del Webhook en la configuración.");
+                if (!isChatServiceConfigured()) {
+                    throw new Error("Agente AI no está configurado. Por favor, añade la URL del Webhook en la configuración.");
                 }
 
                 const aiResponse = await consultarAgente(
@@ -234,7 +234,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
             setIsLoading(false);
         }
-    }, [isLoading, supabase, chat, service, geminiClient, openaiClient, isConfigured, apiKeys, n8nWebhookUrl, messages, auth]);
+    }, [isLoading, supabase, chat, service, geminiClient, openaiClient, isChatServiceConfigured, apiKeys, n8nWebhookUrl, messages, auth]);
     
     const clearUnread = () => {
         setHasUnreadMessage(false);

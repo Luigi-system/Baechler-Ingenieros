@@ -371,13 +371,19 @@ export interface AiApiKeys {
 
 // Updated AiServiceContextType to include n8n settings
 export interface AiServiceContextType {
-    service: AiService;
+    service: AiService; // For main chat/agent
     setService: (service: AiService) => void;
-    isConfigured: (service: AiService) => boolean;
+    isChatServiceConfigured: () => boolean; // Specific check for chat service
+    
+    autocompleteService: 'gemini' | 'openai'; // For file analysis autocompletion
+    setAutocompleteService: (service: 'gemini' | 'openai') => void;
+    isAutocompleteServiceConfigured: () => boolean; // Specific check for autocomplete service
+
     geminiClient: GoogleGenAI | null;
     openaiClient: OpenAiClient | null;
-    apiKeys: AiApiKeys;
-    n8nWebhookUrl: string;
+    apiKeys: AiApiKeys; // Combined API keys for all services
+    n8nWebhookUrl: string; // N8N URL for chat/agent
+    
     updateApiKeys: (keys: AiApiKeys) => Promise<{error: Error | null}>;
     updateN8nWebhookUrl: (url: string) => Promise<{error: Error | null}>;
 }

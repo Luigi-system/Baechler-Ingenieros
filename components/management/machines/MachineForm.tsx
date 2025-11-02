@@ -8,9 +8,11 @@ interface MachineFormProps {
     // FIX: Updated onSave to accept an async function and return the saved machine.
     onSave: (machine: Machine) => Promise<void> | void;
     onCancel: () => void;
+    defaultCompanyId?: number; // New prop for default company
+    defaultPlantId?: number;   // New prop for default plant
 }
 
-const MachineForm: React.FC<MachineFormProps> = ({ machine, onSave, onCancel }) => {
+const MachineForm: React.FC<MachineFormProps> = ({ machine, onSave, onCancel, defaultCompanyId, defaultPlantId }) => {
     const { supabase } = useSupabase();
     const [formData, setFormData] = useState<Partial<Machine>>(machine || {
         serie: '',
@@ -18,8 +20,8 @@ const MachineForm: React.FC<MachineFormProps> = ({ machine, onSave, onCancel }) 
         marca: '',
         linea: '',
         estado: true,
-        id_empresa: undefined,
-        id_planta: undefined,
+        id_empresa: defaultCompanyId, // Initialize with defaultCompanyId
+        id_planta: defaultPlantId,   // Initialize with defaultPlantId
     });
 
     const [companies, setCompanies] = useState<Company[]>([]);
@@ -67,15 +69,26 @@ const MachineForm: React.FC<MachineFormProps> = ({ machine, onSave, onCancel }) 
 
             } else {
                 // Creating a new machine, set a default company if available.
-                const defaultCompanyId = companiesData.length > 0 ? companiesData[0].id : undefined;
-                setFormData(prev => ({ ...prev, id_empresa: defaultCompanyId }));
+                const defaultCompany = defaultCompanyId !== undefined
+                    ? companiesData.find(c => c.id === defaultCompanyId)
+                    : (companiesData.length > 0 ? companiesData[0] : undefined);
+                
+                const defaultPlant = defaultPlantId !== undefined
+                    ? allPlantsData.find(p => p.id === defaultPlantId && p.id_empresa === defaultCompany?.id)
+                    : undefined;
+
+                setFormData(prev => ({ 
+                    ...prev, 
+                    id_empresa: defaultCompany?.id,
+                    id_planta: defaultPlant?.id
+                }));
             }
 
             setIsLoadingData(false);
         };
 
         fetchDataAndInitialize();
-    }, [supabase, machine]);
+    }, [supabase, machine, defaultCompanyId, defaultPlantId]);
     
     // This useEffect remains crucial for a responsive UI. It filters the plants
     // whenever the selected company changes in the form.
