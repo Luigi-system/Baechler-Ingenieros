@@ -1,19 +1,23 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { useAiService } from '../../contexts/AiServiceContext';
-import { SparklesIcon, CogIcon, KeyIcon, SaveIcon, DocumentIcon, CpuChipIcon } from '../ui/Icons'; 
+import { SparklesIcon, CogIcon, KeyIcon, SaveIcon, DocumentIcon, CpuChipIcon, TrashIcon, PlusIcon } from '../ui/Icons'; 
 import Spinner from '../ui/Spinner';
 import type { AiService } from '../../types';
 
 const AiSettings: React.FC = () => {
     const { 
         service, setService, isChatServiceConfigured, apiKeys, updateApiKeys,
-        n8nWebhookUrl, updateN8nWebhookUrl,
+        n8nSettings, updateN8nSettings,
         autocompleteService, setAutocompleteService, isAutocompleteServiceConfigured
     } = useAiService();
     
     const [localKeys, setLocalKeys] = useState({ gemini: '', openai: '' });
     const [localN8nUrl, setLocalN8nUrl] = useState('');
+    const [localN8nMethod, setLocalN8nMethod] = useState<'GET' | 'POST'>('GET');
+    const [localN8nHeaders, setLocalN8nHeaders] = useState<{ id: number; key: string; value: string }[]>([]);
+
     const [isSaving, setIsSaving] = useState(false);
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
@@ -22,12 +26,36 @@ const AiSettings: React.FC = () => {
             gemini: apiKeys.gemini || '',
             openai: apiKeys.openai || '',
         });
-        setLocalN8nUrl(n8nWebhookUrl || '');
-    }, [apiKeys, n8nWebhookUrl]);
+        setLocalN8nUrl(n8nSettings.webhookUrl || '');
+        setLocalN8nMethod(n8nSettings.method || 'GET');
+        setLocalN8nHeaders(
+             Object.entries(n8nSettings.headers || {}).map(([key, value], index) => ({ id: index, key, value }))
+        );
+    }, [apiKeys, n8nSettings]);
 
     const handleKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setLocalKeys(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleHeaderChange = (index: number, field: 'key' | 'value', value: string) => {
+        const newHeaders = [...localN8nHeaders];
+        newHeaders[index][field] = value;
+        setLocalN8nHeaders(newHeaders);
+    };
+
+    const addHeader = () => {
+        setLocalN8nHeaders([...localN8nHeaders, { id: Date.now(), key: '', value: '' }]);
+    };
+
+    const removeHeader = (id: number) => {
+        setLocalN8nHeaders(localN8nHeaders.filter(h => h.id !== id));
+    };
+
+    const addContentTypeHeader = () => {
+        if (!localN8nHeaders.some(h => h.key.toLowerCase().trim() === 'content-type')) {
+            setLocalN8nHeaders([...localN8nHeaders, { id: Date.now(), key: 'Content-Type', value: 'application/json' }]);
+        }
     };
 
     const handleSave = async (e: React.FormEvent) => {
@@ -35,17 +63,27 @@ const AiSettings: React.FC = () => {
         setIsSaving(true);
         setFeedback(null);
         
-        const [keysResult, n8nUrlResult] = await Promise.all([
+        const headersObject = localN8nHeaders.reduce((acc, header) => {
+            if (header.key.trim()) {
+                acc[header.key.trim()] = header.value.trim();
+            }
+            return acc;
+        }, {} as Record<string, string>);
+
+        const [keysResult, n8nResult] = await Promise.all([
             updateApiKeys(localKeys),
-            updateN8nWebhookUrl(localN8nUrl)
-            // No separate save for autocomplete keys as they reuse `apiKeys`
+            updateN8nSettings({
+                webhookUrl: localN8nUrl,
+                method: localN8nMethod,
+                headers: headersObject
+            })
         ]);
 
         setIsSaving(false);
-        if (keysResult.error || n8nUrlResult.error) {
+        if (keysResult.error || n8nResult.error) {
             const keyError = keysResult.error ? `API Keys: ${keysResult.error.message}` : '';
-            const urlError = n8nUrlResult.error ? `Agente AI URL: ${n8nUrlResult.error.message}` : '';
-            setFeedback({ type: 'error', message: `Error al guardar: ${keyError} ${urlError}`.trim() });
+            const n8nError = n8nResult.error ? `Configuración Agente AI: ${n8nResult.error.message}` : '';
+            setFeedback({ type: 'error', message: `Error al guardar: ${keyError} ${n8nError}`.trim() });
         } else {
             setFeedback({ type: 'success', message: '¡Configuración de IA guardada exitosamente!' });
         }
@@ -69,28 +107,36 @@ const AiSettings: React.FC = () => {
                 );
             case 'n8n':
                 return (
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                          <div>
                             <label htmlFor="n8n_url" className="block text-sm font-medium">URL del Webhook de Agente AI</label>
                             <input type="text" id="n8n_url" name="n8n_url" value={localN8nUrl} onChange={(e) => setLocalN8nUrl(e.target.value)} className="mt-1 block w-full input-style" placeholder="https://..."/>
-                             <p className="mt-2 text-xs text-neutral">
-                                El webhook debe aceptar peticiones GET. El siguiente objeto JSON será URL-encodeado y enviado como un parámetro de consulta llamado <code className="bg-base-100 p-1 rounded-sm">q</code>:
-                                <pre className="mt-1 p-2 bg-base-100 rounded text-xs overflow-x-auto custom-scrollbar">
-                                    <code>
-{`{
-  "service": "chatbot",
-  "content": {
-    "action": "consultas",
-    "params": {
-      "query": "tu pregunta...",
-      "userName": "nombre usuario",
-      "file": ""
-    }
-  }
-}`}
-                                    </code>
-                                </pre>
-                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium">Método HTTP</label>
+                             <div className="mt-2 flex items-center space-x-4">
+                                <label className="flex items-center"><input type="radio" name="n8n_method" value="GET" checked={localN8nMethod === 'GET'} onChange={() => setLocalN8nMethod('GET')} className="h-4 w-4 text-primary focus:ring-primary border-base-border" /> <span className="ml-2">GET</span></label>
+                                <label className="flex items-center"><input type="radio" name="n8n_method" value="POST" checked={localN8nMethod === 'POST'} onChange={() => setLocalN8nMethod('POST')} className="h-4 w-4 text-primary focus:ring-primary border-base-border" /> <span className="ml-2">POST</span></label>
+                            </div>
+                        </div>
+
+                        <div>
+                             <div className="flex justify-between items-center mb-2">
+                                <label className="block text-sm font-medium">Headers (Opcional)</label>
+                                <div>
+                                    <button type="button" onClick={addContentTypeHeader} className="text-xs bg-base-300 hover:bg-base-100 px-2 py-1 rounded-md mr-2">Añadir Content-Type: json</button>
+                                    <button type="button" onClick={addHeader} className="text-xs bg-primary/20 text-primary hover:bg-primary/30 px-2 py-1 rounded-md">Añadir Header</button>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                            {localN8nHeaders.map((header, index) => (
+                                <div key={header.id} className="flex items-center gap-2">
+                                    <input type="text" placeholder="Clave (ej. Authorization)" value={header.key} onChange={e => handleHeaderChange(index, 'key', e.target.value)} className="w-1/3 input-style text-sm" />
+                                    <input type="text" placeholder="Valor (ej. Bearer ...)" value={header.value} onChange={e => handleHeaderChange(index, 'value', e.target.value)} className="flex-1 input-style text-sm" />
+                                    <button type="button" onClick={() => removeHeader(header.id)} className="p-2 text-error hover:bg-error/10 rounded-full"><TrashIcon className="h-4 w-4" /></button>
+                                </div>
+                            ))}
+                            </div>
                         </div>
                     </div>
                 );
@@ -229,9 +275,9 @@ const AiSettings: React.FC = () => {
                 </div>
 
                 <div className="space-y-4">
-                    <h4 className="text-lg font-medium text-base-content">API Keys del Asistente (Chat)</h4>
+                    <h4 className="text-lg font-medium text-base-content">Configuración para Asistente (Chat)</h4>
                     {renderChatConfigForm()}
-                    <h4 className="text-lg font-medium text-base-content mt-8 pt-4 border-t border-base-border">API Keys de Autocompletado (Reportes)</h4>
+                    <h4 className="text-lg font-medium text-base-content mt-8 pt-4 border-t border-base-border">Configuración para Autocompletado (Reportes)</h4>
                     {renderAutocompleteConfigForm()}
                 </div>
 

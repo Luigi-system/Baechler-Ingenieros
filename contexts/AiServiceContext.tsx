@@ -1,12 +1,17 @@
 
+
 import React, { createContext, useState, useContext, useEffect, useMemo, useCallback } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
-import type { AiServiceContextType, AiService, AiApiKeys, OpenAiClient } from '../types';
+import type { AiServiceContextType, AiService, AiApiKeys, OpenAiClient, N8nSettings } from '../types';
 
 const AiServiceContext = createContext<AiServiceContextType | undefined>(undefined);
 
-const DEFAULT_N8N_WEBHOOK_URL = '';
+const DEFAULT_N8N_SETTINGS: N8nSettings = {
+    webhookUrl: '',
+    method: 'GET',
+    headers: {},
+};
 const DEFAULT_AUTOCOMPLETE_SERVICE: 'gemini' | 'openai' = 'gemini';
 
 export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -14,7 +19,7 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     
     // States for Chat/Agent AI
     const [service, setServiceState] = useState<AiService>('gemini');
-    const [n8nWebhookUrl, setN8nWebhookUrlState] = useState<string>(DEFAULT_N8N_WEBHOOK_URL);
+    const [n8nSettings, setN8nSettings] = useState<N8nSettings>(DEFAULT_N8N_SETTINGS);
 
     // States for Autocompletion AI
     const [autocompleteService, setAutocompleteServiceState] = useState<'gemini' | 'openai'>(DEFAULT_AUTOCOMPLETE_SERVICE);
@@ -45,21 +50,21 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }
         }
 
-        // Fetch N8N Webhook URL (for Chat/Agent)
-        const { data: webhookData, error: webhookError } = await supabase
+        // Fetch N8N Settings
+        const { data: n8nSettingsData, error: n8nSettingsError } = await supabase
             .from('Configuracion')
             .select('value')
-            .eq('key', 'n8n_webhook_url')
+            .eq('key', 'n8n_agent_settings')
             .is('id_usuario', null)
             .maybeSingle();
-        if (webhookError) {
-            console.warn("Could not fetch N8N webhook URL:", webhookError.message);
-        } else if (webhookData && webhookData.value) {
+        if (n8nSettingsError) {
+            console.warn("Could not fetch N8N agent settings:", n8nSettingsError.message);
+        } else if (n8nSettingsData && n8nSettingsData.value) {
             try {
-                const parsedUrl = JSON.parse(webhookData.value)?.webhookUrl;
-                if (parsedUrl) setN8nWebhookUrlState(parsedUrl);
+                const parsedSettings = JSON.parse(n8nSettingsData.value);
+                setN8nSettings({ ...DEFAULT_N8N_SETTINGS, ...parsedSettings });
             } catch (e) {
-                console.error("Failed to parse N8N webhook URL JSON from DB.", e);
+                console.error("Failed to parse N8N agent settings JSON from DB.", e);
             }
         }
     }, [supabase]);
@@ -158,9 +163,9 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const isChatServiceConfigured = useCallback((): boolean => {
         if (service === 'gemini') return !!apiKeys.gemini;
         if (service === 'openai') return !!apiKeys.openai;
-        if (service === 'n8n') return !!n8nWebhookUrl;
+        if (service === 'n8n') return !!n8nSettings.webhookUrl;
         return false;
-    }, [service, apiKeys, n8nWebhookUrl]);
+    }, [service, apiKeys, n8nSettings.webhookUrl]);
 
     // Check if Autocompletion service is configured
     const isAutocompleteServiceConfigured = useCallback((): boolean => {
@@ -209,8 +214,9 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         }
     };
 
-    const updateN8nWebhookUrl = async (newUrl: string): Promise<{error: Error | null}> => {
-        setN8nWebhookUrlState(newUrl); // Optimistic update
+    const updateN8nSettings = async (newSettings: Partial<N8nSettings>): Promise<{error: Error | null}> => {
+        const updatedSettings = { ...n8nSettings, ...newSettings };
+        setN8nSettings(updatedSettings); // Optimistic update
         if (!supabase) {
             const error = new Error("Supabase client not available");
             return { error };
@@ -220,28 +226,27 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             const { data: existing, error: selectError } = await supabase
                 .from('Configuracion')
                 .select('id')
-                .eq('key', 'n8n_webhook_url')
+                .eq('key', 'n8n_agent_settings')
                 .is('id_usuario', null)
                 .maybeSingle();
             
             if (selectError) throw selectError;
             
-            const urlToSave = { webhookUrl: newUrl };
             if (existing) {
                 const { error: updateError } = await supabase
                     .from('Configuracion')
-                    .update({ value: JSON.stringify(urlToSave) })
+                    .update({ value: JSON.stringify(updatedSettings) })
                     .eq('id', existing.id);
                 if (updateError) throw updateError;
             } else {
                 const { error: insertError } = await supabase
                     .from('Configuracion')
-                    .insert({ key: 'n8n_webhook_url', value: JSON.stringify(urlToSave), id_usuario: null });
+                    .insert({ key: 'n8n_agent_settings', value: JSON.stringify(updatedSettings), id_usuario: null });
                 if (insertError) throw insertError;
             }
             return { error: null };
         } catch (error: any) {
-            console.error("Failed to save N8N webhook URL to DB:", error);
+            console.error("Failed to save N8N settings to DB:", error);
             fetchConfigs(); // Revert to fetched state on error
             return { error };
         }
@@ -259,22 +264,22 @@ export const AiServiceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         geminiClient, 
         openaiClient, 
         apiKeys, 
-        n8nWebhookUrl, 
+        
+        n8nSettings,
+        
         updateApiKeys, 
-        updateN8nWebhookUrl 
+        updateN8nSettings 
     }), [
         service, 
-        setService, 
         isChatServiceConfigured, 
         autocompleteService, 
-        setAutocompleteService, 
         isAutocompleteServiceConfigured,
         geminiClient, 
         openaiClient, 
         apiKeys, 
-        n8nWebhookUrl, 
-        updateApiKeys, 
-        updateN8nWebhookUrl
+        n8nSettings,
+        updateApiKeys,
+        updateN8nSettings
     ]);
 
     return (

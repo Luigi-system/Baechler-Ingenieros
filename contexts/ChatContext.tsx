@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import type { Chat } from '@google/genai';
 import { useSupabase } from './SupabaseContext';
@@ -74,7 +75,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const auth = useContext(AuthContext);
     const { 
         service, geminiClient, openaiClient, 
-        isChatServiceConfigured, apiKeys, n8nWebhookUrl
+        isChatServiceConfigured, apiKeys, n8nSettings
     } = useAiService();
     const [chat, setChat] = useState<Chat | null>(null);
 
@@ -125,7 +126,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const aiResponse = await consultarAgente(
                     prompt,
                     auth?.user?.nombres || 'Usuario desconocido',
-                    n8nWebhookUrl
+                    n8nSettings
                 );
 
                 const aiMessage: Message = { sender: 'ai', content: aiResponse };
@@ -234,7 +235,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
             setIsLoading(false);
         }
-    }, [isLoading, supabase, chat, service, geminiClient, openaiClient, isChatServiceConfigured, apiKeys, n8nWebhookUrl, messages, auth]);
+    }, [isLoading, supabase, chat, service, geminiClient, openaiClient, isChatServiceConfigured, apiKeys, n8nSettings, messages, auth]);
     
     const clearUnread = () => {
         setHasUnreadMessage(false);

@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from '@google/genai';
 
 export enum UserRole {
@@ -372,6 +373,12 @@ export interface AiApiKeys {
     openai?: string;
 }
 
+export interface N8nSettings {
+    webhookUrl: string;
+    method: 'GET' | 'POST';
+    headers: Record<string, string>;
+}
+
 // Updated AiServiceContextType to include n8n settings
 export interface AiServiceContextType {
     service: AiService; // For main chat/agent
@@ -385,8 +392,9 @@ export interface AiServiceContextType {
     geminiClient: GoogleGenAI | null;
     openaiClient: OpenAiClient | null;
     apiKeys: AiApiKeys; // Combined API keys for all services
-    n8nWebhookUrl: string; // N8N URL for chat/agent
+    
+    n8nSettings: N8nSettings; // Replaces n8nWebhookUrl
     
     updateApiKeys: (keys: AiApiKeys) => Promise<{error: Error | null}>;
-    updateN8nWebhookUrl: (url: string) => Promise<{error: Error | null}>;
+    updateN8nSettings: (settings: Partial<N8nSettings>) => Promise<{error: Error | null}>; // Replaces updateN8nWebhookUrl
 }
