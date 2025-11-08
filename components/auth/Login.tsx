@@ -1,7 +1,8 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
-import { EmailIcon, LockIcon, LoginIcon, AlertTriangleIcon } from '../ui/Icons';
+// FIX: Replaced EmailIcon with MailIcon as it is the correct export from ../ui/Icons.
+import { MailIcon, LockIcon, LoginIcon, AlertTriangleIcon } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const Login: React.FC = () => {
@@ -83,7 +84,7 @@ const Login: React.FC = () => {
           )}
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <EmailIcon className="h-5 w-5 text-neutral" />
+              <MailIcon className="h-5 w-5 text-neutral" />
             </div>
             <input
               id="username"

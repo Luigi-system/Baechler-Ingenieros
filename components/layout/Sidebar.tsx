@@ -4,7 +4,7 @@ import {
     DashboardIcon, ReportsIcon, SettingsIcon, 
     ChevronLeftIcon, MenuIcon, BuildingIcon, IndustryIcon, 
     CogIcon, UserCircleIcon, PaletteIcon, DatabaseIcon, 
-    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon, LinkIcon 
+    UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon, LinkIcon, MailIcon 
 } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AuthContext } from '../../contexts/AuthContext'; // Import AuthContext
@@ -58,7 +58,8 @@ const navItems = [
         icon: LinkIcon, 
         permission: 'settings', 
         subItems: [
-            { id: 'settings-ai', label: 'Servicios de IA y Autocompletado', icon: CpuChipIcon, permission: 'settings' },
+            { id: 'settings-ai', label: 'Servicios de IA', icon: CpuChipIcon, permission: 'settings' },
+            { id: 'settings-email', label: 'Configuración de Email', icon: MailIcon, permission: 'settings' },
         ]
     },
 ];

@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import type { ServiceReport } from '../../types';
-import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon } from '../ui/Icons';
+import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon, MailIcon } from '../ui/Icons';
 import { useSupabase } from '../../contexts/SupabaseContext';
 import Spinner from '../ui/Spinner';
 import { useTheme } from '../../contexts/ThemeContext';
 import { generateServiceReport } from '../../services/pdfGenerator';
 import PdfViewerModal from '../ui/PdfViewerModal';
 import ProgressCircle from '../ui/ProgressCircle';
+import EmailModal from '../ui/EmailModal';
 
 interface ReportListProps {
   reportType: 'service' | 'visit';
@@ -41,6 +42,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
   const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
   const [pdfViewingId, setPdfViewingId] = useState<number | null>(null);
   const [pdfViewerUri, setPdfViewerUri] = useState<string | null>(null);
+  const [emailModalState, setEmailModalState] = useState<{ isOpen: boolean; reportId: number | null }>({ isOpen: false, reportId: null });
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -154,6 +156,10 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
       setPdfViewingId(null);
     }
   };
+  
+  const handleSendEmail = (reportId: number) => {
+    setEmailModalState({ isOpen: true, reportId });
+  };
 
 
   const filteredReports = reports.filter(report => 
@@ -265,6 +271,13 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                       >
                         {pdfLoadingId === report.id ? <Spinner /> : <DownloadIcon className="h-5 w-5"/>}
                       </button>
+                      <button 
+                        onClick={() => handleSendEmail(report.id as number)}
+                        className="text-accent hover:text-accent/80 p-1 rounded-full hover:bg-accent/10 transition"
+                        title="Enviar por Email"
+                      >
+                        <MailIcon className="h-5 w-5"/>
+                      </button>
                     </td>
                   </tr>
                 )
@@ -284,6 +297,14 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
         <PdfViewerModal 
             pdfDataUri={pdfViewerUri}
             onClose={() => setPdfViewerUri(null)}
+        />
+      )}
+      {emailModalState.isOpen && (
+        <EmailModal
+          isOpen={emailModalState.isOpen}
+          onClose={() => setEmailModalState({ isOpen: false, reportId: null })}
+          reportId={emailModalState.reportId}
+          reportType="service"
         />
       )}
     </div>

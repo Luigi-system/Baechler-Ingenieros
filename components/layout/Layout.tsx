@@ -27,6 +27,7 @@ import RoleManagement from '../settings/RoleManagement';
 import DataImporter from '../settings/DataImporter';
 import AccessManagement from '../settings/AccessManagement';
 import ProfileSettings from '../settings/ProfileSettings';
+import EmailSettings from '../settings/EmailSettings';
 
 const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
@@ -93,6 +94,8 @@ const Layout: React.FC = () => {
         return <CustomizationSettings />;
       case 'settings-ai':
         return <AiSettings />;
+      case 'settings-email':
+        return <EmailSettings />;
       case 'settings-database':
         return <DatabaseSettings />;
       case 'settings-users':
