@@ -219,25 +219,25 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
       {!isLoading && !error && (
         <div className="bg-base-200 shadow-lg rounded-xl overflow-hidden">
           <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
-            <table className="w-full table-auto divide-y divide-base-border">
+            <table className="w-full table-auto">
               <thead className="bg-base-300 sticky top-0 z-10">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Código</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Cliente</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Creado Por</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Facturación</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Completado</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Estado Reporte</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Fecha</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Acciones</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Código</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Cliente</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Creado Por</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Facturación</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Estado Reporte</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="bg-base-200 divide-y divide-base-border">
+              <tbody className="divide-y divide-base-border">
                 {filteredReports.length > 0 ? filteredReports.map((report) => {
                   const billingStatus = getBillingStatusInfo(report);
                   const completion = calculateCompletion(report);
                   return (
-                  <tr key={report.id} className="hover:bg-base-300">
+                  <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{report.codigo_reporte || 'N/A'}</td>
                     <td className="px-6 py-4 text-sm text-neutral break-words">{report.empresa?.nombre || 'N/A'}</td>
                     <td className="px-6 py-4 text-sm text-neutral break-words">{report.usuario?.nombres || 'N/A'}</td>
@@ -254,7 +254,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                             <span className="ml-3 text-sm font-medium">{report.estado ? 'Finalizado' : 'En Progreso'}</span>
                         </label>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{new Date(report.fecha || '').toLocaleDateString()}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{new Date(report.fecha || '').toLocaleDateString('es-ES', { timeZone: 'UTC' })}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                       <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
                       <button 

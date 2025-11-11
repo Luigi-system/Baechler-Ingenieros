@@ -91,52 +91,52 @@ const AccessManagement: React.FC = () => {
     };
 
     if (isLoading) return <div className="flex justify-center p-8"><Spinner /></div>;
-    if (error) return <p className="text-red-500 text-center">{error}</p>;
+    if (error) return <p className="text-error text-center">{error}</p>;
 
     return (
         <div className="space-y-6">
             <div>
-                <h3 className="text-xl font-bold text-gray-800 dark:text-white">Gestión de Accesos</h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                <h3 className="text-xl font-bold text-base-content">Gestión de Accesos</h3>
+                <p className="mt-1 text-sm text-neutral">
                     Asigna permisos a los roles para controlar el acceso a los módulos del menú.
                 </p>
             </div>
             
             <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <SearchIcon className="h-5 w-5 text-gray-400" />
+                    <SearchIcon className="h-5 w-5 text-neutral" />
                 </div>
                 <input
                     type="text"
                     placeholder="Buscar por nombre de rol..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-200 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary focus:border-primary sm:text-sm"
+                    className="block w-full pl-10 pr-3 py-2 sm:text-sm input-style"
                 />
             </div>
 
-            <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden">
+            <div className="bg-base-200 shadow-lg rounded-xl overflow-hidden">
                 <div className="overflow-y-auto custom-scrollbar">
-                    <table className="w-full table-fixed divide-y divide-gray-200 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-gray-700">
+                    <table className="w-full table-auto">
+                        <thead className="bg-base-300">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Rol</th>
+                                <th className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Rol</th>
                                 {ALL_PERMISSIONS_CONFIG.map(p => (
-                                    <th key={p.id} className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{p.label}</th>
+                                    <th key={p.id} className="px-6 py-3 text-center text-xs font-semibold text-neutral uppercase tracking-wider">{p.label}</th>
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody className="divide-y divide-base-border">
                             {filteredRoles.map(role => (
-                                <tr key={role.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{role.nombre}</td>
+                                <tr key={role.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{role.nombre}</td>
                                     {ALL_PERMISSIONS_CONFIG.map(perm => {
                                         const isChecked = permissions.get(generateKey(role.id, perm.id)) || false;
                                         return (
                                             <td key={perm.id} className="px-6 py-4 text-center">
                                                 <input
                                                     type="checkbox"
-                                                    className="h-5 w-5 rounded text-primary focus:ring-primary border-gray-300 dark:border-gray-600 dark:bg-gray-900"
+                                                    className="h-5 w-5 rounded text-primary focus:ring-primary border-base-border bg-base-100"
                                                     checked={isChecked}
                                                     onChange={(e) => handlePermissionChange(role.id, perm.id, e.target.checked)}
                                                 />

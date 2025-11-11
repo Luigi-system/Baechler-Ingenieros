@@ -150,25 +150,25 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
       {!isLoading && !error && (
         <div className="bg-base-200 shadow-lg rounded-xl overflow-hidden">
           <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
-            <table className="w-full table-auto divide-y divide-base-border">
+            <table className="w-full table-auto">
               <thead className="bg-base-300 sticky top-0 z-10">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Empresa</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Planta</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Completado</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Fecha</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-neutral uppercase tracking-wider">Acciones</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Empresa</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Planta</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="bg-base-200 divide-y divide-base-border">
+              <tbody className="divide-y divide-base-border">
                 {filteredReports.length > 0 ? filteredReports.map((report) => {
                   const completion = calculateCompletion(report);
                   return (
-                  <tr key={report.id} className="hover:bg-base-300">
-                    <td className="px-6 py-4 text-sm text-base-content break-words">{report.empresa || 'N/A'}</td>
+                  <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.empresa || 'N/A'}</td>
                     <td className="px-6 py-4 text-sm text-neutral break-words">{report.planta || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString() : 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{report.fecha ? new Date(report.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                       <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
                       <button 

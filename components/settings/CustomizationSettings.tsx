@@ -18,7 +18,8 @@ const CustomizationSettings: React.FC = () => {
     appTitle, setAppTitle,
     logoFontSize, setLogoFontSize,
     logoFontFamily, setLogoFontFamily,
-    logoColor, setLogoColor
+    logoColor, setLogoColor,
+    isLogoAnimated, setIsLogoAnimated
   } = useTheme();
 
   const { supabase } = useSupabase();
@@ -47,7 +48,8 @@ const CustomizationSettings: React.FC = () => {
             logo_url: logoUrl,
             logo_font_size: logoFontSize,
             logo_font_family: logoFontFamily,
-            logo_color: logoColor
+            logo_color: logoColor,
+            is_logo_animated: isLogoAnimated
         };
         const { data: existing, error: selectError } = await supabase
             .from('Configuracion')
@@ -120,13 +122,13 @@ const CustomizationSettings: React.FC = () => {
             <div className="mt-6 space-y-4 pt-6 border-t border-base-border">
                 <div>
                     <label htmlFor="appTitle" className="block text-sm font-medium">Título de la Aplicación</label>
-                    <input
+                    <textarea
                         id="appTitle"
-                        type="text"
                         value={appTitle}
                         onChange={(e) => setAppTitle(e.target.value)}
                         placeholder="Ej: Mi Empresa App"
                         className="mt-1 block w-full max-w-sm input-style"
+                        rows={3}
                     />
                 </div>
                 <div>
@@ -183,6 +185,15 @@ const CustomizationSettings: React.FC = () => {
                             className="block w-full max-w-xs input-style"
                         />
                     </div>
+                </div>
+                <div className="max-w-sm">
+                    <label className="flex items-center justify-between cursor-pointer">
+                        <span className="text-sm font-medium">Animación del Logo</span>
+                        <div className="relative">
+                            <input type="checkbox" checked={isLogoAnimated} onChange={() => setIsLogoAnimated(!isLogoAnimated)} className="sr-only peer" />
+                            <div className="w-11 h-6 bg-base-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-base-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </div>
+                    </label>
                 </div>
             </div>
         </div>

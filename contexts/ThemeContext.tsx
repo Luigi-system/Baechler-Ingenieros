@@ -21,6 +21,8 @@ interface ThemeContextType {
   setLogoFontFamily: (family: string) => void;
   logoColor: string;
   setLogoColor: (color: string) => void;
+  isLogoAnimated: boolean;
+  setIsLogoAnimated: (animated: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -38,6 +40,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [logoFontSize, setLogoFontSize] = useState('1.5rem');
   const [logoFontFamily, setLogoFontFamily] = useState('');
   const [logoColor, setLogoColor] = useState('#3b82f6');
+  const [isLogoAnimated, setIsLogoAnimated] = useState<boolean>(false);
 
   // Effect to fetch global branding settings once on app load
   useEffect(() => {
@@ -61,6 +64,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 if (settings.logo_font_size) setLogoFontSize(settings.logo_font_size);
                 if (settings.logo_font_family) setLogoFontFamily(settings.logo_font_family);
                 if (settings.logo_color) setLogoColor(settings.logo_color);
+                if (settings.is_logo_animated !== undefined) setIsLogoAnimated(settings.is_logo_animated);
             } catch (e) {
                 console.error("Failed to parse general branding JSON:", e);
             }
@@ -125,7 +129,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setLogoFontFamily,
     logoColor,
     setLogoColor,
-  }), [themeMode, currentPalette, logoUrl, appTitle, logoFontSize, logoFontFamily, logoColor]);
+    isLogoAnimated,
+    setIsLogoAnimated,
+  }), [themeMode, currentPalette, logoUrl, appTitle, logoFontSize, logoFontFamily, logoColor, isLogoAnimated]);
   
   return (
     <ThemeContext.Provider value={value}>

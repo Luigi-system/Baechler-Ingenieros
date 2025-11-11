@@ -8,7 +8,7 @@ import {
     UsersIcon, ShieldCheckIcon, UploadCloudIcon, KeyIcon, ClipboardCheckIcon, CpuChipIcon, LinkIcon, MailIcon 
 } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
-import { AuthContext } from '../../contexts/AuthContext'; // Import AuthContext
+import { AuthContext } from '../../contexts/AuthContext'; 
 
 interface SidebarProps {
   activePage: string;
@@ -67,89 +67,110 @@ const navItems = [
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   const auth = useContext(AuthContext);
-  const { logoUrl, appTitle, logoFontSize, logoFontFamily, logoColor } = useTheme();
+  const { logoUrl, appTitle, logoFontSize, logoFontFamily, logoColor, isLogoAnimated } = useTheme();
   const [isCollapsed, setIsCollapsed] = useState(true);
-  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  const toggleMenu = (id: string) => {
-    setOpenMenus(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-        } else {
-            newSet.add(id);
-        }
-        return newSet;
-    });
-  }
+  const handleItemClick = (item: (typeof navItems)[0]) => {
+    if (item.subItems) {
+      if (isCollapsed) {
+        setIsCollapsed(false); // Expand sidebar
+        setOpenMenuId(item.id);   // And open the menu
+      } else {
+        setOpenMenuId(prevId => (prevId === item.id ? null : item.id));
+      }
+    } else {
+      setActivePage(item.id);
+      setOpenMenuId(null); // Close any open menu when navigating to a top-level item
+    }
+  };
+  
+  const handleSubItemClick = (subItemId: string) => {
+    setActivePage(subItemId);
+  };
+
 
   const filteredNavItems = navItems.filter(item => auth?.user?.permissions.includes(item.permission));
 
+  const isMainActive = (itemId: string) => activePage.startsWith(itemId) && activePage !== itemId;
+
   return (
-    <aside className={`
-      relative flex flex-col bg-base-200 shadow-xl transition-all duration-300 ease-in-out
-      ${isCollapsed ? 'w-20' : 'w-64'}
-    `}>
-      <div className={`flex items-center border-b border-base-border ${isCollapsed ? 'h-20 justify-center' : 'h-20 p-4'}`}>
-        <img src={logoUrl} alt="App Logo" className={`transition-all duration-300 ${isCollapsed ? 'h-10 w-10' : 'h-10'}`} />
+    <aside 
+        className={`
+            relative flex flex-col bg-base-200 shadow-xl transition-all duration-300 ease-in-out z-30
+            ${isCollapsed ? 'w-20' : 'w-64'}
+        `}
+    >
+      <div className={`flex border-b border-base-border transition-all duration-300 ${isCollapsed ? 'h-20 justify-center items-center' : 'min-h-20 px-4 py-4 items-start'}`}>
+        <img src={logoUrl} alt="App Logo" className={`transition-all duration-300 object-contain h-10 w-10 shrink-0 ${isCollapsed ? '' : 'mt-1'} ${isLogoAnimated ? 'logo-jiggle-animation' : ''}`} />
         {!isCollapsed && (
-          <span
-            className="ml-3 font-bold"
+          <div
+            className="ml-3 font-bold whitespace-pre-wrap"
             style={{
               fontSize: logoFontSize,
               fontFamily: logoFontFamily || 'inherit',
               color: logoColor || 'var(--color-primary)',
+              lineHeight: 1.2,
             }}
           >
             {appTitle}
-          </span>
+          </div>
         )}
       </div>
 
       <nav className="flex-1 px-2 py-4 overflow-y-auto custom-scrollbar">
         <ul>
-          {filteredNavItems.map(item => (
-            <li key={item.id}>
+          {filteredNavItems.map(item => {
+            const isOpen = openMenuId === item.id;
+            const isActive = activePage === item.id || isMainActive(item.id);
+
+            return (
+              <li key={item.id}>
                 <div
-                    onClick={() => item.subItems ? toggleMenu(item.id) : setActivePage(item.id)}
+                    onClick={() => handleItemClick(item)}
                     className={`
-                        flex items-center p-3 my-1 rounded-lg cursor-pointer transition-all duration-200 ease-in-out
-                        ${activePage.startsWith(item.id) 
-                        ? 'bg-primary-lighter text-primary' 
-                        : 'text-base-content hover:bg-base-300'
-                        }
+                        relative flex items-center p-3 my-1 rounded-lg cursor-pointer transition-all duration-200 ease-in-out group
                         ${isCollapsed ? 'justify-center' : ''}
+                        ${isActive 
+                            ? 'bg-primary-lighter text-primary' 
+                            : 'text-base-content hover:bg-base-300'
+                        }
                     `}
                     title={isCollapsed ? item.label : ''}
                 >
+                    {isActive && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 bg-primary rounded-r-full"></div>}
                     <item.icon className="h-6 w-6 shrink-0" />
-                    {!isCollapsed && <span className="ml-4 font-medium flex-1">{item.label}</span>}
+                    {!isCollapsed && <span className="ml-4 font-medium flex-1 truncate">{item.label}</span>}
                     {!isCollapsed && item.subItems && (
-                         <ChevronLeftIcon className={`h-5 w-5 transition-transform ${openMenus.has(item.id) ? '-rotate-90' : ''}`} />
+                         <ChevronLeftIcon className={`h-5 w-5 transition-transform ${isOpen ? '-rotate-90' : 'rotate-0'}`} />
                     )}
                 </div>
-                {!isCollapsed && openMenus.has(item.id) && item.subItems && (
-                    <ul className="pl-8 border-l-2 border-base-300 ml-5">
+
+                {/* Submenu for expanded sidebar */}
+                {!isCollapsed && isOpen && item.subItems && (
+                    <ul className="pl-6 mt-1 mb-2 animate-fade-in-right">
                         {item.subItems.map(subItem => (
                            <li
                              key={subItem.id}
-                             onClick={() => setActivePage(subItem.id)}
+                             onClick={() => handleSubItemClick(subItem.id)}
                              className={`
-                                flex items-center p-2 my-1 rounded-md cursor-pointer transition-all duration-200 ease-in-out text-sm
+                                flex items-center p-2 rounded-md cursor-pointer transition-all duration-200 ease-in-out text-sm group
                                 ${activePage === subItem.id
                                   ? 'text-primary font-semibold'
                                   : 'text-neutral hover:bg-base-300'
                                 }
                              `}
                            >
+                            <div className={`h-1.5 w-1.5 rounded-full mr-3 shrink-0 transition-all ${activePage === subItem.id ? 'bg-primary' : 'bg-transparent group-hover:bg-neutral'}`}></div>
                             <subItem.icon className="h-5 w-5 mr-3 shrink-0" />
-                            <span>{subItem.label}</span>
+                            <span className="truncate">{subItem.label}</span>
                            </li>
                         ))}
                     </ul>
                 )}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       </nav>
       
