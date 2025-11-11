@@ -353,17 +353,17 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
 - fecha (YYYY-MM-DD)
 - hora_ingreso (HH:MM)
 - hora_salida (HH:MM)
-- empresa (nombre de la empresa)
+- empresa (nombre de la empresa, a veces llamado "cliente")
 - planta (nombre de la planta/sede)
-- nombre_encargado (nombre completo del encargado de planta)
+- nombre_encargado (nombre completo del encargado de planta, a veces llamado "responsable")
 - celular_encargado
 - email_encargado
-- nombre_operador (nombre completo del operador de máquina)
+- nombre_operador (nombre completo del operador de máquina, a veces llamado "técnico" o "colaborador")
 - celular_operador
 - voltaje_establecido (¿se verificó el voltaje establecido? Responde "SI" o "NO")
 - presurizacion (¿se verificó la presurización? Responde "SI" o "NO")
 - transformador (¿se verificó el transformador? Responde "SI" o "NO")
-- maquinas (un array de strings, cada string debe contener "N° de Serie - Modelo: Observaciones", por ejemplo: ["SERIE-123 - MODELO-ABC: Se encontró fuga de aceite", "SERIE-456 - MODELO-DEF: Limpieza general"])
+- maquinas (un array de objetos. Cada objeto debe representar una fila de la tabla de máquinas y tener las propiedades "serie", "modelo" y "observaciones" extraídas de sus respectivas columnas.)
 - sugerencias
 `;
             
@@ -388,10 +388,20 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                 email_encargado: { type: Type.STRING },
                                 nombre_operador: { type: Type.STRING },
                                 celular_operador: { type: Type.STRING },
-                                voltaje_establecido: { type: Type.STRING }, // AI returns "SI"/"NO"
-                                presurizacion: { type: Type.STRING },      // AI returns "SI"/"NO"
-                                transformador: { type: Type.STRING },     // AI returns "SI"/"NO"
-                                maquinas: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                voltaje_establecido: { type: Type.STRING },
+                                presurizacion: { type: Type.STRING },
+                                transformador: { type: Type.STRING },
+                                maquinas: {
+                                    type: Type.ARRAY,
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            serie: { type: Type.STRING },
+                                            modelo: { type: Type.STRING },
+                                            observaciones: { type: Type.STRING },
+                                        }
+                                    }
+                                },
                                 sugerencias: { type: Type.STRING },
                             }
                         }
@@ -486,17 +496,23 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             // Maquinas parsing
             if (parsed.maquinas && Array.isArray(parsed.maquinas)) {
                 const parsedSelectedMaquinas: { machine: Machine, observaciones: string }[] = [];
-                for (const machineString of parsed.maquinas) {
-                    const parts = machineString.split(': ');
-                    const machineLabel = parts[0]; // e.g., "SERIE-123 - MODELO-ABC"
-                    const observations = parts.slice(1).join(': '); // The rest is observations
-
-                    const serieMatch = machineLabel.match(/SERIE-([^ ]+)/);
-                    if (serieMatch && serieMatch[1]) {
-                        const serie = serieMatch[1];
-                        const foundMachine = machines.find(m => m.serie === serie && m.id_planta === newFormData.form_id_planta);
+                for (const machineInfo of parsed.maquinas) {
+                    if (machineInfo.serie) {
+                        const serieToFind = machineInfo.serie.trim().toLowerCase();
+                        // Find the machine in the database list based on the serial number
+                        const foundMachine = machines.find(m => 
+                            m.serie && m.serie.trim().toLowerCase() === serieToFind && 
+                            m.id_planta === newFormData.form_id_planta
+                        );
+                        
                         if (foundMachine) {
-                            parsedSelectedMaquinas.push({ machine: foundMachine, observaciones: observations });
+                            // If found, add it to the list with the observations from the AI
+                            parsedSelectedMaquinas.push({ 
+                                machine: foundMachine, 
+                                observaciones: machineInfo.observaciones || '' 
+                            });
+                        } else {
+                            console.warn(`Machine with serial "${machineInfo.serie}" not found in database for the selected plant.`);
                         }
                     }
                 }

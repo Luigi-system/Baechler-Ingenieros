@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { Type } from "@google/genai";
 import { UploadIcon, SparklesIcon, BackIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
@@ -313,7 +314,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
 
         try {
             const base64Data = await fileToBase64(file);
-            const textPrompt = "Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa, serie_maquina, modelo_maquina, problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON.";
+            const textPrompt = 'Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa (que es lo mismo que "cliente"), nombre_planta (que es la ubicación del servicio), serie_maquina (que puede aparecer como "equipo" o "marca"), nombre_encargado (que puede aparecer como "responsable"), problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON.';
             
             let parsed: any;
 
@@ -331,8 +332,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                 entrada: { type: Type.STRING },
                                 salida: { type: Type.STRING },
                                 nombre_empresa: { type: Type.STRING },
+                                nombre_planta: { type: Type.STRING },
                                 serie_maquina: { type: Type.STRING },
                                 modelo_maquina: { type: Type.STRING },
+                                nombre_encargado: { type: Type.STRING },
                                 problemas_encontrados: { type: Type.STRING },
                                 acciones_realizadas: { type: Type.STRING },
                                 observaciones: { type: Type.STRING },
@@ -368,27 +371,82 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                  throw new Error(`Servicio de IA desconocido o no configurado para autocompletado: ${autocompleteService}`);
             }
             
-            if (parsed.nombre_empresa) {
-                const companyNameToFind = parsed.nombre_empresa.toLowerCase();
-                const foundCompany = companies.find(c => (c.nombre || '').toLowerCase().includes(companyNameToFind));
-                if (foundCompany) handleSelectCompany(foundCompany);
-            }
-            if (parsed.serie_maquina) {
-                const machineSerieToFind = parsed.serie_maquina.toLowerCase();
-                const foundMachine = machines.find(m => (m.serie || '').toLowerCase() === machineSerieToFind);
-                if(foundMachine) {
-                    const company = companies.find(c => c.id === foundMachine.id_empresa);
-                    if(company) handleSelectCompany(company);
-                    setTimeout(() => { // Wait for state updates
-                        const plant = plants.find(p => p.id === foundMachine.id_planta);
-                        if (plant) handleSelectPlant(plant);
-                        setTimeout(() => handleSelectMachine(foundMachine), 350);
-                    }, 350);
+            const processAiData = async (parsedData: any) => {
+                const { 
+                    nombre_empresa, 
+                    nombre_planta, 
+                    serie_maquina, 
+                    nombre_encargado, 
+                    ...restOfData 
+                } = parsedData;
+
+                // Set non-relational fields first
+                setFormData(prev => ({ ...prev, ...restOfData }));
+
+                // Try to find by the most unique identifier: machine serial number
+                if (serie_maquina) {
+                    const machineSerieToFind = serie_maquina.toLowerCase();
+                    const foundMachine = machines.find(m => (m.serie || '').toLowerCase().includes(machineSerieToFind));
+                    if (foundMachine) {
+                        const company = companies.find(c => c.id === foundMachine.id_empresa);
+                        if (company) {
+                            handleSelectCompany(company);
+                            await new Promise(r => setTimeout(r, 400));
+                            
+                            const plant = plants.find(p => p.id === foundMachine.id_planta);
+                            if (plant) {
+                                handleSelectPlant(plant);
+                                await new Promise(r => setTimeout(r, 400));
+                                
+                                handleSelectMachine(foundMachine);
+                                
+                                // After finding everything from machine, check if AI also provided an encargado name
+                                if (nombre_encargado) {
+                                    const supervisorToFind = nombre_encargado.toLowerCase();
+                                    const foundSupervisor = supervisors.find(s => 
+                                        s.nombreEmpresa === company.nombre &&
+                                        s.nombrePlanta === plant.nombre &&
+                                        `${s.nombre} ${s.apellido || ''}`.toLowerCase().includes(supervisorToFind)
+                                    );
+                                    if(foundSupervisor) handleSelectSupervisor(foundSupervisor);
+                                }
+                            }
+                        }
+                        return; // Exit if we successfully matched by machine
+                    }
                 }
-            }
+
+                // If no machine match, fall back to company/plant name
+                if (nombre_empresa) {
+                    const companyToFind = nombre_empresa.toLowerCase();
+                    const foundCompany = companies.find(c => (c.nombre || '').toLowerCase().includes(companyToFind));
+                    if (foundCompany) {
+                        handleSelectCompany(foundCompany);
+                        await new Promise(r => setTimeout(r, 400));
+
+                        if (nombre_planta) {
+                            const plantToFind = nombre_planta.toLowerCase();
+                            const foundPlant = plants.find(p => p.id_empresa === foundCompany.id && (p.nombre || '').toLowerCase().includes(plantToFind));
+                            if (foundPlant) {
+                                handleSelectPlant(foundPlant);
+                                await new Promise(r => setTimeout(r, 400));
+
+                                if (nombre_encargado) {
+                                    const supervisorToFind = nombre_encargado.toLowerCase();
+                                    const foundSupervisor = supervisors.find(s => 
+                                        s.nombreEmpresa === foundCompany.nombre &&
+                                        s.nombrePlanta === foundPlant.nombre &&
+                                        `${s.nombre} ${s.apellido || ''}`.toLowerCase().includes(supervisorToFind)
+                                    );
+                                    if(foundSupervisor) handleSelectSupervisor(foundSupervisor);
+                                }
+                            }
+                        }
+                    }
+                }
+            };
             
-            delete parsed.nombre_empresa;
-            setFormData(prev => ({ ...prev, ...parsed }));
+            await processAiData(parsed);
 
         } catch (e: any) {
             console.error(e);
