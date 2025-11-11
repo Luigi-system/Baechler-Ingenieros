@@ -43,7 +43,7 @@ const getBase64ImageFromUrl = async (url: string): Promise<string> => {
 };
 
 // NEW: Draws the header on the current page. Called by hooks.
-const drawHeader = (doc: jsPDF, logoDataUrl: string | null, title: string) => {
+const drawHeader = (doc: jsPDF, logoDataUrl: string | null, title: string, options?: { bgColor?: string, textColor?: string }) => {
     if (logoDataUrl) {
         try {
             doc.addImage(logoDataUrl, 'PNG', 15, 10, 30, 15, undefined, 'FAST');
@@ -55,10 +55,13 @@ const drawHeader = (doc: jsPDF, logoDataUrl: string | null, title: string) => {
         doc.text("Logo", 15, 15);
     }
    
+    const bgColor = options?.bgColor || '#14B8A6';
+    const textColor = options?.textColor || '#FFFFFF';
+
     autoTable(doc, {
         startY: 10,
         margin: { left: 50, right: 15 },
-        body: [[{ content: title, styles: { halign: 'center', valign: 'middle', fillColor: '#14B8A6', textColor: '#FFFFFF', fontStyle: 'bold', minCellHeight: 15 } }]],
+        body: [[{ content: title, styles: { halign: 'center', valign: 'middle', fillColor: bgColor, textColor: textColor, fontStyle: 'bold', minCellHeight: 15 } }]],
         theme: 'grid',
     });
 };
@@ -263,14 +266,15 @@ export const generateVisitReport = async (
     }
 
     const reportTitle = 'REPORTE DE VISITA';
+    const headerOptions = { bgColor: '#FFFFFF', textColor: '#333333' };
 
-    drawHeader(doc, logoDataUrl, reportTitle);
+    drawHeader(doc, logoDataUrl, reportTitle, headerOptions);
 
     const commonAutoTableOptions = {
         theme: 'grid' as const,
         margin: { top: pageHeaderMargin },
         didDrawPage: () => {
-            drawHeader(doc, logoDataUrl, reportTitle);
+            drawHeader(doc, logoDataUrl, reportTitle, headerOptions);
         }
     };
 

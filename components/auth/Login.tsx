@@ -1,13 +1,13 @@
-
 import React, { useState, useContext, useEffect } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 // FIX: Replaced EmailIcon with MailIcon as it is the correct export from ../ui/Icons.
-import { MailIcon, LockIcon, LoginIcon, AlertTriangleIcon } from '../ui/Icons';
+import { MailIcon, LockIcon, LoginIcon, AlertTriangleIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
 import { useTheme } from '../../contexts/ThemeContext';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState(''); // Changed email to username
   const [password, setPassword] = useState('');
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [rememberMe, setRememberMe] = useState(false); // New state for "Remember Me"
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,15 +64,24 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-base-100">
-      <div className="w-full max-w-md p-8 space-y-8 bg-base-200 rounded-2xl shadow-2xl transform transition-all">
+    <div className="relative flex items-center justify-center min-h-screen bg-base-100 overflow-hidden">
+        {/* Animated Background */}
+        <div className="absolute inset-0 z-0 opacity-30 dark:opacity-40">
+            <div className="shape" style={{ width: '22rem', height: '22rem', top: '5vh', left: '10vw', animationDuration: '30s', animationDelay: '0s' }}></div>
+            <div className="shape secondary" style={{ width: '15rem', height: '15rem', top: '60vh', left: '70vw', animationDuration: '25s', animationDelay: '5s' }}></div>
+            <div className="shape" style={{ width: '10rem', height: '10rem', top: '75vh', left: '20vw', animationDuration: '20s', animationDelay: '8s' }}></div>
+            <div className="shape secondary" style={{ width: '8rem', height: '8rem', top: '15vh', left: '80vw', animationDuration: '35s', animationDelay: '2s' }}></div>
+            <div className="shape" style={{ width: '5rem', height: '5rem', top: '40vh', left: '45vw', animationDuration: '18s', animationDelay: '12s' }}></div>
+        </div>
+
+      <div className="relative z-10 w-full max-w-md p-8 space-y-8 bg-base-200/80 dark:bg-base-300/80 backdrop-blur-md rounded-2xl shadow-2xl">
         <div className="text-center">
-            <img src={logoUrl} alt="Report-AI Logo" className="mx-auto h-16 w-auto" />
-            <h2 className="mt-6 text-3xl font-extrabold text-base-content">
-                Inicia sesión en Report-AI
+            <img src={logoUrl} alt="Report-AI Logo" className="mx-auto h-16 w-auto logo-entry-animation" />
+            <h2 className="mt-6 text-3xl font-extrabold text-base-content animate-entry" style={{ animationDelay: '0.2s' }}>
+                Login
             </h2>
-            <p className="mt-2 text-sm text-neutral">
-                Ingresa tus credenciales para acceder a tu cuenta.
+            <p className="mt-2 text-sm text-neutral animate-entry" style={{ animationDelay: '0.3s' }}>
+                Bienvenido de nuevo. Por favor, ingresa a tu cuenta.
             </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -82,8 +91,8 @@ const Login: React.FC = () => {
                 <span className="text-left">{error}</span>
             </div>
           )}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <div className="relative group animate-entry" style={{ animationDelay: '0.4s' }}>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-all duration-300 group-focus-within:scale-110 group-focus-within:text-primary">
               <MailIcon className="h-5 w-5 text-neutral" />
             </div>
             <input
@@ -98,24 +107,34 @@ const Login: React.FC = () => {
               onChange={handleInputChange(setUsername)} // Changed setEmail to setUsername
             />
           </div>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <div className="relative group animate-entry" style={{ animationDelay: '0.5s' }}>
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none transition-all duration-300 group-focus-within:scale-110 group-focus-within:text-primary">
               <LockIcon className="h-5 w-5 text-neutral" />
             </div>
             <input
               id="password"
               name="password"
-              type="password"
+              type={isPasswordVisible ? 'text' : 'password'}
               autoComplete="current-password"
               required
-              className="appearance-none relative block w-full pl-10 pr-3 py-3 sm:text-sm input-style"
+              className="appearance-none relative block w-full pl-10 pr-10 py-3 sm:text-sm input-style"
               placeholder="Contraseña"
               value={password}
               onChange={handleInputChange(setPassword)}
             />
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <button
+                    type="button"
+                    onClick={() => setIsPasswordVisible(!isPasswordVisible)}
+                    className="text-neutral hover:text-primary focus:outline-none p-1 rounded-full"
+                    aria-label={isPasswordVisible ? "Ocultar contraseña" : "Mostrar contraseña"}
+                >
+                    {isPasswordVisible ? <EyeOffIcon className="h-5 w-5" /> : <ViewIcon className="h-5 w-5" />}
+                </button>
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between animate-entry" style={{ animationDelay: '0.6s' }}>
             <div className="flex items-center">
               <input
                 id="remember-me"
@@ -131,11 +150,11 @@ const Login: React.FC = () => {
             </div>
           </div>
 
-          <div>
+          <div className="animate-entry" style={{ animationDelay: '0.7s' }}>
             <button
               type="submit"
               disabled={isLoading || !username || !password} // Changed email to username
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-focus disabled:bg-primary/50 disabled:cursor-not-allowed transition-colors"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-focus focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-focus disabled:bg-primary/50 disabled:cursor-not-allowed transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
             >
               {isLoading ? (
                   <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
