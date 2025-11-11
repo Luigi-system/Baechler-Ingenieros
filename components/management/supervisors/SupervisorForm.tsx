@@ -188,7 +188,8 @@ const SupervisorForm: React.FC<SupervisorFormProps> = ({ supervisor, onSave, onC
         setIsSaving(true);
         const payload = { 
             ...formData, 
-            celular: formData.celular ? Number(formData.celular) : null 
+            celular: formData.celular ? Number(formData.celular) : null,
+            nacimiento: formData.nacimiento || null, // Ensure empty string becomes null
         };
 
         const { data, error } = await (supervisor
