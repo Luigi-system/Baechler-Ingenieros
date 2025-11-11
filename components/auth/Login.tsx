@@ -66,12 +66,15 @@ const Login: React.FC = () => {
   return (
     <div className="relative flex items-center justify-center min-h-screen bg-base-100 overflow-hidden">
         {/* Animated Background */}
-        <div className="absolute inset-0 z-0 opacity-30 dark:opacity-40">
-            <div className="shape" style={{ width: '22rem', height: '22rem', top: '5vh', left: '10vw', animationDuration: '30s', animationDelay: '0s' }}></div>
-            <div className="shape secondary" style={{ width: '15rem', height: '15rem', top: '60vh', left: '70vw', animationDuration: '25s', animationDelay: '5s' }}></div>
-            <div className="shape" style={{ width: '10rem', height: '10rem', top: '75vh', left: '20vw', animationDuration: '20s', animationDelay: '8s' }}></div>
-            <div className="shape secondary" style={{ width: '8rem', height: '8rem', top: '15vh', left: '80vw', animationDuration: '35s', animationDelay: '2s' }}></div>
-            <div className="shape" style={{ width: '5rem', height: '5rem', top: '40vh', left: '45vw', animationDuration: '18s', animationDelay: '12s' }}></div>
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#1b2735] to-[#090a0f] overflow-hidden">
+            <div id="stars-small"></div>
+            <div id="stars-medium"></div>
+            <div id="stars-large"></div>
+            <div className="shooting-star"></div>
+            <div className="shooting-star"></div>
+            <div className="shooting-star"></div>
+            <div className="shooting-star"></div>
+            <div className="shooting-star"></div>
         </div>
 
       <div className="relative z-10 w-full max-w-md p-8 space-y-8 bg-base-200/80 dark:bg-base-300/80 backdrop-blur-md rounded-2xl shadow-2xl">
