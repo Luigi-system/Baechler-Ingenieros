@@ -15,6 +15,12 @@ interface ThemeContextType {
   setLogoUrl: (url: string) => void;
   appTitle: string;
   setAppTitle: (title: string) => void;
+  logoFontSize: string;
+  setLogoFontSize: (size: string) => void;
+  logoFontFamily: string;
+  setLogoFontFamily: (family: string) => void;
+  logoColor: string;
+  setLogoColor: (color: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -29,6 +35,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [currentPalette, setCurrentPalette] = useState<ColorPalette>(DEFAULT_PALETTE);
   const [logoUrl, setLogoUrl] = useState<string>(DEFAULT_LOGO_URL);
   const [appTitle, setAppTitle] = useState<string>('Report-AI');
+  const [logoFontSize, setLogoFontSize] = useState('1.5rem');
+  const [logoFontFamily, setLogoFontFamily] = useState('');
+  const [logoColor, setLogoColor] = useState('#3b82f6');
 
   // Effect to fetch global branding settings once on app load
   useEffect(() => {
@@ -49,6 +58,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 const settings = JSON.parse(data.value);
                 if (settings.app_title) setAppTitle(settings.app_title);
                 if (settings.logo_url) setLogoUrl(settings.logo_url);
+                if (settings.logo_font_size) setLogoFontSize(settings.logo_font_size);
+                if (settings.logo_font_family) setLogoFontFamily(settings.logo_font_family);
+                if (settings.logo_color) setLogoColor(settings.logo_color);
             } catch (e) {
                 console.error("Failed to parse general branding JSON:", e);
             }
@@ -107,7 +119,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setLogoUrl,
     appTitle,
     setAppTitle,
-  }), [themeMode, currentPalette, logoUrl, appTitle]);
+    logoFontSize,
+    setLogoFontSize,
+    logoFontFamily,
+    setLogoFontFamily,
+    logoColor,
+    setLogoColor,
+  }), [themeMode, currentPalette, logoUrl, appTitle, logoFontSize, logoFontFamily, logoColor]);
   
   return (
     <ThemeContext.Provider value={value}>

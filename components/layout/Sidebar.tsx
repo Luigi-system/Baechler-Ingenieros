@@ -1,4 +1,5 @@
 
+
 import React, { useContext, useState } from 'react';
 import { 
     DashboardIcon, ReportsIcon, SettingsIcon, 
@@ -66,9 +67,9 @@ const navItems = [
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
   const auth = useContext(AuthContext);
-  const { logoUrl, appTitle } = useTheme();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set(['reports', 'management', 'settings', 'integrations']));
+  const { logoUrl, appTitle, logoFontSize, logoFontFamily, logoColor } = useTheme();
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [openMenus, setOpenMenus] = useState<Set<string>>(new Set());
 
   const toggleMenu = (id: string) => {
     setOpenMenus(prev => {
@@ -91,7 +92,18 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage }) => {
     `}>
       <div className={`flex items-center border-b border-base-border ${isCollapsed ? 'h-20 justify-center' : 'h-20 p-4'}`}>
         <img src={logoUrl} alt="App Logo" className={`transition-all duration-300 ${isCollapsed ? 'h-10 w-10' : 'h-10'}`} />
-        {!isCollapsed && <span className="ml-3 text-2xl font-bold text-primary">{appTitle}</span>}
+        {!isCollapsed && (
+          <span
+            className="ml-3 font-bold"
+            style={{
+              fontSize: logoFontSize,
+              fontFamily: logoFontFamily || 'inherit',
+              color: logoColor || 'var(--color-primary)',
+            }}
+          >
+            {appTitle}
+          </span>
+        )}
       </div>
 
       <nav className="flex-1 px-2 py-4 overflow-y-auto custom-scrollbar">

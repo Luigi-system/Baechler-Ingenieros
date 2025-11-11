@@ -15,7 +15,10 @@ const CustomizationSettings: React.FC = () => {
   const { 
     currentPalette, setPalette, 
     logoUrl, setLogoUrl, 
-    appTitle, setAppTitle 
+    appTitle, setAppTitle,
+    logoFontSize, setLogoFontSize,
+    logoFontFamily, setLogoFontFamily,
+    logoColor, setLogoColor
   } = useTheme();
 
   const { supabase } = useSupabase();
@@ -39,7 +42,13 @@ const CustomizationSettings: React.FC = () => {
 
     // Task 1: Save General Branding
     const saveBranding = async () => {
-        const brandingValue = { app_title: appTitle, logo_url: logoUrl };
+        const brandingValue = { 
+            app_title: appTitle, 
+            logo_url: logoUrl,
+            logo_font_size: logoFontSize,
+            logo_font_family: logoFontFamily,
+            logo_color: logoColor
+        };
         const { data: existing, error: selectError } = await supabase
             .from('Configuracion')
             .select('id')
@@ -132,6 +141,47 @@ const CustomizationSettings: React.FC = () => {
                         placeholder="Ingresa la URL del logo"
                         className="block w-full max-w-sm input-style"
                     />
+                    </div>
+                </div>
+                <div>
+                    <label htmlFor="logoFontSize" className="block text-sm font-medium">Tamaño de Letra del Título</label>
+                    <input
+                        id="logoFontSize"
+                        type="text"
+                        value={logoFontSize}
+                        onChange={(e) => setLogoFontSize(e.target.value)}
+                        placeholder="Ej: 1.5rem o 24px"
+                        className="mt-1 block w-full max-w-sm input-style"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="logoFontFamily" className="block text-sm font-medium">Tipo de Letra del Título</label>
+                    <input
+                        id="logoFontFamily"
+                        type="text"
+                        value={logoFontFamily}
+                        onChange={(e) => setLogoFontFamily(e.target.value)}
+                        placeholder="Ej: 'Arial', sans-serif"
+                        className="mt-1 block w-full max-w-sm input-style"
+                    />
+                </div>
+                <div>
+                    <label htmlFor="logoColor" className="block text-sm font-medium">Color del Título</label>
+                    <div className="flex items-center space-x-4 mt-1">
+                        <input
+                            id="logoColor"
+                            type="color"
+                            value={logoColor}
+                            onChange={(e) => setLogoColor(e.target.value)}
+                            className="p-1 h-10 w-10 block bg-base-100 border border-base-border cursor-pointer rounded-md"
+                        />
+                        <input
+                            type="text"
+                            value={logoColor}
+                            onChange={(e) => setLogoColor(e.target.value)}
+                            placeholder="#3b82f6"
+                            className="block w-full max-w-xs input-style"
+                        />
                     </div>
                 </div>
             </div>
