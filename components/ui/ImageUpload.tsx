@@ -7,6 +7,8 @@ interface ImageUploadProps {
     files: File[];
     onFilesChange: (files: File[]) => void;
     multiple?: boolean;
+    existingImageUrls?: (string | null)[];
+    onRemoveExisting?: (index: number) => void;
 }
 
 const ImageUpload: React.FC<ImageUploadProps> = ({ 
@@ -14,7 +16,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     label, 
     files, 
     onFilesChange, 
-    multiple = true 
+    multiple = true,
+    existingImageUrls = [],
+    onRemoveExisting,
 }) => {
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -30,13 +34,39 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
         onFilesChange(files.filter((_, i) => i !== index));
     };
 
+    const totalImageCount = (existingImageUrls?.filter(Boolean).length || 0) + files.length;
+
     return (
         <div className="mt-2">
             {label && <label className="block text-sm font-medium mb-1">{label}</label>}
             <div className="flex items-center gap-4 flex-wrap">
                 <div className="flex flex-wrap gap-2">
+                    {/* Render existing images */}
+                    {existingImageUrls?.map((url, index) => url && (
+                        <div key={`existing-${index}`} className="relative group">
+                            <img 
+                                src={url} 
+                                alt="preview" 
+                                className="h-20 w-20 rounded-md object-cover border border-base-border"
+                            />
+                            {onRemoveExisting && (
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                    <button 
+                                        type="button"
+                                        onClick={() => onRemoveExisting(index)} 
+                                        className="text-white rounded-full p-1 bg-error/80 hover:bg-error"
+                                        aria-label="Remove existing image"
+                                    >
+                                        <XIcon className="h-4 w-4" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+
+                    {/* Render newly uploaded files */}
                     {files.map((file, index) => (
-                        <div key={index} className="relative group">
+                        <div key={`new-${index}`} className="relative group">
                             <img 
                                 src={URL.createObjectURL(file)} 
                                 alt="preview" 
@@ -54,7 +84,9 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
                             </div>
                         </div>
                     ))}
-                     {(multiple || files.length === 0) && (
+
+                    {/* Render upload button */}
+                    {(multiple || totalImageCount === 0) && (
                         <label 
                             htmlFor={id} 
                             className="relative cursor-pointer bg-base-100 rounded-md font-medium text-neutral h-20 w-20 flex items-center justify-center border-2 border-dashed border-base-border hover:border-primary transition"

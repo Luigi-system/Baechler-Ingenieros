@@ -8,6 +8,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { SupabaseProvider, useSupabase } from './contexts/SupabaseContext';
 import { AiServiceProvider } from './contexts/AiServiceContext';
 import { ChatProvider } from './contexts/ChatContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Spinner from './components/ui/Spinner'; // Import Spinner
 import type { User } from './types';
 
@@ -193,9 +194,11 @@ const App: React.FC = () => {
     <SupabaseProvider>
       <AiServiceProvider>
         <ThemeProvider>
-          <ChatProvider>
-            <AppContent />
-          </ChatProvider>
+          <NotificationProvider>
+            <ChatProvider>
+              <AppContent />
+            </ChatProvider>
+          </NotificationProvider>
         </ThemeProvider>
       </AiServiceProvider>
     </SupabaseProvider>

@@ -81,10 +81,10 @@ export interface ServiceReport {
   estado?: boolean;
 
   // Files - will handle URLs from storage
-  fotos_problemas_encontrados_url?: string[];
-  fotos_acciones_realizadas_url?: string[];
-  fotos_observaciones_url?: string[];
-  foto_firma_url?: string;
+  fotos_problemas_encontrados_url?: (string | null)[];
+  fotos_acciones_realizadas_url?: (string | null)[];
+  fotos_observaciones_url?: (string | null)[];
+  foto_firma_url?: string | null;
   
   // For passing base64 to PDF generator
   fotosProblemasBase64?: string[];
@@ -137,10 +137,10 @@ export interface VisitReport {
   // Details
   sugerencias?: string;
 
-  // Files - these store URLs in DB in schema, but we'll handle File objects
-  foto_observaciones?: string;
-  foto_sugerencias?: string;
-  firma?: string;
+  // Files - these store URLs/Base64 in DB, now nullable for removal
+  foto_observaciones?: string | null;
+  foto_sugerencias?: string | null;
+  firma?: string | null;
   
   // For passing base64 to PDF generator
   fotosObservacionesBase64?: string[];
@@ -397,4 +397,14 @@ export interface AiServiceContextType {
     
     updateApiKeys: (keys: AiApiKeys) => Promise<{error: Error | null}>;
     updateN8nSettings: (settings: Partial<N8nSettings>) => Promise<{error: Error | null}>; // Replaces updateN8nWebhookUrl
+}
+
+// Notification System Types
+export type NotificationType = 'success' | 'error' | 'warning' | 'info';
+
+export interface Notification {
+  id: number;
+  type: NotificationType;
+  title: string;
+  message: string;
 }

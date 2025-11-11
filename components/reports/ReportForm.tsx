@@ -121,7 +121,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             if (reportId) {
                 const { data: reportData, error } = await supabase
                     .from('Reporte_Servicio')
-                    .select('*')
+                    .select('*, empresa:Empresa(nombre), encargado:Encargado(nombre, apellido)')
                     .eq('id', reportId)
                     .single();
 
@@ -131,7 +131,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 } else if (reportData) {
                     const matchingPlant = plants.find(p => 
                         p.id_empresa === reportData.id_empresa && 
-                        p.nombre === reportData.nombre_planta
+                        p.nombre.trim() === (reportData.nombre_planta || '').trim()
                     );
                     
                     const formDataToSet: Partial<ServiceReport> = { ...reportData, id_planta: matchingPlant?.id };
@@ -151,12 +151,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
 
                     setFormData(formDataToSet);
 
-                    const company = companies.find(c => c.id === reportData.id_empresa);
-                    if (company) setCompanySearchText(company.nombre);
+                    if (reportData.empresa) setCompanySearchText(reportData.empresa.nombre);
                     if (matchingPlant) setPlantSearchText(matchingPlant.nombre);
                     if (reportData.serie_maquina) setMachineSearchText(reportData.serie_maquina);
-                    const supervisor = supervisors.find(s => s.id === reportData.id_encargado);
-                    if (supervisor) setSupervisorSearchText(`${supervisor.nombre} ${supervisor.apellido || ''}`);
+                    if (reportData.encargado) setSupervisorSearchText(`${reportData.encargado.nombre} ${reportData.encargado.apellido || ''}`);
                 }
             }
             setIsDataLoading(false);
@@ -288,6 +286,16 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const handleSupervisorSaved = useCallback(async (newSupervisor: Supervisor) => {
         await fetchDropdownData(); handleSelectSupervisor(newSupervisor); setIsNewSupervisorModalOpen(false);
     }, [fetchDropdownData, handleSelectSupervisor]);
+
+    const handleRemoveExistingImage = (field: keyof ServiceReport, index: number) => {
+        setFormData(prev => {
+            const currentImages = prev[field] as (string | null)[];
+            if (!Array.isArray(currentImages)) return prev;
+            const updatedImages = [...currentImages];
+            updatedImages.splice(index, 1);
+            return { ...prev, [field]: updatedImages };
+        });
+    };
 
     const handleAiFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -487,7 +495,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información General</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div><label htmlFor="codigo_reporte" className="block text-sm font-medium">Código Reporte</label><input type="text" name="codigo_reporte" value={formData.codigo_reporte || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                        <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} required className="mt-1 block w-full input-style" /></div>
+                        <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div className="grid grid-cols-2 gap-2">
                             <div><label htmlFor="entrada" className="block text-sm font-medium">Hora Entrada</label><input type="time" name="entrada" value={formData.entrada || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                             <div><label htmlFor="salida" className="block text-sm font-medium">Hora Salida</label><input type="time" name="salida" value={formData.salida || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
@@ -570,16 +578,22 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                 </div>
                             </div>
                         </div>
-                        <input type="text" readOnly value={`Modelo: ${formData.modelo_maquina || 'N/A'}`} className="mt-1 block w-full input-style bg-base-300" />
-                        <input type="text" readOnly value={`Marca: ${formData.marca_maquina || 'N/A'}`} className="mt-1 block w-full input-style bg-base-300" />
+                        <div>
+                            <label htmlFor="modelo_maquina" className="block text-sm font-medium">Modelo</label>
+                            <input type="text" name="modelo_maquina" id="modelo_maquina" value={formData.modelo_maquina || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                        </div>
+                        <div>
+                            <label htmlFor="marca_maquina" className="block text-sm font-medium">Marca</label>
+                            <input type="text" name="marca_maquina" id="marca_maquina" value={formData.marca_maquina || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                        </div>
                     </div>
                 </div>
 
                 <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Detalles del Servicio</h3>
-                    <div><label htmlFor="problemas_encontrados" className="block text-sm font-medium">Problemas Encontrados</label><textarea name="problemas_encontrados" rows={4} value={formData.problemas_encontrados || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-problemas" label="" files={fotosProblemas} onFilesChange={setFotosProblemas} /></div>
-                    <div><label htmlFor="acciones_realizadas" className="block text-sm font-medium">Acciones Realizadas</label><textarea name="acciones_realizadas" rows={4} value={formData.acciones_realizadas || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-acciones" label="" files={fotosAcciones} onFilesChange={setFotosAcciones} /></div>
-                    <div><label htmlFor="observaciones" className="block text-sm font-medium">Observaciones</label><textarea name="observaciones" rows={3} value={formData.observaciones || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-observaciones" label="" files={fotosObservaciones} onFilesChange={setFotosObservaciones} /></div>
+                    <div><label htmlFor="problemas_encontrados" className="block text-sm font-medium">Problemas Encontrados</label><textarea name="problemas_encontrados" rows={4} value={formData.problemas_encontrados || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-problemas" label="" files={fotosProblemas} onFilesChange={setFotosProblemas} existingImageUrls={formData.fotos_problemas_encontrados_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_problemas_encontrados_url', index)} /></div>
+                    <div><label htmlFor="acciones_realizadas" className="block text-sm font-medium">Acciones Realizadas</label><textarea name="acciones_realizadas" rows={4} value={formData.acciones_realizadas || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-acciones" label="" files={fotosAcciones} onFilesChange={setFotosAcciones} existingImageUrls={formData.fotos_acciones_realizadas_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_acciones_realizadas_url', index)} /></div>
+                    <div><label htmlFor="observaciones" className="block text-sm font-medium">Observaciones</label><textarea name="observaciones" rows={3} value={formData.observaciones || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-observaciones" label="" files={fotosObservaciones} onFilesChange={setFotosObservaciones} existingImageUrls={formData.fotos_observaciones_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_observaciones_url', index)} /></div>
                 </div>
 
                 <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
@@ -597,7 +611,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div><label htmlFor="nombre_firmante" className="block text-sm font-medium">Nombre del Receptor</label><input type="text" name="nombre_firmante" value={formData.nombre_firmante || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div><label htmlFor="celular_firmante" className="block text-sm font-medium">Celular del Receptor</label><input type="text" name="celular_firmante" value={formData.celular_firmante || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                        <div className="md:col-span-2"><ImageUpload id="foto-firma" label="Firma de Conformidad" files={fotoFirma} onFilesChange={setFotoFirma} multiple={false} /></div>
+                        <div className="md:col-span-2"><ImageUpload id="foto-firma" label="Firma de Conformidad" files={fotoFirma} onFilesChange={setFotoFirma} multiple={false} existingImageUrls={formData.foto_firma_url ? [formData.foto_firma_url] : []} onRemoveExisting={() => setFormData(prev => ({ ...prev, foto_firma_url: null }))} /></div>
                     </div>
                 </div>
 

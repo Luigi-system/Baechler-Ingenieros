@@ -36,9 +36,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     // FIX: Explicitly initializing optional fields in formData to ensure TypeScript recognizes them.
     const [formData, setFormData] = useState<Partial<VisitReport>>({
         fecha: new Date().toISOString().split('T')[0],
-        id_empresa: undefined, // Explicitly include for type recognition
-        id_planta: undefined,  // Explicitly include for type recognition
-        id_encargado: undefined, // Explicitly include for type recognition
         form_id_empresa: undefined, // Explicitly include for type recognition
         form_id_planta: undefined,  // Explicitly include for type recognition
         form_id_encargado: undefined, // Explicitly include for type recognition
@@ -133,13 +130,27 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 if (error) {
                     console.error("Error fetching visit report for editing:", error);
                 } else if (reportData) {
-                    // FIX: Ensure form_id_empresa, form_id_planta, and form_id_encargado are set from DB IDs
+                    const company = companies.find(c => (c.nombre || '').trim().toLowerCase() === (reportData.empresa || '').trim().toLowerCase());
+                    const plant = company ? plants.find(p => p.id_empresa === company.id && (p.nombre || '').trim().toLowerCase() === (reportData.planta || '').trim().toLowerCase()) : undefined;
+                    const supervisor = (company && plant) ? supervisors.find(s => 
+                        (s.nombreEmpresa || '').trim().toLowerCase() === (company.nombre || '').trim().toLowerCase() && 
+                        (s.nombrePlanta || '').trim().toLowerCase() === (plant.nombre || '').trim().toLowerCase() &&
+                        `${s.nombre || ''} ${s.apellido || ''}`.trim().toLowerCase() === (reportData.nombre_encargado || '').trim().toLowerCase()
+                    ) : undefined;
+                    
+                    const formattedDate = reportData.fecha ? new Date(reportData.fecha).toISOString().split('T')[0] : reportData.fecha;
+
                     setFormData({
                         ...reportData,
-                        form_id_empresa: reportData.id_empresa,
-                        form_id_planta: reportData.id_planta,
-                        form_id_encargado: reportData.id_encargado,
+                        fecha: formattedDate,
+                        form_id_empresa: company?.id,
+                        form_id_planta: plant?.id,
+                        form_id_encargado: supervisor?.id,
                     });
+
+                    if (company) setCompanySearchText(company.nombre);
+                    if (plant) setPlantSearchText(plant.nombre);
+                    if (supervisor) setSupervisorSearchText(`${supervisor.nombre} ${supervisor.apellido || ''}`);
                     
                     if (reportData.maquinas && Array.isArray(reportData.maquinas)) {
                         const parsedMaquinas = reportData.maquinas.map(maquinaString => {
@@ -153,21 +164,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             return null;
                         }).filter((item): item is { machine: Machine; observaciones: string } => item !== null);
                         setSelectedMaquinas(parsedMaquinas);
-                    }
-                    
-                    const company = companies.find(c => (c.nombre || '').toLowerCase() === (reportData.empresa || '').toLowerCase());
-                    if (company) {
-                        setCompanySearchText(company.nombre);
-                        const plant = plants.find(p => p.id_empresa === company.id && (p.nombre || '').toLowerCase() === (reportData.planta || '').toLowerCase());
-                        if(plant) {
-                            setPlantSearchText(plant.nombre);
-                             const supervisor = supervisors.find(s => 
-                                (s.nombreEmpresa || '').toLowerCase() === (company.nombre || '').toLowerCase() && 
-                                (s.nombrePlanta || '').toLowerCase() === (plant.nombre || '').toLowerCase() &&
-                                `${s.nombre || ''} ${s.apellido || ''}`.trim().toLowerCase() === (reportData.nombre_encargado || '').toLowerCase()
-                            );
-                            if(supervisor) setSupervisorSearchText(`${supervisor.nombre} ${supervisor.apellido || ''}`);
-                        }
                     }
                 }
             }
@@ -522,22 +518,41 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        if (!supabase) return;
+        if (!supabase || !auth?.user) return;
 
-        // FIX: Map form state IDs (form_id_*) to database IDs (id_*) directly in the payload creation.
-        // This ensures TypeScript correctly recognizes these properties on the payload object.
-        const payload: Partial<VisitReport> = { 
+        // Create a mutable copy of formData to modify
+        const payload: { [key: string]: any } = { 
             ...formData, 
+            fecha: formData.fecha || null,
+            id_usuario: auth.user.id,
             maquinas: selectedMaquinas.map(item => `${item.machine.serie} - ${item.machine.modelo || ''}: ${item.observaciones}`),
-            id_empresa: formData.form_id_empresa,
-            id_planta: formData.form_id_planta,
-            id_encargado: formData.form_id_encargado,
         };
+
+        // Handle new image uploads and convert to Base64
+        if (fotosObservaciones.length > 0) {
+            payload.foto_observaciones = await fileToBase64(fotosObservaciones[0]);
+        }
+        if (fotosSugerencias.length > 0) {
+            payload.foto_sugerencias = await fileToBase64(fotosSugerencias[0]);
+        }
+        if (fotoFirma.length > 0) {
+            payload.firma = await fileToBase64(fotoFirma[0]);
+        }
         
         // Clean up temporary form state fields before sending to DB
         delete payload.form_id_empresa;
         delete payload.form_id_planta;
         delete payload.form_id_encargado;
+        
+        // Also remove other temporary/UI-only fields
+        delete (payload as any).usuario;
+        delete (payload as any).selected_empresa_pdf;
+        delete (payload as any).selected_planta_pdf;
+        delete (payload as any).selected_encargado_pdf;
+        delete (payload as any).selected_maquinas_pdf;
+        delete (payload as any).fotosObservacionesBase64;
+        delete (payload as any).fotosSugerenciasBase64;
+        delete (payload as any).fotoFirmaBase64;
 
         const request = reportId
             ? supabase.from('Reporte_Visita').update(payload).eq('id', reportId)
@@ -585,7 +600,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-4">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información General</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} required className="mt-1 block w-full input-style" /></div>
+                        <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div className="grid grid-cols-2 gap-2">
                              <div><label htmlFor="hora_ingreso" className="block text-sm font-medium">Hora Ingreso</label><input type="time" name="hora_ingreso" value={formData.hora_ingreso || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                             <div><label htmlFor="hora_salida" className="block text-sm font-medium">Hora Salida</label><input type="time" name="hora_salida" value={formData.hora_salida || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
@@ -614,7 +629,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             <div onBlur={() => setTimeout(() => setShowPlantSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        {/* FIX: Use formData.form_id_empresa */}
                                         <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => setPlantSearchText(e.target.value)} onFocus={() => setShowPlantSuggestions(true)} disabled={!formData.form_id_empresa} placeholder="Seleccionar Planta" className="w-full input-style" autoComplete="off" />
                                         {showPlantSuggestions && plantSuggestions.length > 0 && (
                                             <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
@@ -622,9 +636,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                             </ul>
                                         )}
                                     </div>
-                                    {/* FIX: Use formData.form_id_empresa */}
                                     <button type="button" onClick={() => setIsNewPlantModalOpen(true)} disabled={!formData.form_id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Planta"><PlusIcon className="h-5 w-5"/></button>
-                                    {/* FIX: Use formData.form_id_empresa */}
                                     <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formData.form_id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Planta"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
@@ -641,7 +653,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             <div onBlur={() => setTimeout(() => setShowSupervisorSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        {/* FIX: Use formData.form_id_planta */}
                                         <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formData.form_id_planta} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
                                         {showSupervisorSuggestions && supervisorSuggestions.length > 0 && (
                                             <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
@@ -649,9 +660,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                             </ul>
                                         )}
                                     </div>
-                                    {/* FIX: Use formData.form_id_planta */}
                                     <button type="button" onClick={() => setIsNewSupervisorModalOpen(true)} disabled={!formData.form_id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nuevo Encargado"><UserPlusIcon className="h-5 w-5"/></button>
-                                    {/* FIX: Use formData.form_id_planta */}
                                     <button type="button" onClick={() => setIsSupervisorSearchModalOpen(true)} disabled={!formData.form_id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Encargado"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
@@ -659,15 +668,15 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         {/* New separate fields for supervisor */}
                         <div>
                             <label htmlFor="nombre_encargado" className="block text-sm font-medium">Nombre del Encargado</label>
-                            <input type="text" name="nombre_encargado" value={formData.nombre_encargado || ''} className="mt-1 block w-full input-style bg-base-300" disabled />
+                            <input type="text" name="nombre_encargado" value={formData.nombre_encargado || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
                         </div>
                         <div>
                             <label htmlFor="celular_encargado" className="block text-sm font-medium">Celular del Encargado</label>
-                            <input type="text" name="celular_encargado" value={formData.celular_encargado || ''} className="mt-1 block w-full input-style bg-base-300" disabled />
+                            <input type="text" name="celular_encargado" value={formData.celular_encargado || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
                         </div>
                         <div>
                             <label htmlFor="email_encargado" className="block text-sm font-medium">Email del Encargado</label>
-                            <input type="email" name="email_encargado" value={formData.email_encargado || ''} className="mt-1 block w-full input-style bg-base-300" disabled />
+                            <input type="email" name="email_encargado" value={formData.email_encargado || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
                         </div>
                         {/* End new fields */}
 
@@ -752,14 +761,14 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             )}
                         </div>
                     </div>
-                    <div><label htmlFor="sugerencias" className="block text-sm font-medium">Sugerencias</label><textarea name="sugerencias" rows={3} value={formData.sugerencias || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-sugerencias" label="" files={fotosSugerencias} onFilesChange={setFotosSugerencias} /></div>
-                    <div><ImageUpload id="fotos-observaciones" label="Fotos Generales / Observaciones" files={fotosObservaciones} onFilesChange={setFotosObservaciones} /></div>
+                    <div><label htmlFor="sugerencias" className="block text-sm font-medium">Sugerencias</label><textarea name="sugerencias" rows={3} value={formData.sugerencias || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-sugerencias" label="" files={fotosSugerencias} onFilesChange={setFotosSugerencias} multiple={false} existingImageUrls={formData.foto_sugerencias ? [formData.foto_sugerencias] : []} onRemoveExisting={() => setFormData(prev => ({...prev, foto_sugerencias: null}))} /></div>
+                    <div><ImageUpload id="fotos-observaciones" label="Fotos Generales / Observaciones" files={fotosObservaciones} onFilesChange={setFotosObservaciones} multiple={false} existingImageUrls={formData.foto_observaciones ? [formData.foto_observaciones] : []} onRemoveExisting={() => setFormData(prev => ({...prev, foto_observaciones: null}))} /></div>
                 </div>
                 
                  <div className="bg-base-200 p-6 rounded-xl shadow-lg">
                      <h3 className="text-xl font-semibold border-b border-base-border pb-2">Conformidad del Cliente</h3>
                      <p className="text-sm mt-2 text-neutral">La firma corresponde al Encargado de Planta seleccionado.</p>
-                     <ImageUpload id="foto-firma" label="Firma de Conformidad" files={fotoFirma} onFilesChange={setFotoFirma} multiple={false} />
+                     <ImageUpload id="foto-firma" label="Firma de Conformidad" files={fotoFirma} onFilesChange={setFotoFirma} multiple={false} existingImageUrls={formData.firma ? [formData.firma] : []} onRemoveExisting={() => setFormData(prev => ({...prev, firma: null}))} />
                 </div>
 
                 <div className="flex justify-end items-center pt-4 gap-4">
