@@ -239,6 +239,24 @@
         animation: logo-jiggle 1.5s infinite ease-in-out;
         transform-origin: center;
       }
+      
+      /* Sidebar Overlay for Mobile */
+      .sidebar-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 39; /* Below sidebar (z-40) but above content */
+        opacity: 0;
+        transition: opacity 0.3s ease-in-out;
+        pointer-events: none;
+      }
+      .sidebar-overlay.visible {
+        opacity: 1;
+        pointer-events: auto;
+      }
     </style>
   <script type="importmap">
 {

@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { Type } from "@google/genai";
 import { UploadIcon, SparklesIcon, BackIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
@@ -529,15 +530,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     if (isDataLoading) return <div className="flex justify-center items-center h-full"><Spinner /> Cargando datos...</div>
 
   return (
-    <div className="flex h-full gap-4">
+    <div className="flex flex-col lg:flex-row h-full gap-4">
         {/* Form Section */}
-        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+        <div className="w-full lg:flex-1 overflow-y-auto pr-2 custom-scrollbar">
             <div className="flex items-center mb-6">
                 <button onClick={onBack} className="p-2 mr-4 rounded-full hover:bg-base-300 transition"><BackIcon className="h-6 w-6" /></button>
                 <h2 className="text-3xl font-bold">{reportId ? `Editar Reporte` : 'Crear Reporte'}</h2>
             </div>
             <form onSubmit={handleSubmit} className="space-y-8">
-                <div className="bg-base-200 p-6 rounded-xl shadow-lg">
+                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg">
                     <div className="flex items-start"><SparklesIcon className="h-8 w-8 text-primary mr-3 shrink-0"/><div><h3 className="font-bold text-lg text-primary">Autocompletado con IA</h3><p className="text-sm text-neutral">Sube una orden de trabajo para rellenar campos automáticamente.</p></div></div>
                     <div className="mt-4">
                     <label htmlFor="file-upload" className="relative cursor-pointer bg-base-200 rounded-md font-medium text-primary hover:text-primary-focus focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
@@ -549,7 +550,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     </div>
                 </div>
                 
-                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información General</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div><label htmlFor="codigo_reporte" className="block text-sm font-medium">Código Reporte</label><input type="text" name="codigo_reporte" value={formData.codigo_reporte || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
@@ -561,7 +562,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     </div>
                 </div>
 
-                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Cliente y Equipo</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Empresa */}
@@ -647,14 +648,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     </div>
                 </div>
 
-                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Detalles del Servicio</h3>
                     <div><label htmlFor="problemas_encontrados" className="block text-sm font-medium">Problemas Encontrados</label><textarea name="problemas_encontrados" rows={4} value={formData.problemas_encontrados || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-problemas" label="" files={fotosProblemas} onFilesChange={setFotosProblemas} existingImageUrls={formData.fotos_problemas_encontrados_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_problemas_encontrados_url', index)} /></div>
                     <div><label htmlFor="acciones_realizadas" className="block text-sm font-medium">Acciones Realizadas</label><textarea name="acciones_realizadas" rows={4} value={formData.acciones_realizadas || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-acciones" label="" files={fotosAcciones} onFilesChange={setFotosAcciones} existingImageUrls={formData.fotos_acciones_realizadas_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_acciones_realizadas_url', index)} /></div>
                     <div><label htmlFor="observaciones" className="block text-sm font-medium">Observaciones</label><textarea name="observaciones" rows={3} value={formData.observaciones || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-observaciones" label="" files={fotosObservaciones} onFilesChange={setFotosObservaciones} existingImageUrls={formData.fotos_observaciones_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_observaciones_url', index)} /></div>
                 </div>
 
-                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Estado Final</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <fieldset><legend className="text-sm font-medium">Estado de la Máquina</legend><div className="mt-2 space-y-2">{['operativo', 'inoperativo', 'en_prueba'].map(opt => (<div key={opt} className="flex items-center"><input id={`maq_${opt}`} name="estado_maquina" type="radio" value={opt} checked={formData.estado_maquina === opt} onChange={() => handleRadioChange('estado_maquina', opt)} className="h-4 w-4 text-primary focus:ring-primary border-base-border" /><label htmlFor={`maq_${opt}`} className="ml-3 block text-sm capitalize">{opt.replace('_', ' ')}</label></div>))}</div></fieldset>
@@ -664,7 +665,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     </div>
                 </div>
 
-                <div className="bg-base-200 p-6 rounded-xl shadow-lg space-y-6">
+                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Conformidad del Cliente</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div><label htmlFor="nombre_firmante" className="block text-sm font-medium">Nombre del Receptor</label><input type="text" name="nombre_firmante" value={formData.nombre_firmante || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
@@ -691,12 +692,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         </div>
         
         {/* Simulator Section */}
-        <div className={`relative transition-all duration-300 ease-in-out ${isSimulatorVisible ? 'w-1/2' : 'w-12'}`}>
+        <div className={`relative transition-all duration-300 ease-in-out w-full ${isSimulatorVisible ? 'lg:w-1/2 h-[80vh] lg:h-full' : 'lg:w-12 h-12'}`}>
             <div className="sticky top-0 h-full flex flex-col bg-base-300/50 rounded-lg shadow-inner">
-                 <div className="flex-shrink-0 p-2 bg-base-200 rounded-t-lg border-b border-base-border">
+                 <div className="flex-shrink-0 p-2 bg-base-200 rounded-t-lg border-b border-base-border flex justify-between items-center">
                      <button onClick={() => setIsSimulatorVisible(!isSimulatorVisible)} className="p-2 rounded-full hover:bg-base-300" title={isSimulatorVisible ? "Ocultar Previsualización" : "Mostrar Previsualización"}>
                         {isSimulatorVisible ? <EyeOffIcon className="h-5 w-5" /> : <ViewIcon className="h-5 w-5" />}
                     </button>
+                    <span className="text-sm font-medium lg:hidden">{isSimulatorVisible ? 'Ocultar' : 'Mostrar'} Previsualización</span>
                 </div>
                 {isSimulatorVisible && (
                     <div className="flex-grow p-2 relative">

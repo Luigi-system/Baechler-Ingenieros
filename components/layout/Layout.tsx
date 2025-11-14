@@ -35,6 +35,11 @@ const Layout: React.FC = () => {
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const { hasUnreadMessage, clearUnread } = useChat();
 
+  // State for sidebars (mobile and desktop)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(true);
+
+
   const handleOpenAssistant = () => {
     setIsAssistantOpen(true);
     clearUnread();
@@ -115,11 +120,21 @@ const Layout: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-base-100">
-      <Sidebar activePage={activePage} setActivePage={navigateTo} />
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <Header onNavigateToProfile={() => navigateTo('settings-profile')} />
-        <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+    <div className="flex h-screen bg-base-100 overflow-x-hidden">
+      <Sidebar 
+        activePage={activePage} 
+        setActivePage={navigateTo}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        isCollapsed={isDesktopSidebarCollapsed}
+        setIsCollapsed={setIsDesktopSidebarCollapsed}
+      />
+      <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${isDesktopSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+        <Header 
+            onNavigateToProfile={() => navigateTo('settings-profile')} 
+            onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+        />
+        <div className="flex-1 p-3 md:p-6 overflow-y-auto custom-scrollbar">
           {renderContent()}
         </div>
       </main>

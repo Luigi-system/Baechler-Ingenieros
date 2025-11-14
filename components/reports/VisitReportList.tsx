@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import type { VisitReport } from '../../types';
 import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon, MailIcon } from '../ui/Icons';
@@ -148,64 +149,105 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
       {error && <p className="text-error text-center py-8">{error}</p>}
       
       {!isLoading && !error && (
-        <div className="bg-base-200 shadow-lg rounded-xl overflow-hidden">
-          <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
-            <table className="w-full table-auto">
-              <thead className="bg-base-300 sticky top-0 z-10">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Empresa</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Planta</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-base-border">
+        <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-base-200 shadow-lg rounded-xl overflow-hidden">
+                <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
+                    <table className="w-full table-auto">
+                    <thead className="bg-base-300 sticky top-0 z-10">
+                        <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Empresa</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Planta</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-base-border">
+                        {filteredReports.length > 0 ? filteredReports.map((report) => {
+                        const completion = calculateCompletion(report);
+                        return (
+                        <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
+                            <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.empresa || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.planta || 'N/A'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{report.fecha ? new Date(report.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
+                            <button 
+                                onClick={() => handleViewPDF(report.id as number)} 
+                                disabled={pdfViewingId === report.id}
+                                className="text-info hover:text-info/80 p-1 rounded-full hover:bg-info/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {pdfViewingId === report.id ? <Spinner /> : <ViewIcon className="h-5 w-5"/>}
+                            </button>
+                            <button 
+                                onClick={() => handleDownloadPDF(report.id as number)} 
+                                disabled={pdfLoadingId === report.id}
+                                className="text-success hover:text-success/80 p-1 rounded-full hover:bg-success/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {pdfLoadingId === report.id ? <Spinner /> : <DownloadIcon className="h-5 w-5"/>}
+                            </button>
+                            <button 
+                                onClick={() => handleSendEmail(report.id as number)}
+                                className="text-accent hover:text-accent/80 p-1 rounded-full hover:bg-accent/10 transition"
+                                title="Enviar por Email"
+                            >
+                                <MailIcon className="h-5 w-5"/>
+                            </button>
+                            </td>
+                        </tr>
+                        )
+                        }) : (
+                        <tr>
+                            <td colSpan={5} className="text-center py-8 text-neutral">
+                                No se encontraron reportes de visita.
+                            </td>
+                        </tr>
+                        )}
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
                 {filteredReports.length > 0 ? filteredReports.map((report) => {
-                  const completion = calculateCompletion(report);
-                  return (
-                  <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.empresa || 'N/A'}</td>
-                    <td className="px-6 py-4 text-sm text-neutral break-words">{report.planta || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{report.fecha ? new Date(report.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
-                      <button 
-                        onClick={() => handleViewPDF(report.id as number)} 
-                        disabled={pdfViewingId === report.id}
-                        className="text-info hover:text-info/80 p-1 rounded-full hover:bg-info/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {pdfViewingId === report.id ? <Spinner /> : <ViewIcon className="h-5 w-5"/>}
-                      </button>
-                      <button 
-                        onClick={() => handleDownloadPDF(report.id as number)} 
-                        disabled={pdfLoadingId === report.id}
-                        className="text-success hover:text-success/80 p-1 rounded-full hover:bg-success/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {pdfLoadingId === report.id ? <Spinner /> : <DownloadIcon className="h-5 w-5"/>}
-                      </button>
-                      <button 
-                        onClick={() => handleSendEmail(report.id as number)}
-                        className="text-accent hover:text-accent/80 p-1 rounded-full hover:bg-accent/10 transition"
-                        title="Enviar por Email"
-                      >
-                        <MailIcon className="h-5 w-5"/>
-                      </button>
-                    </td>
-                  </tr>
-                )
+                    const completion = calculateCompletion(report);
+                    return (
+                        <div key={report.id} className="bg-base-200 rounded-lg shadow-md p-4 space-y-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="font-bold text-base-content">{report.empresa || 'N/A'}</p>
+                                    <p className="text-sm text-neutral">{report.planta || 'N/A'}</p>
+                                </div>
+                                <div className="text-right">
+                                    <label className="text-xs text-neutral">Completado</label>
+                                    <ProgressCircle percentage={completion} />
+                                </div>
+                            </div>
+                            <p className="text-sm text-neutral"><strong>Fecha:</strong> {report.fecha ? new Date(report.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}</p>
+                            <div className="border-t border-base-border pt-3 flex justify-end space-x-2">
+                                <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-2 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
+                                <button onClick={() => handleViewPDF(report.id as number)} disabled={pdfViewingId === report.id} className="text-info hover:text-info/80 p-2 rounded-full hover:bg-info/10 transition disabled:opacity-50">
+                                    {pdfViewingId === report.id ? <Spinner /> : <ViewIcon className="h-5 w-5"/>}
+                                </button>
+                                <button onClick={() => handleDownloadPDF(report.id as number)} disabled={pdfLoadingId === report.id} className="text-success hover:text-success/80 p-2 rounded-full hover:bg-success/10 transition disabled:opacity-50">
+                                    {pdfLoadingId === report.id ? <Spinner /> : <DownloadIcon className="h-5 w-5"/>}
+                                </button>
+                                <button onClick={() => handleSendEmail(report.id as number)} className="text-accent hover:text-accent/80 p-2 rounded-full hover:bg-accent/10 transition">
+                                    <MailIcon className="h-5 w-5"/>
+                                </button>
+                            </div>
+                        </div>
+                    );
                 }) : (
-                  <tr>
-                    <td colSpan={5} className="text-center py-8 text-neutral">
+                    <div className="text-center py-8 text-neutral bg-base-200 rounded-lg">
                         No se encontraron reportes de visita.
-                    </td>
-                  </tr>
+                    </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            </div>
+        </>
       )}
       {pdfViewerUri && (
         <PdfViewerModal 

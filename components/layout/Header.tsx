@@ -1,12 +1,14 @@
 
+
 import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import ThemeToggle from '../ui/ThemeToggle';
-import { BellIcon, LogoutIcon, UserIcon, CheckCircleIcon } from '../ui/Icons';
+import { BellIcon, LogoutIcon, UserIcon, CheckCircleIcon, MenuIcon } from '../ui/Icons';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface HeaderProps {
   onNavigateToProfile: () => void;
+  onToggleMobileSidebar: () => void;
 }
 
 // Dummy data for the notification charts
@@ -15,7 +17,7 @@ const tasksData = [{ name: 'Completadas', value: 5 }, { name: 'Pendientes', valu
 const profileData = [{ name: 'Completo', value: 85 }, { name: 'Restante', value: 15 }];
 const COLORS = ['var(--color-primary)', 'var(--color-base-300)'];
 
-const Header: React.FC<HeaderProps> = ({ onNavigateToProfile }) => {
+const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSidebar }) => {
   const auth = useContext(AuthContext);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -26,16 +28,22 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile }) => {
 
   return (
     <header className="flex items-center justify-between p-4 bg-base-200 border-b border-base-border shadow-sm">
-      <div>
-        <h1 className="text-xl font-semibold text-base-content">Bienvenido, {auth.user.nombres}</h1>
-        <p className="text-sm text-neutral">Rol: {auth.user.roleName}</p>
+      <div className="flex items-center gap-2">
+        <button onClick={onToggleMobileSidebar} className="md:hidden p-2 -ml-2 text-neutral">
+            <MenuIcon className="h-6 w-6" />
+        </button>
+        <div className="hidden md:block">
+            <h1 className="text-xl font-semibold text-base-content">Bienvenido, {auth.user.nombres}</h1>
+            <p className="text-sm text-neutral">Rol: {auth.user.roleName}</p>
+        </div>
       </div>
 
-      <div className="flex items-center space-x-4">
+
+      <div className="flex items-center space-x-2 sm:space-x-4">
         <div className="relative">
-            <button onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} className="relative">
+            <button onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} className="relative p-1">
                 <BellIcon className="h-6 w-6 text-neutral cursor-pointer hover:text-primary"/>
-                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                <span className="absolute top-0 right-0 flex h-3 w-3">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-error"></span>
                 </span>
@@ -100,9 +108,9 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile }) => {
                   src={`https://i.pravatar.cc/150?u=${auth.user.email}`} 
                   alt="User avatar" 
                 />
-                <div>
-                  <p className="font-medium text-base-content">{auth.user.nombres}</p>
-                  <p className="text-xs text-neutral">{auth.user.email}</p>
+                <div className="hidden sm:block">
+                  <p className="font-medium text-base-content truncate max-w-24">{auth.user.nombres}</p>
+                  <p className="text-xs text-neutral truncate max-w-24">{auth.user.email}</p>
                 </div>
             </div>
             

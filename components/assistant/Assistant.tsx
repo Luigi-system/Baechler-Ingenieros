@@ -652,9 +652,9 @@ const Assistant: React.FC<AssistantProps> = ({ isOpen, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-end p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-end justify-center sm:p-4" onClick={onClose}>
         <div 
-            className="bg-base-200 rounded-xl shadow-2xl w-full max-w-2xl h-[85vh] flex flex-col animate-slide-in-up" 
+            className="bg-base-200 rounded-t-xl sm:rounded-xl shadow-2xl w-full sm:max-w-2xl h-[90vh] sm:h-[85vh] flex flex-col animate-slide-in-up" 
             onClick={e => e.stopPropagation()}
         >
             <div className="flex items-center justify-between p-4 border-b border-base-border shrink-0">

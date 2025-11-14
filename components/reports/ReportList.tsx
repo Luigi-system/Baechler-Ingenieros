@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import type { ServiceReport } from '../../types';
 import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon, MailIcon } from '../ui/Icons';
@@ -217,81 +218,143 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
       {error && <p className="text-error text-center py-8">{error}</p>}
       
       {!isLoading && !error && (
-        <div className="bg-base-200 shadow-lg rounded-xl overflow-hidden">
-          <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
-            <table className="w-full table-auto">
-              <thead className="bg-base-300 sticky top-0 z-10">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Código</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Cliente</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Creado Por</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Facturación</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Estado Reporte</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-base-border">
+        <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-base-200 shadow-lg rounded-xl overflow-hidden">
+                <div className="overflow-y-auto max-h-[60vh] relative custom-scrollbar">
+                    <table className="w-full table-auto">
+                    <thead className="bg-base-300 sticky top-0 z-10">
+                        <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Código</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Cliente</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Creado Por</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Facturación</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Estado Reporte</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-base-border">
+                        {filteredReports.length > 0 ? filteredReports.map((report) => {
+                        const billingStatus = getBillingStatusInfo(report);
+                        const completion = calculateCompletion(report);
+                        return (
+                        <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{report.codigo_reporte || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.empresa?.nombre || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.usuario?.nombres || 'N/A'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${billingStatus.className}`}>
+                                {billingStatus.text}
+                            </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" checked={!!report.estado} onChange={() => handleStatusToggle(report)} className="sr-only peer" />
+                                    <div className="w-11 h-6 bg-base-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary-focus peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-base-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                    <span className="ml-3 text-sm font-medium">{report.estado ? 'Finalizado' : 'En Progreso'}</span>
+                                </label>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{new Date(report.fecha || '').toLocaleDateString('es-ES', { timeZone: 'UTC' })}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
+                            <button 
+                                onClick={() => handleViewPDF(report.id as number)} 
+                                disabled={pdfViewingId === report.id}
+                                className="text-info hover:text-info/80 p-1 rounded-full hover:bg-info/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {pdfViewingId === report.id ? <Spinner /> : <ViewIcon className="h-5 w-5"/>}
+                            </button>
+                            <button 
+                                onClick={() => handleDownloadPDF(report.id as number)} 
+                                disabled={pdfLoadingId === report.id}
+                                className="text-success hover:text-success/80 p-1 rounded-full hover:bg-success/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {pdfLoadingId === report.id ? <Spinner /> : <DownloadIcon className="h-5 w-5"/>}
+                            </button>
+                            <button 
+                                onClick={() => handleSendEmail(report.id as number)}
+                                className="text-accent hover:text-accent/80 p-1 rounded-full hover:bg-accent/10 transition"
+                                title="Enviar por Email"
+                            >
+                                <MailIcon className="h-5 w-5"/>
+                            </button>
+                            </td>
+                        </tr>
+                        )
+                        }) : (
+                        <tr>
+                            <td colSpan={8} className="text-center py-8 text-neutral">
+                                No se encontraron reportes.
+                            </td>
+                        </tr>
+                        )}
+                    </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
                 {filteredReports.length > 0 ? filteredReports.map((report) => {
-                  const billingStatus = getBillingStatusInfo(report);
-                  const completion = calculateCompletion(report);
-                  return (
-                  <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{report.codigo_reporte || 'N/A'}</td>
-                    <td className="px-6 py-4 text-sm text-neutral break-words">{report.empresa?.nombre || 'N/A'}</td>
-                    <td className="px-6 py-4 text-sm text-neutral break-words">{report.usuario?.nombres || 'N/A'}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${billingStatus.className}`}>
-                        {billingStatus.text}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" checked={!!report.estado} onChange={() => handleStatusToggle(report)} className="sr-only peer" />
-                            <div className="w-11 h-6 bg-base-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary-focus peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-base-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                            <span className="ml-3 text-sm font-medium">{report.estado ? 'Finalizado' : 'En Progreso'}</span>
-                        </label>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{new Date(report.fecha || '').toLocaleDateString('es-ES', { timeZone: 'UTC' })}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                      <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
-                      <button 
-                        onClick={() => handleViewPDF(report.id as number)} 
-                        disabled={pdfViewingId === report.id}
-                        className="text-info hover:text-info/80 p-1 rounded-full hover:bg-info/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {pdfViewingId === report.id ? <Spinner /> : <ViewIcon className="h-5 w-5"/>}
-                      </button>
-                      <button 
-                        onClick={() => handleDownloadPDF(report.id as number)} 
-                        disabled={pdfLoadingId === report.id}
-                        className="text-success hover:text-success/80 p-1 rounded-full hover:bg-success/10 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {pdfLoadingId === report.id ? <Spinner /> : <DownloadIcon className="h-5 w-5"/>}
-                      </button>
-                      <button 
-                        onClick={() => handleSendEmail(report.id as number)}
-                        className="text-accent hover:text-accent/80 p-1 rounded-full hover:bg-accent/10 transition"
-                        title="Enviar por Email"
-                      >
-                        <MailIcon className="h-5 w-5"/>
-                      </button>
-                    </td>
-                  </tr>
-                )
+                    const billingStatus = getBillingStatusInfo(report);
+                    const completion = calculateCompletion(report);
+                    return (
+                    <div key={report.id} className="bg-base-200 rounded-lg shadow-md p-4 space-y-3">
+                        <div className="flex justify-between items-start">
+                        <div>
+                            <p className="font-bold text-base-content">{report.codigo_reporte || 'N/A'}</p>
+                            <p className="text-sm text-neutral">{report.empresa?.nombre || 'N/A'}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${billingStatus.className}`}>
+                            {billingStatus.text}
+                        </span>
+                        </div>
+                        
+                        <div className="text-sm text-neutral space-y-1">
+                            <p><strong>Creado por:</strong> {report.usuario?.nombres || 'N/A'}</p>
+                            <p><strong>Fecha:</strong> {new Date(report.fecha || '').toLocaleDateString('es-ES', { timeZone: 'UTC' })}</p>
+                        </div>
+
+                        <div className="flex justify-between items-center gap-4">
+                            <div className="flex-1">
+                                <label className="text-xs text-neutral">Completado</label>
+                                <div className="flex items-center gap-2">
+                                    <ProgressCircle percentage={completion} />
+                                </div>
+                            </div>
+                            <div className="flex-1 text-right">
+                                <label className="text-xs text-neutral">Estado</label>
+                                <label className="relative inline-flex items-center cursor-pointer mt-1">
+                                    <input type="checkbox" checked={!!report.estado} onChange={() => handleStatusToggle(report)} className="sr-only peer" />
+                                    <div className="w-11 h-6 bg-base-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary-focus peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-base-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-base-border pt-3 flex justify-end space-x-2">
+                            <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-2 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
+                            <button onClick={() => handleViewPDF(report.id as number)} disabled={pdfViewingId === report.id} className="text-info hover:text-info/80 p-2 rounded-full hover:bg-info/10 transition disabled:opacity-50">
+                                {pdfViewingId === report.id ? <Spinner /> : <ViewIcon className="h-5 w-5"/>}
+                            </button>
+                            <button onClick={() => handleDownloadPDF(report.id as number)} disabled={pdfLoadingId === report.id} className="text-success hover:text-success/80 p-2 rounded-full hover:bg-success/10 transition disabled:opacity-50">
+                                {pdfLoadingId === report.id ? <Spinner /> : <DownloadIcon className="h-5 w-5"/>}
+                            </button>
+                            <button onClick={() => handleSendEmail(report.id as number)} className="text-accent hover:text-accent/80 p-2 rounded-full hover:bg-accent/10 transition">
+                                <MailIcon className="h-5 w-5"/>
+                            </button>
+                        </div>
+                    </div>
+                    )
                 }) : (
-                  <tr>
-                    <td colSpan={8} className="text-center py-8 text-neutral">
+                    <div className="text-center py-8 text-neutral bg-base-200 rounded-lg">
                         No se encontraron reportes.
-                    </td>
-                  </tr>
+                    </div>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            </div>
+        </>
       )}
       {pdfViewerUri && (
         <PdfViewerModal 
