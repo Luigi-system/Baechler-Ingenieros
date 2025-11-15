@@ -212,8 +212,10 @@ export const generateServiceReport = async (
     const commonAutoTableOptions = {
         theme: 'grid' as const,
         margin: { top: pageHeaderMargin },
-        didDrawPage: () => {
-            drawHeader(doc, logoDataUrl, reportTitle);
+        didDrawPage: (data: any) => {
+            if (data.pageNumber > 1) { // Avoid redrawing on first page
+                drawHeader(doc, logoDataUrl, reportTitle);
+            }
         }
     };
     
@@ -236,8 +238,9 @@ export const generateServiceReport = async (
         startY: finalY,
         body: [
             [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa_nombre ?? 'N/A', { content: 'CÓDIGO', styles: { fontStyle: 'bold' } }, report.codigo ?? 'N/A'],
-            [{ content: 'RESPONSABLE', styles: { fontStyle: 'bold' } }, report.encargado_nombre ?? 'N/A', { content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
+            [{ content: 'RESPONSABLE PLANTA', styles: { fontStyle: 'bold' } }, report.encargado_nombre ?? 'N/A', { content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
             [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.enpresa_planta ?? 'N/A', { content: 'HORAS', styles: { fontStyle: 'bold' } }, `E: ${report.hora_entrada ?? '--:--'} - S: ${report.hora_salida ?? '--:--'}`],
+            [{ content: 'REALIZADO POR (TÉCNICO)', styles: { fontStyle: 'bold' } }, { content: report.usuario_nombre ?? 'N/A', colSpan: 3 }],
         ],
         styles: { fontSize: 9, cellPadding: 1.5, valign: 'middle' },
     });
@@ -297,27 +300,44 @@ export const generateServiceReport = async (
     finalY = (doc as any).lastAutoTable.finalY;
 
     // --- SIGNATURES ---
-    if (firmaImage) {
-        try {
-            const format = (firmaImage.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
-            doc.addImage(firmaImage, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
-        } catch(e) { console.error("Could not add signature image", e); }
+    let signatureBlockStartY = finalY + 10;
+    const signatureImageHeight = 20;
+    const signatureTextHeight = 15;
+    const signatureBlockHeight = signatureImageHeight + signatureTextHeight;
+
+    if (signatureBlockStartY + signatureBlockHeight > doc.internal.pageSize.height - 20) { // Check space for footer
+        doc.addPage();
+        signatureBlockStartY = pageHeaderMargin;
     }
 
-    autoTable(doc, {
-        ...commonAutoTableOptions,
-        startY: finalY + 5,
-        body: [
-            [{ content: `REALIZADO POR:\n${report.usuario_nombre ?? 'N/A'}`, styles: { halign: 'center', } }, { content: `CONFORMIDAD CLIENTE:\n${report.encargado_nombre ?? 'N/A'}`, styles: { halign: 'center' } }],
-        ],
-        styles: { minCellHeight: 35, valign: 'bottom', fontStyle: 'bold', fontSize: 9 },
-        bodyStyles: { lineWidth: 0.1, lineColor: '#fff' }, // hide all but top line
-        didParseCell: (data) => {
-            if (data.row.index === 0) {
-                data.cell.styles.lineColor = '#000';
-            }
-        }
-    });
+    const centerX = doc.internal.pageSize.getWidth() / 2;
+    const signatureLineWidth = 70;
+
+    // Draw signature image if it exists, centered above the client signature line
+    if (firmaImage) {
+        try {
+            const imageX = centerX - (60 / 2); // Center image over the signature line
+            doc.addImage(firmaImage, 'PNG', imageX, signatureBlockStartY, 60, signatureImageHeight, undefined, 'FAST');
+        } catch(e) { console.error("Could not add signature image", e); }
+    }
+    
+    // Y position for the CLIENT's signature line, placed after the image space
+    const clientLineY = signatureBlockStartY + signatureImageHeight + 2;
+    
+    doc.setDrawColor(0); // black
+    doc.setLineWidth(0.2);
+    // Line for "CONFORMIDAD CLIENTE"
+    doc.line(centerX - (signatureLineWidth / 2), clientLineY, centerX + (signatureLineWidth / 2), clientLineY);
+
+    // Add signature text below line
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const encargadoDetails = [
+        report.encargado_nombre ?? 'N/A',
+        report.encargado_cel ? `Cel: ${report.encargado_cel}` : ''
+    ].filter(Boolean).join('\n');
+    doc.text(`CONFORMIDAD CLIENTE:\n${encargadoDetails}`, centerX, clientLineY + 5, { align: 'center' });
+
 
     addFooters(doc);
     
@@ -354,8 +374,10 @@ export const generateVisitReport = async (
     const commonAutoTableOptions = {
         theme: 'grid' as const,
         margin: { top: pageHeaderMargin },
-        didDrawPage: () => {
-            drawHeader(doc, logoDataUrl, reportTitle, headerOptions);
+        didDrawPage: (data: any) => {
+            if (data.pageNumber > 1) { // Avoid redrawing on first page
+                drawHeader(doc, logoDataUrl, reportTitle, headerOptions);
+            }
         }
     };
     
@@ -381,6 +403,7 @@ export const generateVisitReport = async (
             [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.planta ?? 'N/A'],
             [{ content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
             [{ content: 'HORAS', styles: { fontStyle: 'bold' } }, `Ingreso: ${report.hora_ingreso ?? '--:--'} - Salida: ${report.hora_salida ?? '--:--'}`],
+            [{ content: 'REALIZADO POR (TÉCNICO)', styles: { fontStyle: 'bold' } }, report.usuario?.nombres ?? 'N/A'],
         ],
         styles: { fontSize: 9, cellPadding: 2 },
         columnStyles: { 0: { cellWidth: 40 } },
@@ -461,27 +484,43 @@ export const generateVisitReport = async (
     drawSection('SUGERENCIAS', report.sugerencias, sugerenciasImages);
 
     // --- SIGNATURES ---
-    if (firmaImage) {
-        try {
-            const format = (firmaImage.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
-            doc.addImage(firmaImage, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
-        } catch(e) { console.error("Could not add signature image", e); }
+    let signatureBlockStartY = finalY + 10;
+    const signatureImageHeight = 20;
+    const signatureTextHeight = 15;
+    const signatureBlockHeight = signatureImageHeight + signatureTextHeight;
+
+    if (signatureBlockStartY + signatureBlockHeight > doc.internal.pageSize.height - 20) { // Check space for footer
+        doc.addPage();
+        signatureBlockStartY = pageHeaderMargin;
     }
 
-     autoTable(doc, {
-        ...commonAutoTableOptions,
-        startY: finalY + 5,
-        body: [
-            [{ content: `REALIZADO POR:\n${report.usuario?.nombres ?? 'N/A'}`, styles: { halign: 'center' } }, { content: `CONFORMIDAD CLIENTE:\n${report.nombre_encargado ?? 'N/A'}`, styles: { halign: 'center' } }],
-        ],
-        styles: { minCellHeight: 35, valign: 'bottom', fontStyle: 'bold', fontSize: 9 },
-        bodyStyles: { lineWidth: 0.1, lineColor: '#fff' },
-        didParseCell: (data) => {
-            if (data.row.index === 0) {
-                data.cell.styles.lineColor = '#000';
-            }
-        }
-    });
+    const centerX = doc.internal.pageSize.getWidth() / 2;
+    const signatureLineWidth = 70;
+
+    // Draw signature image if it exists, centered above the client signature line
+    if (firmaImage) {
+        try {
+            const imageX = centerX - (60 / 2); // Center image over the signature line
+            doc.addImage(firmaImage, 'PNG', imageX, signatureBlockStartY, 60, signatureImageHeight, undefined, 'FAST');
+        } catch(e) { console.error("Could not add signature image", e); }
+    }
+    
+    // Y position for the CLIENT's signature line, placed after the image space
+    const clientLineY = signatureBlockStartY + signatureImageHeight + 2;
+    
+    doc.setDrawColor(0); // black
+    doc.setLineWidth(0.2);
+    // Line for "CONFORMIDAD CLIENTE"
+    doc.line(centerX - (signatureLineWidth / 2), clientLineY, centerX + (signatureLineWidth / 2), clientLineY);
+
+    // Add signature text below line
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const encargadoDetails = [
+        report.nombre_encargado ?? 'N/A',
+        report.celular_encargado ? `Cel: ${report.celular_encargado}` : ''
+    ].filter(Boolean).join('\n');
+    doc.text(`CONFORMIDAD CLIENTE:\n${encargadoDetails}`, centerX, clientLineY + 5, { align: 'center' });
     
     addFooters(doc);
 
