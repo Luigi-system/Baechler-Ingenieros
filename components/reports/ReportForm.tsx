@@ -1,7 +1,5 @@
 
 
-
-
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { Type } from "@google/genai";
 import { UploadIcon, SparklesIcon, BackIcon, UserPlusIcon, SearchIcon, PlusIcon, DownloadIcon, ViewIcon, EyeOffIcon } from '../ui/Icons';
@@ -24,12 +22,57 @@ interface ReportFormProps {
   onBack: () => void;
 }
 
-const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+// Internal state for managing selections that are no longer stored as IDs in the DB
+interface FormInternalState {
+    selectedCompanyId?: number;
+    selectedPlantId?: number;
+    selectedSupervisorId?: number;
+}
+
+
+const fileToPngDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    // Ensure file is an image before processing
+    if (!file.type.startsWith('image/')) {
+        return reject(new Error('El archivo no es una imagen.'));
+    }
     const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return reject(new Error('No se pudo obtener el contexto del canvas'));
+            }
+            ctx.drawImage(img, 0, 0);
+            // Returns a data URI, e.g., "data:image/png;base64,..."
+            resolve(canvas.toDataURL('image/png')); 
+        };
+        img.onerror = (err) => reject(new Error('La imagen no se pudo cargar.'));
+        if (event.target?.result) {
+            img.src = event.target.result as string;
+        } else {
+            reject(new Error('El resultado de la lectura del archivo está vacío.'));
+        }
+    };
+    reader.onerror = (err) => reject(new Error('El archivo no se pudo leer.'));
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
 });
+
+
+const stripDataUriPrefix = (dataUri: string) => dataUri.split('base64,')[1];
+
+// Helper function to robustly create a data URL
+const toDataURL = (b64OrDataURL: string): string => {
+    if (b64OrDataURL.startsWith('data:image')) {
+        return b64OrDataURL; // It's already a data URL, return as is.
+    }
+    // Smart-prefixing for raw base64 strings. JPEG base64 often starts with /9j/.
+    const prefix = b64OrDataURL.startsWith('/9j/') ? 'data:image/jpeg;base64,' : 'data:image/png;base64,';
+    return prefix + b64OrDataURL;
+};
 
 // Main Form Component
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
@@ -39,6 +82,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const { autocompleteService, geminiClient, openaiClient, isAutocompleteServiceConfigured } = useAiService();
 
     const [formData, setFormData] = useState<Partial<ServiceReport>>({ fecha: new Date().toISOString().split('T')[0], estado: false });
+    const [formInternalState, setFormInternalState] = useState<FormInternalState>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
     
@@ -51,7 +95,6 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     // File states
     const [fotosProblemas, setFotosProblemas] = useState<File[]>([]);
     const [fotosAcciones, setFotosAcciones] = useState<File[]>([]);
-    const [fotosObservaciones, setFotosObservaciones] = useState<File[]>([]);
     const [fotoFirma, setFotoFirma] = useState<File[]>([]);
 
     // UI States
@@ -123,7 +166,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             if (reportId) {
                 const { data: reportData, error } = await supabase
                     .from('Reporte_Servicio')
-                    .select('*, empresa:Empresa(nombre), encargado:Encargado(nombre, apellido)')
+                    .select('*')
                     .eq('id', reportId)
                     .single();
 
@@ -131,32 +174,39 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     console.error("Error fetching report for editing:", error);
                     alert("No se pudo cargar el reporte para editar.");
                 } else if (reportData) {
-                    const matchingPlant = plants.find(p => 
-                        p.id_empresa === reportData.id_empresa && 
-                        p.nombre.trim() === (reportData.nombre_planta || '').trim()
-                    );
-                    
-                    const formDataToSet: Partial<ServiceReport> = { ...reportData, id_planta: matchingPlant?.id };
+                    const company = companies.find(c => c.nombre === reportData.empresa_nombre);
+                    const plant = company ? plants.find(p => p.id_empresa === company.id && p.nombre === reportData.enpresa_planta) : undefined;
+                    const supervisor = (company && plant) ? supervisors.find(s => s.nombreEmpresa === company.nombre && s.nombrePlanta === plant.nombre && `${s.nombre} ${s.apellido || ''}`.trim() === reportData.encargado_nombre) : undefined;
 
-                    if (reportData.operativo) formDataToSet.estado_maquina = 'operativo';
-                    else if (reportData.inoperativo) formDataToSet.estado_maquina = 'inoperativo';
-                    else if (reportData.en_prueba) formDataToSet.estado_maquina = 'en_prueba';
+                    setFormInternalState({
+                        selectedCompanyId: company?.id,
+                        selectedPlantId: plant?.id,
+                        selectedSupervisorId: supervisor?.id,
+                    });
                     
-                    if (reportData.con_garantia) formDataToSet.estado_garantia = 'con_garantia';
-                    else if (reportData.sin_garantia) formDataToSet.estado_garantia = 'sin_garantia';
+                    const formDataToSet: Partial<ServiceReport> = { ...reportData };
+
+                    formDataToSet.foto_problemas_encontrados = (reportData.foto_problemas_encontrados || []).filter(Boolean).map(toDataURL);
+                    formDataToSet.foto_acciones_realizadas = (reportData.foto_acciones_realizadas || []).filter(Boolean).map(toDataURL);
+                    formDataToSet.foto_firma = reportData.foto_firma ? toDataURL(reportData.foto_firma) : null;
+
+
+                    if (reportData.operatio) formDataToSet.estado_maquina = 'operativo';
+                    else if (reportData.en_prueba) formDataToSet.estado_maquina = 'en_prueba';
+                    else formDataToSet.estado_maquina = 'inoperativo';
+                    
+                    if (reportData.garantia) formDataToSet.estado_garantia = 'con_garantia';
+                    else if (reportData.garantia === false) formDataToSet.estado_garantia = 'sin_garantia';
 
                     if (reportData.facturado) formDataToSet.estado_facturacion = 'facturado';
-                    else if (reportData.no_facturado) formDataToSet.estado_facturacion = 'no_facturado';
+                    else if (reportData.facturado === false) formDataToSet.estado_facturacion = 'no_facturado';
                     
-                    formDataToSet.nombre_firmante = reportData.nombre_usuario;
-                    formDataToSet.celular_firmante = reportData.celular_usuario;
-
                     setFormData(formDataToSet);
 
-                    if (reportData.empresa) setCompanySearchText(reportData.empresa.nombre);
-                    if (matchingPlant) setPlantSearchText(matchingPlant.nombre);
-                    if (reportData.serie_maquina) setMachineSearchText(reportData.serie_maquina);
-                    if (reportData.encargado) setSupervisorSearchText(`${reportData.encargado.nombre} ${reportData.encargado.apellido || ''}`);
+                    if (reportData.empresa_nombre) setCompanySearchText(reportData.empresa_nombre);
+                    if (reportData.enpresa_planta) setPlantSearchText(reportData.enpresa_planta);
+                    if (reportData.maquina_seria) setMachineSearchText(reportData.maquina_seria);
+                    if (reportData.encargado_nombre) setSupervisorSearchText(reportData.encargado_nombre);
                 }
             }
             setIsDataLoading(false);
@@ -171,28 +221,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setIsPdfLoading(true);
         debounceTimeout.current = window.setTimeout(async () => {
             try {
-                // Convert files to base64 for the PDF generator
+                // Convert new files to base64 data URIs for the PDF generator
                 const [
-                    fotosProblemasBase64,
-                    fotosAccionesBase64,
-                    fotosObservacionesBase64,
-                    fotoFirmaBase64,
+                    newFotosProblemasBase64,
+                    newFotosAccionesBase64,
+                    newFotoFirmaBase64,
                 ] = await Promise.all([
-                    Promise.all(fotosProblemas.map(fileToBase64)),
-                    Promise.all(fotosAcciones.map(fileToBase64)),
-                    Promise.all(fotosObservaciones.map(fileToBase64)),
-                    fotoFirma[0] ? fileToBase64(fotoFirma[0]) : Promise.resolve(undefined),
+                    Promise.all(fotosProblemas.map(fileToPngDataUrl)),
+                    Promise.all(fotosAcciones.map(fileToPngDataUrl)),
+                    fotoFirma[0] ? fileToPngDataUrl(fotoFirma[0]) : Promise.resolve(undefined),
                 ]);
 
+                // Combine existing data URIs with new ones
                 const enrichedData: ServiceReport = {
                     ...formData,
-                    empresa: companies.find(c => c.id === formData.id_empresa) ?? null,
-                    encargado: supervisors.find(s => s.id === formData.id_encargado) ?? null,
-                    usuario: { nombres: auth?.user?.nombres ?? 'N/A' },
-                    fotosProblemasBase64,
-                    fotosAccionesBase64,
-                    fotosObservacionesBase64,
-                    fotoFirmaBase64,
+                    usuario_nombre: auth?.user?.nombres ?? 'N/A',
+                    fotosProblemasBase64: [...(formData.foto_problemas_encontrados || []), ...newFotosProblemasBase64],
+                    fotosAccionesBase64: [...(formData.foto_acciones_realizadas || []), ...newFotosAccionesBase64],
+                    fotoFirmaBase64: newFotoFirmaBase64 || formData.foto_firma || undefined,
                 };
                 const uri = await generateServiceReport(enrichedData, logoUrl, 'datauristring');
                 setPdfPreviewUri(uri as string);
@@ -203,24 +249,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                  setIsPdfLoading(false);
             }
         }, 500);
-    }, [formData, companies, supervisors, logoUrl, auth?.user, fotosProblemas, fotosAcciones, fotosObservaciones, fotoFirma]);
+    }, [formData, logoUrl, auth?.user, fotosProblemas, fotosAcciones, fotoFirma]);
 
 
     // Memoized lists for dependent dropdowns and suggestions
-    const filteredPlants = useMemo(() => plants.filter(p => p.id_empresa === formData.id_empresa), [plants, formData.id_empresa]);
-    const filteredMachines = useMemo(() => machines.filter(m => m.id_planta === formData.id_planta), [machines, formData.id_planta]);
+    const filteredPlants = useMemo(() => plants.filter(p => p.id_empresa === formInternalState.selectedCompanyId), [plants, formInternalState.selectedCompanyId]);
+    const filteredMachines = useMemo(() => machines.filter(m => m.id_planta === formInternalState.selectedPlantId), [machines, formInternalState.selectedPlantId]);
     
     const filteredSupervisors = useMemo(() => {
-        if (!formData.id_empresa || !formData.id_planta) return [];
-        const selectedCompany = companies.find(c => c.id === formData.id_empresa);
-        const selectedPlant = plants.find(p => p.id === formData.id_planta);
+        if (!formInternalState.selectedCompanyId || !formInternalState.selectedPlantId) return [];
+        const selectedCompany = companies.find(c => c.id === formInternalState.selectedCompanyId);
+        const selectedPlant = plants.find(p => p.id === formInternalState.selectedPlantId);
         if (!selectedCompany || !selectedPlant) return [];
 
         return supervisors.filter(s =>
             s.nombreEmpresa === selectedCompany.nombre &&
             s.nombrePlanta === selectedPlant.nombre
         );
-    }, [formData.id_empresa, formData.id_planta, companies, plants, supervisors]);
+    }, [formInternalState, companies, plants, supervisors]);
     
     const companySuggestions = useMemo(() => companySearchText ? companies.filter(c => (c.nombre || '').toLowerCase().includes(companySearchText.toLowerCase())).slice(0, 5) : [], [companySearchText, companies]);
     const plantSuggestions = useMemo(() => plantSearchText ? filteredPlants.filter(p => (p.nombre || '').toLowerCase().includes(plantSearchText.toLowerCase())).slice(0, 5) : [], [plantSearchText, filteredPlants]);
@@ -241,7 +287,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
 
     const handleSelectCompany = useCallback((company: Company) => {
         setIsPlantsLoading(true);
-        setFormData(prev => ({ ...prev, id_empresa: company.id, id_planta: undefined, serie_maquina: undefined, modelo_maquina: undefined, marca_maquina: undefined, linea_maquina: undefined, id_encargado: undefined }));
+        setFormInternalState(prev => ({...prev, selectedCompanyId: company.id, selectedPlantId: undefined, selectedSupervisorId: undefined}));
+        setFormData(prev => ({ ...prev, empresa_nombre: company.nombre, enpresa_planta: undefined, maquina_seria: undefined, maquina_modelo: undefined, maquina_marca: undefined, maquina_linea: undefined, encargado_nombre: undefined, encargado_cel: undefined }));
         setCompanySearchText(company.nombre);
         setPlantSearchText(''); setMachineSearchText(''); setSupervisorSearchText('');
         setShowCompanySuggestions(false);
@@ -251,7 +298,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     
     const handleSelectPlant = useCallback((plant: Plant) => {
         setIsMachinesAndSupervisorsLoading(true);
-        setFormData(prev => ({...prev, id_planta: plant.id, serie_maquina: undefined, modelo_maquina: undefined, marca_maquina: undefined, linea_maquina: undefined, id_encargado: undefined }));
+        setFormInternalState(prev => ({...prev, selectedPlantId: plant.id, selectedSupervisorId: undefined}));
+        setFormData(prev => ({...prev, enpresa_planta: plant.nombre, maquina_seria: undefined, maquina_modelo: undefined, maquina_marca: undefined, maquina_linea: undefined, encargado_nombre: undefined, encargado_cel: undefined }));
         setPlantSearchText(plant.nombre);
         setMachineSearchText(''); setSupervisorSearchText('');
         setShowPlantSuggestions(false);
@@ -260,14 +308,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     }, []);
     
     const handleSelectMachine = useCallback((machine: Machine) => {
-        setFormData(prev => ({ ...prev, serie_maquina: machine.serie, modelo_maquina: machine.modelo, marca_maquina: machine.marca, linea_maquina: machine.linea }));
+        setFormData(prev => ({ ...prev, maquina_seria: machine.serie, maquina_modelo: machine.modelo, maquina_marca: machine.marca, maquina_linea: machine.linea }));
         setMachineSearchText(machine.serie);
         setShowMachineSuggestions(false);
         setIsMachineSearchModalOpen(false);
     }, []);
 
     const handleSelectSupervisor = useCallback((supervisor: Supervisor) => {
-        setFormData(prev => ({ ...prev, id_encargado: supervisor.id }));
+        setFormInternalState(prev => ({...prev, selectedSupervisorId: supervisor.id}));
+        setFormData(prev => ({ ...prev, encargado_nombre: `${supervisor.nombre} ${supervisor.apellido || ''}`, encargado_cel: supervisor.celular?.toString() }));
         setSupervisorSearchText(`${supervisor.nombre} ${supervisor.apellido || ''}`);
         setShowSupervisorSuggestions(false);
         setIsSupervisorSearchModalOpen(false);
@@ -289,7 +338,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         await fetchDropdownData(); handleSelectSupervisor(newSupervisor); setIsNewSupervisorModalOpen(false);
     }, [fetchDropdownData, handleSelectSupervisor]);
 
-    const handleRemoveExistingImage = (field: keyof ServiceReport, index: number) => {
+    const handleRemoveExistingImage = (field: 'foto_problemas_encontrados' | 'foto_acciones_realizadas', index: number) => {
         setFormData(prev => {
             const currentImages = prev[field] as (string | null)[];
             if (!Array.isArray(currentImages)) return prev;
@@ -314,30 +363,30 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         }
 
         try {
-            const base64Data = await fileToBase64(file);
-            const textPrompt = 'Del documento adjunto, extrae la siguiente información: codigo_reporte, fecha (YYYY-MM-DD), entrada (HH:MM), salida (HH:MM), nombre_empresa (que es lo mismo que "cliente"), nombre_planta (que es la ubicación del servicio), serie_maquina (que puede aparecer como "equipo" o "marca"), nombre_encargado (que puede aparecer como "responsable"), problemas_encontrados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON.';
+            const base64Data = await fileToPngDataUrl(file);
+            const textPrompt = 'Del documento adjunto, extrae la siguiente información: codigo, fecha (YYYY-MM-DD), hora_entrada (HH:MM), hora_salida (HH:MM), empresa_nombre (que es lo mismo que "cliente"), enpresa_planta (que es la ubicación del servicio), maquina_seria (que puede aparecer como "equipo" o "marca"), maquina_modelo, encargado_nombre (que puede aparecer como "responsable"), problemas_encontraados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON.';
             
             let parsed: any;
 
             if (autocompleteService === 'gemini' && geminiClient) {
                  const response = await geminiClient.models.generateContent({
                     model: "gemini-2.5-flash",
-                    contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
+                    contents: [{ parts: [ { inlineData: { mimeType: 'image/png', data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: {
                             type: Type.OBJECT,
                             properties: {
-                                codigo_reporte: { type: Type.STRING },
+                                codigo: { type: Type.STRING },
                                 fecha: { type: Type.STRING },
-                                entrada: { type: Type.STRING },
-                                salida: { type: Type.STRING },
-                                nombre_empresa: { type: Type.STRING },
-                                nombre_planta: { type: Type.STRING },
-                                serie_maquina: { type: Type.STRING },
-                                modelo_maquina: { type: Type.STRING },
-                                nombre_encargado: { type: Type.STRING },
-                                problemas_encontrados: { type: Type.STRING },
+                                hora_entrada: { type: Type.STRING },
+                                hora_salida: { type: Type.STRING },
+                                empresa_nombre: { type: Type.STRING },
+                                enpresa_planta: { type: Type.STRING },
+                                maquina_seria: { type: Type.STRING },
+                                maquina_modelo: { type: Type.STRING },
+                                encargado_nombre: { type: Type.STRING },
+                                problemas_encontraados: { type: Type.STRING },
                                 acciones_realizadas: { type: Type.STRING },
                                 observaciones: { type: Type.STRING },
                             }
@@ -374,19 +423,18 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             
             const processAiData = async (parsedData: any) => {
                 const { 
-                    nombre_empresa, 
-                    nombre_planta, 
-                    serie_maquina, 
-                    nombre_encargado, 
+                    empresa_nombre, 
+                    enpresa_planta, 
+                    maquina_seria,
+                    maquina_modelo, 
+                    encargado_nombre, 
                     ...restOfData 
                 } = parsedData;
 
-                // Set non-relational fields first
                 setFormData(prev => ({ ...prev, ...restOfData }));
 
-                // Try to find by the most unique identifier: machine serial number
-                if (serie_maquina) {
-                    const machineSerieToFind = serie_maquina.toLowerCase();
+                if (maquina_seria) {
+                    const machineSerieToFind = maquina_seria.toLowerCase();
                     const foundMachine = machines.find(m => (m.serie || '').toLowerCase().includes(machineSerieToFind));
                     if (foundMachine) {
                         const company = companies.find(c => c.id === foundMachine.id_empresa);
@@ -394,46 +442,44 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             handleSelectCompany(company);
                             await new Promise(r => setTimeout(r, 400));
                             
-                            const plant = plants.find(p => p.id === foundMachine.id_planta);
-                            if (plant) {
-                                handleSelectPlant(plant);
+                            const plantObj = plants.find(p => p.id === foundMachine.id_planta);
+                            if (plantObj) {
+                                handleSelectPlant(plantObj);
                                 await new Promise(r => setTimeout(r, 400));
                                 
                                 handleSelectMachine(foundMachine);
                                 
-                                // After finding everything from machine, check if AI also provided an encargado name
-                                if (nombre_encargado) {
-                                    const supervisorToFind = nombre_encargado.toLowerCase();
+                                if (encargado_nombre) {
+                                    const supervisorToFind = encargado_nombre.toLowerCase();
                                     const foundSupervisor = supervisors.find(s => 
                                         s.nombreEmpresa === company.nombre &&
-                                        s.nombrePlanta === plant.nombre &&
+                                        s.nombrePlanta === plantObj.nombre &&
                                         `${s.nombre} ${s.apellido || ''}`.toLowerCase().includes(supervisorToFind)
                                     );
                                     if(foundSupervisor) handleSelectSupervisor(foundSupervisor);
                                 }
                             }
                         }
-                        return; // Exit if we successfully matched by machine
+                        return;
                     }
                 }
 
-                // If no machine match, fall back to company/plant name
-                if (nombre_empresa) {
-                    const companyToFind = nombre_empresa.toLowerCase();
+                if (empresa_nombre) {
+                    const companyToFind = empresa_nombre.toLowerCase();
                     const foundCompany = companies.find(c => (c.nombre || '').toLowerCase().includes(companyToFind));
                     if (foundCompany) {
                         handleSelectCompany(foundCompany);
                         await new Promise(r => setTimeout(r, 400));
 
-                        if (nombre_planta) {
-                            const plantToFind = nombre_planta.toLowerCase();
+                        if (enpresa_planta) {
+                            const plantToFind = enpresa_planta.toLowerCase();
                             const foundPlant = plants.find(p => p.id_empresa === foundCompany.id && (p.nombre || '').toLowerCase().includes(plantToFind));
                             if (foundPlant) {
                                 handleSelectPlant(foundPlant);
                                 await new Promise(r => setTimeout(r, 400));
 
-                                if (nombre_encargado) {
-                                    const supervisorToFind = nombre_encargado.toLowerCase();
+                                if (encargado_nombre) {
+                                    const supervisorToFind = encargado_nombre.toLowerCase();
                                     const foundSupervisor = supervisors.find(s => 
                                         s.nombreEmpresa === foundCompany.nombre &&
                                         s.nombrePlanta === foundPlant.nombre &&
@@ -460,44 +506,83 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        if (!supabase || !auth?.user) return;
-        
-        const selectedPlant = plants.find(p => p.id === formData.id_planta);
-        const payload: { [key: string]: any } = { 
-            ...formData, 
-            id_usuario: auth.user.id, 
-            nombre_planta: selectedPlant?.nombre, 
-            operativo: formData.estado_maquina === 'operativo', 
-            inoperativo: formData.estado_maquina === 'inoperativo', 
-            en_prueba: formData.estado_maquina === 'en_prueba', 
-            con_garantia: formData.estado_garantia === 'con_garantia', 
-            sin_garantia: formData.estado_garantia === 'sin_garantia', 
-            facturado: formData.estado_facturacion === 'facturado', 
-            no_facturado: formData.estado_facturacion === 'no_facturado', 
-            nombre_usuario: formData.nombre_firmante, 
-            celular_usuario: formData.celular_firmante,
-            estado: formData.estado ?? false,
-        };
-        
-        delete payload.estado_maquina; 
-        delete payload.estado_garantia; 
-        delete payload.estado_facturacion; 
-        delete payload.nombre_firmante; 
-        delete payload.celular_firmante;
-        delete payload.id_planta;
+        if (!supabase || !auth?.user) {
+            setIsSubmitting(false);
+            return;
+        }
 
-        const request = reportId
-            ? supabase.from('Reporte_Servicio').update(payload).eq('id', reportId)
-            : supabase.from('Reporte_Servicio').insert(payload);
+        try {
+            const convertFilesToBase64 = async (files: File[]): Promise<string[]> => {
+                if (files.length === 0) return [];
+                const base64Promises = files.map(file => fileToPngDataUrl(file).then(stripDataUriPrefix));
+                return Promise.all(base64Promises);
+            };
 
-        const { error } = await request.select().single();
-        
-        setIsSubmitting(false);
-        if (error) {
-            alert("Error al guardar el reporte: " + error.message);
-        } else {
+            const [
+                newProblemasB64,
+                newAccionesB64,
+            ] = await Promise.all([
+                convertFilesToBase64(fotosProblemas),
+                convertFilesToBase64(fotosAcciones),
+            ]);
+            
+            const newFirmaB64 = fotoFirma.length > 0 
+                ? await fileToPngDataUrl(fotoFirma[0]).then(stripDataUriPrefix) 
+                : null;
+
+            const getExistingBase64 = (dataUris: (string | null)[] | undefined) => {
+                if (!dataUris) return [];
+                return dataUris.filter((uri): uri is string => !!uri).map(stripDataUriPrefix);
+            };
+            
+            const finalPayload: { [key: string]: any } = {
+                id: formData.id,
+                codigo: formData.codigo,
+                fecha: formData.fecha,
+                hora_entrada: formData.hora_entrada,
+                hora_salida: formData.hora_salida,
+                empresa_nombre: formData.empresa_nombre,
+                enpresa_planta: formData.enpresa_planta,
+                encargado_nombre: formData.encargado_nombre,
+                encargado_cel: formData.encargado_cel,
+                maquina_seria: formData.maquina_seria,
+                maquina_modelo: formData.maquina_modelo,
+                maquina_marca: formData.maquina_marca,
+                maquina_linea: formData.maquina_linea,
+                problemas_encontraados: formData.problemas_encontraados,
+                acciones_realizadas: formData.acciones_realizadas,
+                observaciones: formData.observaciones,
+                control_interno: formData.control_interno,
+                operatio: formData.estado_maquina === 'operativo',
+                en_prueba: formData.estado_maquina === 'en_prueba',
+                garantia: formData.estado_garantia === 'con_garantia',
+                facturado: formData.estado_facturacion === 'facturado',
+                estado: formData.estado ?? false,
+                usuario_nombre: auth.user.nombres,
+                usuario_cel: auth.user.celular?.toString(),
+                
+                foto_problemas_encontrados: [...getExistingBase64(formData.foto_problemas_encontrados), ...newProblemasB64],
+                foto_acciones_realizadas: [...getExistingBase64(formData.foto_acciones_realizadas), ...newAccionesB64],
+                foto_firma: newFirmaB64 || (formData.foto_firma ? stripDataUriPrefix(formData.foto_firma) : null),
+            };
+
+            Object.keys(finalPayload).forEach(key => (finalPayload[key] === undefined) && delete finalPayload[key]);
+            if (formData.id === undefined) {
+                delete finalPayload.id;
+            }
+    
+            const { error } = await supabase.from('Reporte_Servicio').upsert(finalPayload);
+    
+            if (error) throw error;
+            
+            setIsSubmitting(false);
             alert("¡Reporte guardado exitosamente!");
             onBack();
+    
+        } catch (error: any) {
+            setIsSubmitting(false);
+            alert("Error al guardar el reporte: " + error.message);
+            console.error("Submit error:", error);
         }
     };
 
@@ -510,7 +595,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         try {
             const { data, error } = await supabase
                 .from('Reporte_Servicio')
-                .select('*, empresa:Empresa(*), encargado:Encargado(*), usuario:Usuarios(nombres)')
+                .select('*')
                 .eq('id', reportId)
                 .single();
             
@@ -524,8 +609,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         }
     };
     
-    const selectedCompanyForNewSupervisor = useMemo(() => companies.find(c => c.id === formData.id_empresa), [formData.id_empresa, companies]);
-    const selectedPlantForNewSupervisor = useMemo(() => plants.find(p => p.id === formData.id_planta), [formData.id_planta, plants]);
+    const selectedCompanyForNewSupervisor = useMemo(() => companies.find(c => c.id === formInternalState.selectedCompanyId), [formInternalState.selectedCompanyId, companies]);
+    const selectedPlantForNewSupervisor = useMemo(() => plants.find(p => p.id === formInternalState.selectedPlantId), [formInternalState.selectedPlantId, plants]);
 
     if (isDataLoading) return <div className="flex justify-center items-center h-full"><Spinner /> Cargando datos...</div>
 
@@ -553,11 +638,11 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información General</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div><label htmlFor="codigo_reporte" className="block text-sm font-medium">Código Reporte</label><input type="text" name="codigo_reporte" value={formData.codigo_reporte || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                        <div><label htmlFor="codigo" className="block text-sm font-medium">Código Reporte</label><input type="text" name="codigo" value={formData.codigo || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         <div className="grid grid-cols-2 gap-2">
-                            <div><label htmlFor="entrada" className="block text-sm font-medium">Hora Entrada</label><input type="time" name="entrada" value={formData.entrada || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                            <div><label htmlFor="salida" className="block text-sm font-medium">Hora Salida</label><input type="time" name="salida" value={formData.salida || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                            <div><label htmlFor="hora_entrada" className="block text-sm font-medium">Hora Entrada</label><input type="time" name="hora_entrada" value={formData.hora_entrada || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                            <div><label htmlFor="hora_salida" className="block text-sm font-medium">Hora Salida</label><input type="time" name="hora_salida" value={formData.hora_salida || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         </div>
                     </div>
                 </div>
@@ -589,33 +674,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             <div onBlur={() => setTimeout(() => setShowPlantSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => setPlantSearchText(e.target.value)} onFocus={() => setShowPlantSuggestions(true)} disabled={!formData.id_empresa} placeholder="Seleccionar Planta" className="w-full input-style" autoComplete="off" />
+                                        <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => { setPlantSearchText(e.target.value); setFormData(prev => ({...prev, enpresa_planta: e.target.value })) }} onFocus={() => setShowPlantSuggestions(true)} disabled={!formInternalState.selectedCompanyId} placeholder="Escribir o seleccionar Planta..." className="w-full input-style" autoComplete="off" />
                                         {showPlantSuggestions && plantSuggestions.length > 0 && (
                                             <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {plantSuggestions.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}
                                             </ul>
                                         )}
                                     </div>
-                                    <button type="button" onClick={() => setIsNewPlantModalOpen(true)} disabled={!formData.id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Planta"><PlusIcon className="h-5 w-5"/></button>
-                                    <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formData.id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Planta"><SearchIcon className="h-5 w-5"/></button>
-                                </div>
-                            </div>
-                        </div>
-                        {/* Maquina */}
-                        <div>
-                            <label htmlFor="machine-search" className="block text-sm font-medium flex items-center gap-2">Máquina (N° Serie) {isMachinesAndSupervisorsLoading && <Spinner />}</label>
-                            <div onBlur={() => setTimeout(() => setShowMachineSuggestions(false), 100)}>
-                                <div className="flex items-center gap-2 mt-1">
-                                    <div className="relative flex-grow">
-                                        <input id="machine-search" type="text" value={machineSearchText} onChange={(e) => setMachineSearchText(e.target.value)} onFocus={() => setShowMachineSuggestions(true)} disabled={!formData.id_planta} placeholder="Escribir o buscar N° Serie..." className="w-full input-style" autoComplete="off" />
-                                        {showMachineSuggestions && machineSuggestions.length > 0 && (
-                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
-                                                {machineSuggestions.map(m => <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{m.serie}</li>)}
-                                            </ul>
-                                        )}
-                                    </div>
-                                    <button type="button" onClick={() => setIsNewMachineModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Máquina"><PlusIcon className="h-5 w-5"/></button>
-                                    <button type="button" onClick={() => setIsMachineSearchModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Máquina"><SearchIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsNewPlantModalOpen(true)} disabled={!formInternalState.selectedCompanyId} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Planta"><PlusIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formInternalState.selectedCompanyId} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Planta"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                         </div>
@@ -625,34 +692,57 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             <div onBlur={() => setTimeout(() => setShowSupervisorSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formData.id_planta} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
+                                        <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formInternalState.selectedPlantId} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
                                         {showSupervisorSuggestions && supervisorSuggestions.length > 0 && (
                                             <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {supervisorSuggestions.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}
                                             </ul>
                                         )}
                                     </div>
-                                    <button type="button" onClick={() => setIsNewSupervisorModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nuevo Encargado"><UserPlusIcon className="h-5 w-5"/></button>
-                                    <button type="button" onClick={() => setIsSupervisorSearchModalOpen(true)} disabled={!formData.id_planta} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Encargado"><SearchIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsNewSupervisorModalOpen(true)} disabled={!formInternalState.selectedPlantId} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nuevo Encargado"><UserPlusIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsSupervisorSearchModalOpen(true)} disabled={!formInternalState.selectedPlantId} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Encargado"><SearchIcon className="h-5 w-5"/></button>
+                                </div>
+                            </div>
+                        </div>
+                         {/* Maquina */}
+                        <div>
+                            <label htmlFor="machine-search" className="block text-sm font-medium flex items-center gap-2">Máquina (N° Serie) {isMachinesAndSupervisorsLoading && <Spinner />}</label>
+                            <div onBlur={() => setTimeout(() => setShowMachineSuggestions(false), 100)}>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <div className="relative flex-grow">
+                                        <input id="machine-search" type="text" value={machineSearchText} onChange={(e) => setMachineSearchText(e.target.value)} onFocus={() => setShowMachineSuggestions(true)} disabled={!formInternalState.selectedPlantId} placeholder="Escribir o buscar N° Serie..." className="w-full input-style" autoComplete="off" />
+                                        {showMachineSuggestions && machineSuggestions.length > 0 && (
+                                            <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
+                                                {machineSuggestions.map(m => <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{m.serie}</li>)}
+                                            </ul>
+                                        )}
+                                    </div>
+                                    <button type="button" onClick={() => setIsNewMachineModalOpen(true)} disabled={!formInternalState.selectedPlantId} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Crear Nueva Máquina"><PlusIcon className="h-5 w-5"/></button>
+                                    <button type="button" onClick={() => setIsMachineSearchModalOpen(true)} disabled={!formInternalState.selectedPlantId} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50" title="Buscar Máquina"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
                         </div>
                         <div>
-                            <label htmlFor="modelo_maquina" className="block text-sm font-medium">Modelo</label>
-                            <input type="text" name="modelo_maquina" id="modelo_maquina" value={formData.modelo_maquina || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                            <label htmlFor="maquina_modelo" className="block text-sm font-medium">Modelo</label>
+                            <input type="text" name="maquina_modelo" id="maquina_modelo" value={formData.maquina_modelo || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
                         </div>
                         <div>
-                            <label htmlFor="marca_maquina" className="block text-sm font-medium">Marca</label>
-                            <input type="text" name="marca_maquina" id="marca_maquina" value={formData.marca_maquina || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                            <label htmlFor="maquina_marca" className="block text-sm font-medium">Marca</label>
+                            <input type="text" name="maquina_marca" id="maquina_marca" value={formData.maquina_marca || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                        </div>
+                        <div>
+                            <label htmlFor="maquina_linea" className="block text-sm font-medium">Línea</label>
+                            <input type="text" name="maquina_linea" id="maquina_linea" value={formData.maquina_linea || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
                         </div>
                     </div>
                 </div>
 
                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Detalles del Servicio</h3>
-                    <div><label htmlFor="problemas_encontrados" className="block text-sm font-medium">Problemas Encontrados</label><textarea name="problemas_encontrados" rows={4} value={formData.problemas_encontrados || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-problemas" label="" files={fotosProblemas} onFilesChange={setFotosProblemas} existingImageUrls={formData.fotos_problemas_encontrados_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_problemas_encontrados_url', index)} /></div>
-                    <div><label htmlFor="acciones_realizadas" className="block text-sm font-medium">Acciones Realizadas</label><textarea name="acciones_realizadas" rows={4} value={formData.acciones_realizadas || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-acciones" label="" files={fotosAcciones} onFilesChange={setFotosAcciones} existingImageUrls={formData.fotos_acciones_realizadas_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_acciones_realizadas_url', index)} /></div>
-                    <div><label htmlFor="observaciones" className="block text-sm font-medium">Observaciones</label><textarea name="observaciones" rows={3} value={formData.observaciones || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-observaciones" label="" files={fotosObservaciones} onFilesChange={setFotosObservaciones} existingImageUrls={formData.fotos_observaciones_url} onRemoveExisting={(index) => handleRemoveExistingImage('fotos_observaciones_url', index)} /></div>
+                    <div><label htmlFor="problemas_encontraados" className="block text-sm font-medium">Problemas Encontrados</label><textarea name="problemas_encontraados" rows={4} value={formData.problemas_encontraados || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-problemas" label="" files={fotosProblemas} onFilesChange={setFotosProblemas} existingImageUrls={formData.foto_problemas_encontrados} onRemoveExisting={(index) => handleRemoveExistingImage('foto_problemas_encontrados', index)} /></div>
+                    <div><label htmlFor="acciones_realizadas" className="block text-sm font-medium">Acciones Realizadas</label><textarea name="acciones_realizadas" rows={4} value={formData.acciones_realizadas || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-acciones" label="" files={fotosAcciones} onFilesChange={setFotosAcciones} existingImageUrls={formData.foto_acciones_realizadas} onRemoveExisting={(index) => handleRemoveExistingImage('foto_acciones_realizadas', index)} /></div>
+                    <div><label htmlFor="observaciones" className="block text-sm font-medium">Observaciones</label><textarea name="observaciones" rows={3} value={formData.observaciones || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea></div>
+                    <div><label htmlFor="control_interno" className="block text-sm font-medium">Control Interno</label><textarea name="control_interno" rows={2} value={formData.control_interno || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea></div>
                 </div>
 
                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
@@ -668,9 +758,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-6">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Conformidad del Cliente</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div><label htmlFor="nombre_firmante" className="block text-sm font-medium">Nombre del Receptor</label><input type="text" name="nombre_firmante" value={formData.nombre_firmante || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                        <div><label htmlFor="celular_firmante" className="block text-sm font-medium">Celular del Receptor</label><input type="text" name="celular_firmante" value={formData.celular_firmante || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                        <div className="md:col-span-2"><ImageUpload id="foto-firma" label="Firma de Conformidad" files={fotoFirma} onFilesChange={setFotoFirma} multiple={false} existingImageUrls={formData.foto_firma_url ? [formData.foto_firma_url] : []} onRemoveExisting={() => setFormData(prev => ({ ...prev, foto_firma_url: null }))} /></div>
+                        <div><label htmlFor="encargado_nombre" className="block text-sm font-medium">Nombre del Receptor</label><input type="text" name="encargado_nombre" value={formData.encargado_nombre || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                        <div><label htmlFor="encargado_cel" className="block text-sm font-medium">Celular del Receptor</label><input type="text" name="encargado_cel" value={formData.encargado_cel || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                        <div className="md:col-span-2"><ImageUpload id="foto-firma" label="Firma de Conformidad" files={fotoFirma} onFilesChange={setFotoFirma} multiple={false} existingImageUrls={formData.foto_firma ? [formData.foto_firma] : []} onRemoveExisting={() => setFormData(prev => ({ ...prev, foto_firma: null }))} /></div>
                     </div>
                 </div>
 

@@ -1,3 +1,4 @@
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ServiceReport, VisitReport } from '../types';
@@ -10,19 +11,21 @@ type OutputType = 'save' | 'datauristring';
  * Fetches an image from a URL and converts it to a base64 data string.
  * This method uses the `fetch` API to avoid CORS issues that can occur
  * when loading images directly onto a canvas from a different origin.
- * @param url The URL of the image to fetch.
+ * It also handles cases where the URL is already a base64 data URI.
+ * @param url The URL or data URI of the image to fetch.
  * @returns A Promise that resolves with the base64 data URL.
  */
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
+  if (url.startsWith('data:image')) {
+    return url;
+  }
   try {
-    // Use fetch to get the image data, which is more robust with CORS.
     const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Network response was not ok: ${response.statusText}`);
     }
     const blob = await response.blob();
     
-    // Use FileReader to convert the blob to a base64 data URL.
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -37,7 +40,6 @@ const getBase64ImageFromUrl = async (url: string): Promise<string> => {
     });
   } catch (error) {
     console.error(`Error in getBase64ImageFromUrl for URL: ${url}`, error);
-    // Rethrow to be caught by the caller
     throw error;
   }
 };
@@ -116,6 +118,72 @@ const addImageGallery = (doc: jsPDF, images: string[] | undefined, startY: numbe
     return y + imgHeight + padding;
 };
 
+/**
+ * Helper function that takes an image data URL, draws it to a canvas,
+ * and returns a new data URL in PNG format. This normalizes all images.
+ * @param imageDataUrl The source image data URL (can be any format).
+ * @returns A promise that resolves with a PNG data URL.
+ */
+const convertToPngDataUrl = (imageDataUrl: string): Promise<string> => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Could not get canvas context'));
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => reject(new Error('Image could not be loaded for normalization. It might be corrupt or an unsupported format.'));
+    img.src = imageDataUrl;
+});
+
+
+/**
+ * Normalizes different image sources (data URI, public URL, raw base64) into a consistent
+ * array of PNG data URIs for reliable PDF generation.
+ * @param imagesSources An array of image sources.
+ * @returns A promise that resolves to an array of PNG data URIs.
+ */
+const prepareImages = async (imagesSources: (string | null)[] | undefined): Promise<string[]> => {
+    if (!imagesSources) return [];
+
+    const validSources = imagesSources.filter((s): s is string => !!s);
+    if (validSources.length === 0) return [];
+
+    const imagePromises = validSources.map(async (source) => {
+        let dataUrl: string;
+
+        // Step 1: Ensure we have a data URL from any source type.
+        if (source.startsWith('http')) {
+            dataUrl = await getBase64ImageFromUrl(source);
+        } else if (source.startsWith('data:image')) {
+            dataUrl = source;
+        } else {
+            // It's raw base64. Guess the mime type to create a temporary data URL.
+            // JPEG base64 strings often start with /9j/.
+            const prefix = source.startsWith('/9j/') ? 'data:image/jpeg;base64,' : 'data:image/png;base64,';
+            dataUrl = prefix + source;
+        }
+
+        // Step 2: Normalize the data URL to PNG format to ensure consistency for the PDF generator.
+        return convertToPngDataUrl(dataUrl);
+    });
+
+    const results = await Promise.allSettled(imagePromises);
+    const images: string[] = [];
+    results.forEach(result => {
+        if (result.status === 'fulfilled') {
+            images.push(result.value);
+        } else {
+            console.error("Failed to process an image for PDF:", result.reason);
+        }
+    });
+    return images;
+};
+
+
 // --- MAIN PDF GENERATORS ---
 
 export const generateServiceReport = async (
@@ -148,15 +216,28 @@ export const generateServiceReport = async (
             drawHeader(doc, logoDataUrl, reportTitle);
         }
     };
+    
+    // --- Image Processing ---
+    const [
+        problemasImages,
+        accionesImages,
+        firmaImageArray,
+    ] = await Promise.all([
+        prepareImages([...(report.fotosProblemasBase64 || []), ...(report.foto_problemas_encontrados || [])]),
+        prepareImages([...(report.fotosAccionesBase64 || []), ...(report.foto_acciones_realizadas || [])]),
+        prepareImages([...(report.fotoFirmaBase64 ? [report.fotoFirmaBase64] : []), ...(report.foto_firma ? [report.foto_firma] : [])]),
+    ]);
+    const firmaImage = firmaImageArray.length > 0 ? firmaImageArray[0] : null;
+
 
     // --- DETAILS TABLE ---
     autoTable(doc, {
         ...commonAutoTableOptions,
         startY: finalY,
         body: [
-            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa?.nombre ?? 'N/A', { content: 'CÓDIGO', styles: { fontStyle: 'bold' } }, report.codigo_reporte ?? 'N/A'],
-            [{ content: 'RESPONSABLE', styles: { fontStyle: 'bold' } }, `${report.encargado?.nombre ?? ''} ${report.encargado?.apellido ?? ''}`.trim() || 'N/A', { content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
-            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.nombre_planta ?? 'N/A', { content: 'HORAS', styles: { fontStyle: 'bold' } }, `E: ${report.entrada ?? '--:--'} - S: ${report.salida ?? '--:--'}`],
+            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa_nombre ?? 'N/A', { content: 'CÓDIGO', styles: { fontStyle: 'bold' } }, report.codigo ?? 'N/A'],
+            [{ content: 'RESPONSABLE', styles: { fontStyle: 'bold' } }, report.encargado_nombre ?? 'N/A', { content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
+            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.enpresa_planta ?? 'N/A', { content: 'HORAS', styles: { fontStyle: 'bold' } }, `E: ${report.hora_entrada ?? '--:--'} - S: ${report.hora_salida ?? '--:--'}`],
         ],
         styles: { fontSize: 9, cellPadding: 1.5, valign: 'middle' },
     });
@@ -166,8 +247,8 @@ export const generateServiceReport = async (
         ...commonAutoTableOptions,
         startY: finalY + 2,
         body: [
-            [{ content: 'N° SERIE', styles: { fontStyle: 'bold' } }, report.serie_maquina ?? 'N/A', { content: 'MODELO', styles: { fontStyle: 'bold' } }, report.modelo_maquina ?? 'N/A'],
-            [{ content: 'MARCA', styles: { fontStyle: 'bold' } }, report.marca_maquina ?? 'N/A', { content: 'LINEA', styles: { fontStyle: 'bold' } }, report.linea_maquina ?? 'N/A'],
+            [{ content: 'N° SERIE', styles: { fontStyle: 'bold' } }, report.maquina_seria ?? 'N/A', { content: 'MODELO', styles: { fontStyle: 'bold' } }, report.maquina_modelo ?? 'N/A'],
+            [{ content: 'MARCA', styles: { fontStyle: 'bold' } }, report.maquina_marca ?? 'N/A', { content: 'LINEA', styles: { fontStyle: 'bold' } }, report.maquina_linea ?? 'N/A'],
         ],
         styles: { fontSize: 9, cellPadding: 1.5, valign: 'middle' },
     });
@@ -195,9 +276,9 @@ export const generateServiceReport = async (
         }
     };
 
-    drawSection('PROBLEMAS ENCONTRADOS', report.problemas_encontrados, report.fotosProblemasBase64);
-    drawSection('ACCIONES REALIZADAS', report.acciones_realizadas, report.fotosAccionesBase64);
-    drawSection('OBSERVACIONES', report.observaciones, report.fotosObservacionesBase64);
+    drawSection('PROBLEMAS ENCONTRADOS', report.problemas_encontraados, problemasImages);
+    drawSection('ACCIONES REALIZADAS', report.acciones_realizadas, accionesImages);
+    drawSection('OBSERVACIONES', report.observaciones, undefined);
     
     // --- FINAL STATUS TABLE ---
     autoTable(doc, {
@@ -206,8 +287,8 @@ export const generateServiceReport = async (
         head: [[{ content: 'ESTADO FINAL', colSpan: 6, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
         body: [
             [
-                'OPERATIVO', `(${report.operativo || report.estado_maquina === 'operativo' ? 'X' : ' '})`,
-                'INOPERATIVO', `(${report.inoperativo || report.estado_maquina === 'inoperativo' ? 'X' : ' '})`,
+                'OPERATIVO', `(${report.operatio || report.estado_maquina === 'operativo' ? 'X' : ' '})`,
+                'INOPERATIVO', `(${!report.operatio && !report.en_prueba || report.estado_maquina === 'inoperativo' ? 'X' : ' '})`,
                 'EN PRUEBA', `(${report.en_prueba || report.estado_maquina === 'en_prueba' ? 'X' : ' '})`,
             ]
         ],
@@ -216,10 +297,10 @@ export const generateServiceReport = async (
     finalY = (doc as any).lastAutoTable.finalY;
 
     // --- SIGNATURES ---
-    if (report.fotoFirmaBase64) {
+    if (firmaImage) {
         try {
-            const format = (report.fotoFirmaBase64.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
-            doc.addImage(report.fotoFirmaBase64, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
+            const format = (firmaImage.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
+            doc.addImage(firmaImage, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
         } catch(e) { console.error("Could not add signature image", e); }
     }
 
@@ -227,7 +308,7 @@ export const generateServiceReport = async (
         ...commonAutoTableOptions,
         startY: finalY + 5,
         body: [
-            [{ content: `REALIZADO POR:\n${report.usuario?.nombres ?? 'N/A'}`, styles: { halign: 'center', } }, { content: `CONFORMIDAD CLIENTE:\n${report.nombre_firmante ?? 'N/A'}`, styles: { halign: 'center' } }],
+            [{ content: `REALIZADO POR:\n${report.usuario_nombre ?? 'N/A'}`, styles: { halign: 'center', } }, { content: `CONFORMIDAD CLIENTE:\n${report.encargado_nombre ?? 'N/A'}`, styles: { halign: 'center' } }],
         ],
         styles: { minCellHeight: 35, valign: 'bottom', fontStyle: 'bold', fontSize: 9 },
         bodyStyles: { lineWidth: 0.1, lineColor: '#fff' }, // hide all but top line
@@ -241,7 +322,7 @@ export const generateServiceReport = async (
     addFooters(doc);
     
     if (outputType === 'save') {
-        doc.save(`reporte-servicio-${report.codigo_reporte || 'NUEVO'}.pdf`);
+        doc.save(`reporte-servicio-${report.codigo || 'NUEVO'}.pdf`);
     } else {
         return doc.output('datauristring');
     }
@@ -277,6 +358,19 @@ export const generateVisitReport = async (
             drawHeader(doc, logoDataUrl, reportTitle, headerOptions);
         }
     };
+    
+    // --- Image Processing for Visit Report ---
+    const [
+        observacionesImages,
+        sugerenciasImages,
+        firmaImageArray,
+    ] = await Promise.all([
+        prepareImages([...(report.fotosObservacionesBase64 || []), ...(report.foto_observaciones ? [report.foto_observaciones] : [])]),
+        prepareImages([...(report.fotosSugerenciasBase64 || []), ...(report.foto_sugerencias ? [report.foto_sugerencias] : [])]),
+        prepareImages([...(report.fotoFirmaBase64 ? [report.fotoFirmaBase64] : []), ...(report.firma ? [report.firma] : [])]),
+    ]);
+    const firmaImage = firmaImageArray.length > 0 ? firmaImageArray[0] : undefined;
+
 
     // --- DETAILS TABLE ---
      autoTable(doc, {
@@ -363,14 +457,14 @@ export const generateVisitReport = async (
         }
     };
     
-    drawSection('OBSERVACIONES / FOTOS GENERALES', undefined, report.fotosObservacionesBase64);
-    drawSection('SUGERENCIAS', report.sugerencias, report.fotosSugerenciasBase64);
+    drawSection('OBSERVACIONES / FOTOS GENERALES', undefined, observacionesImages);
+    drawSection('SUGERENCIAS', report.sugerencias, sugerenciasImages);
 
     // --- SIGNATURES ---
-    if (report.fotoFirmaBase64) {
+    if (firmaImage) {
         try {
-            const format = (report.fotoFirmaBase64.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
-            doc.addImage(report.fotoFirmaBase64, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
+            const format = (firmaImage.match(/data:image\/(.+);base64,/) || [,'jpeg'])[1].toUpperCase();
+            doc.addImage(firmaImage, format, 120, finalY + 10, 60, 20, undefined, 'FAST');
         } catch(e) { console.error("Could not add signature image", e); }
     }
 

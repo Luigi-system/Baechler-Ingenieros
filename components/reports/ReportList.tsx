@@ -21,16 +21,16 @@ const calculateCompletion = (report: ServiceReport): number => {
     const totalFields = 10;
     let completedFields = 0;
 
-    if (report.codigo_reporte) completedFields++;
+    if (report.codigo) completedFields++;
     if (report.fecha) completedFields++;
-    if (report.id_empresa) completedFields++;
-    if (report.nombre_planta) completedFields++;
-    if (report.serie_maquina) completedFields++;
-    if (report.problemas_encontrados) completedFields++;
+    if (report.empresa_nombre) completedFields++;
+    if (report.enpresa_planta) completedFields++;
+    if (report.maquina_seria) completedFields++;
+    if (report.problemas_encontraados) completedFields++;
     if (report.acciones_realizadas) completedFields++;
-    if (report.operativo || report.inoperativo || report.en_prueba) completedFields++;
-    if (report.nombre_firmante) completedFields++;
-    if (report.foto_firma_url) completedFields++;
+    if (report.operatio || report.en_prueba) completedFields++; // Simplified status
+    if (report.encargado_nombre) completedFields++;
+    if (report.foto_firma) completedFields++;
 
     return (completedFields / totalFields) * 100;
 };
@@ -59,18 +59,12 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
         try {
             const { data, error } = await supabase
                 .from('Reporte_Servicio')
-                .select('*, empresa:Empresa(nombre), usuario:Usuarios(nombres)')
+                .select('*')
                 .order('fecha', { ascending: false });
 
             if (error) throw error;
-
-            const formattedData = data.map((item: any) => ({
-                ...item,
-                empresa: (Array.isArray(item.empresa) ? item.empresa[0] : item.empresa) || null,
-                usuario: (Array.isArray(item.usuario) ? item.usuario[0] : item.usuario) || null,
-                nombre_firmante: item.nombre_usuario,
-            }));
-            setReports(formattedData as ServiceReport[]);
+            
+            setReports(data as ServiceReport[]);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -114,7 +108,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
     try {
       const { data, error } = await supabase
         .from('Reporte_Servicio')
-        .select('*, empresa:Empresa(*), encargado:Encargado(*), usuario:Usuarios(nombres)')
+        .select('*')
         .eq('id', reportId)
         .single();
       
@@ -139,7 +133,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
     try {
       const { data, error } = await supabase
         .from('Reporte_Servicio')
-        .select('*, empresa:Empresa(*), encargado:Encargado(*), usuario:Usuarios(nombres)')
+        .select('*')
         .eq('id', reportId)
         .single();
       
@@ -164,18 +158,18 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
 
 
   const filteredReports = reports.filter(report => 
-    (report.codigo_reporte || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (report.empresa?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (report.codigo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (report.empresa_nombre || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getBillingStatusInfo = (report: ServiceReport): { className: string; text: string } => {
-    if (report.facturado) {
+    if (report.facturado === true) {
         return {
             className: 'bg-success/10 text-success',
             text: 'Facturado'
         };
     }
-    if (report.no_facturado) {
+    if (report.facturado === false) {
         return {
             className: 'bg-warning/10 text-warning',
             text: 'No Facturado'
@@ -241,9 +235,9 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                         const completion = calculateCompletion(report);
                         return (
                         <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{report.codigo_reporte || 'N/A'}</td>
-                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.empresa?.nombre || 'N/A'}</td>
-                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.usuario?.nombres || 'N/A'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{report.codigo || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.empresa_nombre || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.usuario_nombre || 'N/A'}</td>
                             <td className="px-6 py-4 whitespace-nowrap">
                             <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${billingStatus.className}`}>
                                 {billingStatus.text}
@@ -305,8 +299,8 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                     <div key={report.id} className="bg-base-200 rounded-lg shadow-md p-4 space-y-3">
                         <div className="flex justify-between items-start">
                         <div>
-                            <p className="font-bold text-base-content">{report.codigo_reporte || 'N/A'}</p>
-                            <p className="text-sm text-neutral">{report.empresa?.nombre || 'N/A'}</p>
+                            <p className="font-bold text-base-content">{report.codigo || 'N/A'}</p>
+                            <p className="text-sm text-neutral">{report.empresa_nombre || 'N/A'}</p>
                         </div>
                         <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${billingStatus.className}`}>
                             {billingStatus.text}
@@ -314,7 +308,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                         </div>
                         
                         <div className="text-sm text-neutral space-y-1">
-                            <p><strong>Creado por:</strong> {report.usuario?.nombres || 'N/A'}</p>
+                            <p><strong>Creado por:</strong> {report.usuario_nombre || 'N/A'}</p>
                             <p><strong>Fecha:</strong> {new Date(report.fecha || '').toLocaleDateString('es-ES', { timeZone: 'UTC' })}</p>
                         </div>
 

@@ -25,87 +25,66 @@ export interface User {
   pass?: number | null; // Changed from password and type to number | null
 }
 
-export interface Report {
-  id: number;
-  created_at: string;
-  codigo_reporte: string;
-  fecha: string;
-  empresa: { nombre: string } | null;
-  usuario: { nombres: string } | null;
-  // FIX: Replaced 'estado_facturacion' with boolean fields to match the DB schema.
-  facturado: boolean | null;
-  no_facturado: boolean | null;
-  estado: boolean | null;
-}
-
-
-// Added new ServiceReport type for the detailed form
 export interface ServiceReport {
   id?: number;
   created_at?: string;
-  codigo_reporte?: string;
+
+  // Datos generales from new schema
+  codigo?: string;
+  estado?: boolean;
+  pdf?: string;
+
+  // Datos de empresa / planta / sede
+  empresa_nombre?: string;
+  enpresa_planta?: string;
+
+  // Datos de usuario (creator)
+  usuario_nombre?: string;
+  usuario_cel?: string;
+
+  // Datos del encargado (client who signs)
+  encargado_nombre?: string;
+  encargado_cel?: string;
+
+  // Datos de la máquina
+  maquina_linea?: string;
+  maquina_marca?: string;
+  maquina_seria?: string;
+  maquina_modelo?: string;
+
+  // Condiciones del servicio
+  garantia?: boolean;
+  facturado?: boolean;
+  operatio?: boolean;
+  en_prueba?: boolean;
+  
+  // Tiempos
   fecha?: string; // YYYY-MM-DD
-  entrada?: string; // HH:MM
-  salida?: string; // HH:MM
-  
-  // Linked IDs
-  id_empresa?: number;
-  id_planta?: number;
-  nombre_planta?: string; // From DB schema
-  id_encargado?: number;
-  
-  // Denormalized machine data for the report
-  serie_maquina?: string;
-  modelo_maquina?: string;
-  marca_maquina?: string;
-  linea_maquina?: string;
-  
-  // Service Details
-  problemas_encontrados?: string;
+  hora_entrada?: string; // HH:MM
+  hora_salida?: string; // HH:MM
+
+  // Información del servicio
+  problemas_encontraados?: string;
   acciones_realizadas?: string;
   observaciones?: string;
+  control_interno?: string;
 
-  // Statuses
-  estado_maquina?: 'operativo' | 'inoperativo' | 'en_prueba';
-  estado_garantia?: 'con_garantia' | 'sin_garantia';
-  estado_facturacion?: 'facturado' | 'no_facturado'; // Used for form state only
-  
-  // Boolean fields from DB schema for persistence.
-  facturado?: boolean;
-  no_facturado?: boolean;
-  con_garantia?: boolean;
-  sin_garantia?: boolean;
-  operativo?: boolean;
-  inoperativo?: boolean;
-  en_prueba?: boolean;
-  estado?: boolean;
+  // Fotos (Base64)
+  foto_firma?: string | null;
+  foto_acciones_realizadas?: (string | null)[];
+  foto_problemas_encontrados?: (string | null)[];
 
-  // Files - will handle URLs from storage
-  fotos_problemas_encontrados_url?: (string | null)[];
-  fotos_acciones_realizadas_url?: (string | null)[];
-  fotos_observaciones_url?: (string | null)[];
-  foto_firma_url?: string | null;
-  
+  // --- Fields for form state & PDF generation ---
+  estado_maquina?: 'operativo' | 'inoperativo' | 'en_prueba'; // form state
+  estado_garantia?: 'con_garantia' | 'sin_garantia'; // form state
+  estado_facturacion?: 'facturado' | 'no_facturado'; // form state
+
   // For passing base64 to PDF generator
   fotosProblemasBase64?: string[];
   fotosAccionesBase64?: string[];
-  fotosObservacionesBase64?: string[];
   fotoFirmaBase64?: string;
-  
-  // Sign-off (maps to nombre_usuario, celular_usuario in db)
-  nombre_firmante?: string; 
-  celular_firmante?: string;
-  
-  // Meta
-  id_usuario?: string; // The user creating the report
-  url_pdf?: string;
-
-  // Joined data properties for PDF generation.
-  // These should be populated by a specific query.
-  usuario?: { nombres: string } | null;
-  empresa?: Company | null;
-  encargado?: Supervisor | null;
 }
+
 
 export interface VisitReport {
   id?: number;

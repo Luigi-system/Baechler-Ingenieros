@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import StatCard from './StatCard';
 import ReportsChart from './ReportsChart';
@@ -10,6 +11,7 @@ interface DashboardStats {
     totalReports: number;
     activeUsers: number;
     completedServices: number;
+
     pendingReports: number;
 }
 
@@ -35,8 +37,8 @@ const Dashboard: React.FC = () => {
                     supabase.from('Reporte_Servicio').select('id', { count: 'exact', head: true }),
                     supabase.from('Usuarios').select('id', { count: 'exact', head: true }),
                     supabase.from('Reporte_Servicio').select('id', { count: 'exact', head: true }).eq('facturado', true),
-                    supabase.from('Reporte_Servicio').select('id', { count: 'exact', head: true }).eq('no_facturado', true),
-                    supabase.from('Reporte_Servicio').select('*, empresa:Empresa(nombre), usuario:Usuarios(nombres)').order('created_at', { ascending: false }).limit(3)
+                    supabase.from('Reporte_Servicio').select('id', { count: 'exact', head: true }).is('facturado', false),
+                    supabase.from('Reporte_Servicio').select('id, created_at, codigo, usuario_nombre').order('created_at', { ascending: false }).limit(3)
                 ]);
 
                 setStats({
@@ -118,7 +120,7 @@ const Dashboard: React.FC = () => {
                       <div className="flex-shrink-0"><CheckCircleIcon className="h-5 w-5 text-success mt-1"/></div>
                       <div className="ml-3">
                           <p className="text-sm font-medium text-base-content">
-                            {report.usuario?.nombres ?? 'Usuario desconocido'} creó el reporte #{report.codigo_reporte}.
+                            {report.usuario_nombre ?? 'Usuario desconocido'} creó el reporte #{report.codigo}.
                           </p>
                           <p className="text-sm text-neutral">
                             {new Date(report.created_at ?? '').toLocaleDateString()}

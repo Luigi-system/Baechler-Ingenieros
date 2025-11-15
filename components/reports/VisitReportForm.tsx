@@ -22,12 +22,48 @@ interface ReportFormProps {
   onBack: () => void;
 }
 
-const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+const fileToPngDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    // Ensure file is an image before processing
+    if (!file.type.startsWith('image/')) {
+        return reject(new Error('El archivo no es una imagen.'));
+    }
     const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                return reject(new Error('No se pudo obtener el contexto del canvas'));
+            }
+            ctx.drawImage(img, 0, 0);
+            // Returns a data URI, e.g., "data:image/png;base64,..."
+            resolve(canvas.toDataURL('image/png'));
+        };
+        img.onerror = (err) => reject(new Error('La imagen no se pudo cargar.'));
+        if (event.target?.result) {
+            img.src = event.target.result as string;
+        } else {
+            reject(new Error('El resultado de la lectura del archivo está vacío.'));
+        }
+    };
+    reader.onerror = (err) => reject(new Error('El archivo no se pudo leer.'));
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
 });
+
+const stripDataUriPrefix = (dataUri: string) => dataUri.split('base64,')[1];
+
+// Helper function to robustly create a data URL
+const toDataURL = (b64OrDataURL: string): string => {
+    if (b64OrDataURL.startsWith('data:image')) {
+        return b64OrDataURL; // It's already a data URL, return as is.
+    }
+    // Smart-prefixing for raw base64 strings. JPEG base64 often starts with /9j/.
+    const prefix = b64OrDataURL.startsWith('/9j/') ? 'data:image/jpeg;base64,' : 'data:image/png;base64,';
+    return prefix + b64OrDataURL;
+};
 
 const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const { supabase } = useSupabase();
@@ -128,7 +164,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             const { companies, plants, supervisors, machines } = await fetchDropdownData();
 
             if (reportId && supabase) {
-                const { data: reportData, error } = await supabase.from('Reporte_Visita').select('*').eq('id', reportId).single();
+                const { data: reportData, error } = await supabase.from('Reporte_Visita').select('*, foto_observaciones, foto_sugerencias, firma').eq('id', reportId).single();
                 if (error) {
                     console.error("Error fetching visit report for editing:", error);
                 } else if (reportData) {
@@ -142,13 +178,20 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     
                     const formattedDate = reportData.fecha ? new Date(reportData.fecha).toISOString().split('T')[0] : reportData.fecha;
 
-                    setFormData({
+                    const formDataToSet: Partial<VisitReport> = {
                         ...reportData,
                         fecha: formattedDate,
                         form_id_empresa: company?.id,
                         form_id_planta: plant?.id,
                         form_id_encargado: supervisor?.id,
-                    });
+                    };
+                    
+                    // Convert base64 from bytea to data URIs for display, handling potentially corrupt data
+                    formDataToSet.foto_observaciones = reportData.foto_observaciones ? toDataURL(reportData.foto_observaciones) : null;
+                    formDataToSet.foto_sugerencias = reportData.foto_sugerencias ? toDataURL(reportData.foto_sugerencias) : null;
+                    formDataToSet.firma = reportData.firma ? toDataURL(reportData.firma) : null;
+
+                    setFormData(formDataToSet);
 
                     if (company) setCompanySearchText(company.nombre);
                     if (plant) setPlantSearchText(plant.nombre);
@@ -181,9 +224,9 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         debounceTimeout.current = window.setTimeout(async () => {
             try {
                 const [fotosObservacionesBase64, fotosSugerenciasBase64, fotoFirmaBase64] = await Promise.all([
-                    Promise.all(fotosObservaciones.map(fileToBase64)),
-                    Promise.all(fotosSugerencias.map(fileToBase64)),
-                    fotoFirma[0] ? fileToBase64(fotoFirma[0]) : Promise.resolve(undefined),
+                    Promise.all(fotosObservaciones.map(fileToPngDataUrl)),
+                    Promise.all(fotosSugerencias.map(fileToPngDataUrl)),
+                    fotoFirma[0] ? fileToPngDataUrl(fotoFirma[0]) : Promise.resolve(undefined),
                 ]);
 
                 const enrichedData: VisitReport = {
@@ -193,9 +236,9 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         observations: item.observaciones,
                     })),
                     usuario: { nombres: auth?.user?.nombres || 'N/A' },
-                    fotosObservacionesBase64,
-                    fotosSugerenciasBase64,
-                    fotoFirmaBase64,
+                    fotosObservacionesBase64: [...(formData.foto_observaciones ? [formData.foto_observaciones] : []), ...fotosObservacionesBase64],
+                    fotosSugerenciasBase64: [...(formData.foto_sugerencias ? [formData.foto_sugerencias] : []), ...fotosSugerenciasBase64],
+                    fotoFirmaBase64: fotoFirmaBase64 || formData.firma || undefined,
                 };
                 const uri = await generateVisitReport(enrichedData, logoUrl, 'datauristring');
                 setPdfPreviewUri(uri as string);
@@ -350,7 +393,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         }
 
         try {
-            const base64Data = await fileToBase64(file);
+            const base64Data = await fileToPngDataUrl(file);
             const textPrompt = `Del documento adjunto, extrae la siguiente información y proporciona la salida en formato JSON:
 - fecha (YYYY-MM-DD)
 - hora_ingreso (HH:MM)
@@ -374,7 +417,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             if (autocompleteService === 'gemini' && geminiClient) {
                  const response = await geminiClient.models.generateContent({
                     model: "gemini-2.5-flash",
-                    contents: [{ parts: [ { inlineData: { mimeType: file.type, data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
+                    contents: [{ parts: [ { inlineData: { mimeType: 'image/png', data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: {
@@ -536,54 +579,67 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSubmitting(true);
-        if (!supabase || !auth?.user) return;
-
-        // Create a mutable copy of formData to modify
-        const payload: { [key: string]: any } = { 
-            ...formData, 
-            fecha: formData.fecha || null,
-            id_usuario: auth.user.id,
-            maquinas: selectedMaquinas.map(item => `${item.machine.serie} - ${item.machine.modelo || ''}: ${item.observaciones}`),
-        };
-
-        // Handle new image uploads and convert to Base64
-        if (fotosObservaciones.length > 0) {
-            payload.foto_observaciones = await fileToBase64(fotosObservaciones[0]);
+        if (!supabase || !auth?.user) {
+            setIsSubmitting(false);
+            return;
         }
-        if (fotosSugerencias.length > 0) {
-            payload.foto_sugerencias = await fileToBase64(fotosSugerencias[0]);
-        }
-        if (fotoFirma.length > 0) {
-            payload.firma = await fileToBase64(fotoFirma[0]);
-        }
-        
-        // Clean up temporary form state fields before sending to DB
-        delete payload.form_id_empresa;
-        delete payload.form_id_planta;
-        delete payload.form_id_encargado;
-        
-        // Also remove other temporary/UI-only fields
-        delete (payload as any).usuario;
-        delete (payload as any).selected_empresa_pdf;
-        delete (payload as any).selected_planta_pdf;
-        delete (payload as any).selected_encargado_pdf;
-        delete (payload as any).selected_maquinas_pdf;
-        delete (payload as any).fotosObservacionesBase64;
-        delete (payload as any).fotosSugerenciasBase64;
-        delete (payload as any).fotoFirmaBase64;
 
-        const request = reportId
-            ? supabase.from('Reporte_Visita').update(payload).eq('id', reportId)
-            : supabase.from('Reporte_Visita').insert(payload);
+        try {
+            const convertFileToBase64 = async (files: File[]): Promise<string | null> => {
+                if (files.length === 0) return null;
+                return fileToPngDataUrl(files[0]).then(stripDataUriPrefix);
+            };
+            
+            const [
+                newObservacionesB64,
+                newSugerenciasB64,
+                newFirmaB64,
+            ] = await Promise.all([
+                convertFileToBase64(fotosObservaciones),
+                convertFileToBase64(fotosSugerencias),
+                convertFileToBase64(fotoFirma),
+            ]);
 
-        const { error } = await request.select().single();
-        
-        setIsSubmitting(false);
-        if (error) {
-            alert("Error al guardar el reporte: " + error.message);
-        } else {
+            const payload: { [key: string]: any } = {
+                id: formData.id,
+                fecha: formData.fecha || null,
+                hora_ingreso: formData.hora_ingreso,
+                hora_salida: formData.hora_salida,
+                empresa: formData.empresa,
+                cliente: formData.cliente,
+                planta: formData.planta,
+                nombre_encargado: formData.nombre_encargado,
+                celular_encargado: formData.celular_encargado,
+                email_encargado: formData.email_encargado,
+                nombre_operador: formData.nombre_operador,
+                celular_operador: formData.celular_operador,
+                voltaje_establecido: formData.voltaje_establecido,
+                presurizacion: formData.presurizacion,
+                transformador: formData.transformador,
+                maquinas: selectedMaquinas.map(item => `${item.machine.serie} - ${item.machine.modelo || ''}: ${item.observaciones}`),
+                sugerencias: formData.sugerencias,
+                id_usuario: auth.user.id,
+                foto_observaciones: newObservacionesB64 !== null ? newObservacionesB64 : (formData.foto_observaciones ? stripDataUriPrefix(formData.foto_observaciones) : null),
+                foto_sugerencias: newSugerenciasB64 !== null ? newSugerenciasB64 : (formData.foto_sugerencias ? stripDataUriPrefix(formData.foto_sugerencias) : null),
+                firma: newFirmaB64 !== null ? newFirmaB64 : (formData.firma ? stripDataUriPrefix(formData.firma) : null),
+            };
+            
+            Object.keys(payload).forEach(key => (payload[key] === undefined || payload[key] === null) && delete payload[key]);
+            if (formData.id === undefined) {
+                delete payload.id;
+            }
+
+            const { error } = await supabase.from('Reporte_Visita').upsert(payload);
+            if (error) throw error;
+            
+            setIsSubmitting(false);
             alert("¡Reporte de visita guardado exitosamente!");
             onBack();
+
+        } catch (error: any) {
+            setIsSubmitting(false);
+            alert("Error al guardar el reporte: " + error.message);
+            console.error("Submit error:", error);
         }
     };
     
