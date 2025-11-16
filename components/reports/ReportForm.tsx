@@ -535,6 +535,26 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 return dataUris.filter((uri): uri is string => !!uri).map(stripDataUriPrefix);
             };
             
+            // Create a comprehensive data object for the PDF generator
+            const pdfDataObject: ServiceReport = {
+                ...formData,
+                usuario_nombre: auth.user.nombres ?? 'N/A',
+                fotosProblemasBase64: [
+                    ...(formData.foto_problemas_encontrados?.filter(Boolean) as string[] || []),
+                    ...(await Promise.all(fotosProblemas.map(fileToPngDataUrl)))
+                ],
+                fotosAccionesBase64: [
+                    ...(formData.foto_acciones_realizadas?.filter(Boolean) as string[] || []),
+                    ...(await Promise.all(fotosAcciones.map(fileToPngDataUrl)))
+                ],
+                fotoFirmaBase64: fotoFirma[0] ? await fileToPngDataUrl(fotoFirma[0]) : formData.foto_firma || undefined,
+            };
+
+            const pdfDataUri = await generateServiceReport(pdfDataObject, logoUrl, 'datauristring');
+            const pdfBase64 = pdfDataUri && (pdfDataUri as string).includes('base64,')
+                ? (pdfDataUri as string).split('base64,')[1]
+                : null;
+
             const finalPayload: { [key: string]: any } = {
                 id: formData.id,
                 codigo: formData.codigo,
@@ -564,6 +584,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 foto_problemas_encontrados: [...getExistingBase64(formData.foto_problemas_encontrados), ...newProblemasB64],
                 foto_acciones_realizadas: [...getExistingBase64(formData.foto_acciones_realizadas), ...newAccionesB64],
                 foto_firma: newFirmaB64 || (formData.foto_firma ? stripDataUriPrefix(formData.foto_firma) : null),
+                pdf: pdfBase64,
             };
 
             Object.keys(finalPayload).forEach(key => (finalPayload[key] === undefined) && delete finalPayload[key]);

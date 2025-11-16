@@ -494,6 +494,30 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 fotoFirma.length > 0 ? fileToPngDataUrl(fotoFirma[0]).then(stripDataUriPrefix) : Promise.resolve(null),
             ]);
 
+            // Create a comprehensive data object for the PDF generator
+            const pdfDataObject: VisitReport = {
+                ...formData,
+                selected_maquinas_pdf: selectedMaquinas.map(item => ({
+                    machineLabel: `${item.machine.serie} - ${item.machine.modelo || ''} (${item.machine.marca || 'S/M'})`,
+                    observations: item.observaciones,
+                })),
+                usuario_nombre: auth.user.nombres || 'N/A',
+                fotosObservacionesBase64: [
+                    ...(formData.fotos_observaciones ? [formData.fotos_observaciones] : []),
+                    ...(await Promise.all(fotosObservaciones.map(fileToPngDataUrl)))
+                ],
+                fotosSugerenciasBase64: [
+                    ...(formData.fotos_sugerencias ? [formData.fotos_sugerencias] : []),
+                    ...(await Promise.all(fotosSugerencias.map(fileToPngDataUrl)))
+                ],
+                fotoFirmaBase64: fotoFirma[0] ? await fileToPngDataUrl(fotoFirma[0]) : formData.foto_firma || undefined,
+            };
+
+            const pdfDataUri = await generateVisitReport(pdfDataObject, logoUrl, 'datauristring');
+            const pdfBase64 = pdfDataUri && (pdfDataUri as string).includes('base64,')
+                ? (pdfDataUri as string).split('base64,')[1]
+                : null;
+
             const payload: { [key: string]: any } = {
                 id: formData.id,
                 codigo: formData.codigo,
@@ -515,6 +539,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 foto_firma: newFirmaB64 || (formData.foto_firma ? stripDataUriPrefix(formData.foto_firma) : null),
                 observaciones: formData.observaciones,
                 sugerencias: formData.sugerencias,
+                pdf: pdfBase64,
             };
             
             Object.keys(payload).forEach(key => (payload[key] === undefined) && delete payload[key]);

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { VisitReport } from '../../types';
 import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon, MailIcon } from '../ui/Icons';
@@ -14,33 +15,31 @@ interface VisitReportListProps {
   onEditReport: (id: number) => void;
 }
 
-const calculateCompletion = (report: VisitReport): number => {
-    const totalFields = 14; 
-    let completedFields = 0;
-    
-    if (report.codigo) completedFields++;
-    if (report.empresa_nombre) completedFields++;
-    if (report.empresa_planta) completedFields++;
-    if (report.encargado_nombre) completedFields++;
-    if (report.maquinas && report.maquinas.length > 0) completedFields++;
-    
-    // Check for text or photo for observations/suggestions
-    if (report.observaciones || report.fotos_observaciones) completedFields++;
-    if (report.sugerencias || report.fotos_sugerencias) completedFields++;
-    
-    if (report.foto_firma) completedFields++;
-    
-    // Checklist items - check if they have a value (true or false), not just truthy
-    if (report.voltaje_establecido != null) completedFields++;
-    if (report.linea_a_tierra != null) completedFields++;
-    if (report.presurizacion_de_cabezal != null) completedFields++;
-    if (report.transformador_de_aislamiento != null) completedFields++;
-    if (report.limpieza_cabezal != null) completedFields++;
+const calculateCompletion = (report: VisitReport): { percentage: number; missingFields: string[] } => {
+    const fields = [
+        { name: 'Código', isComplete: !!report.codigo },
+        { name: 'Empresa', isComplete: !!report.empresa_nombre },
+        { name: 'Planta', isComplete: !!report.empresa_planta },
+        { name: 'Encargado', isComplete: !!report.encargado_nombre },
+        { name: 'Máquinas Atendidas', isComplete: !!(report.maquinas && report.maquinas.length > 0) },
+        { name: 'Observaciones', isComplete: !!report.observaciones || !!report.fotos_observaciones },
+        { name: 'Sugerencias', isComplete: !!report.sugerencias || !!report.fotos_sugerencias },
+        { name: 'Firma de Conformidad', isComplete: !!report.foto_firma },
+        { name: 'Voltaje Estable', isComplete: report.voltaje_establecido != null },
+        { name: 'Línea a Tierra', isComplete: report.linea_a_tierra != null },
+        { name: 'Presurización de Cabezal', isComplete: report.presurizacion_de_cabezal != null },
+        { name: 'Transformador', isComplete: report.transformador_de_aislamiento != null },
+        { name: 'Limpieza de Cabezal', isComplete: report.limpieza_cabezal != null },
+        { name: 'Reporte Finalizado', isComplete: report.estado === 'Finalizado' },
+    ];
 
-    if (report.estado === 'Finalizado') completedFields++;
-    
-    const percentage = (completedFields / totalFields) * 100;
-    return Math.min(percentage, 100); // Ensure it doesn't exceed 100
+    const completedCount = fields.filter(f => f.isComplete).length;
+    const missingFields = fields.filter(f => !f.isComplete).map(f => f.name);
+
+    return {
+        percentage: Math.min((completedCount / fields.length) * 100, 100),
+        missingFields,
+    };
 };
 
 const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEditReport }) => {
@@ -80,6 +79,31 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
     };
     fetchReports();
   }, [supabase]);
+
+  const handleStatusToggle = async (report: VisitReport) => {
+    if (!supabase || !report.id) return;
+
+    const newStatus = report.estado === 'Finalizado' ? 'En Progreso' : 'Finalizado';
+
+    // Optimistic UI update
+    setReports(prevReports => 
+        prevReports.map(r => r.id === report.id ? { ...r, estado: newStatus } : r)
+    );
+
+    const { error } = await supabase
+        .from('Reporte_Visita')
+        .update({ estado: newStatus })
+        .eq('id', report.id);
+
+    if (error) {
+        // Revert on error
+        const oldStatus = newStatus === 'Finalizado' ? 'En Progreso' : 'Finalizado';
+        setReports(prevReports => 
+            prevReports.map(r => r.id === report.id ? { ...r, estado: oldStatus } : r)
+        );
+        alert(`Error al actualizar estado: ${error.message}`);
+    }
+  };
 
   const handleDownloadPDF = async (reportId: number) => {
     if (!supabase) return;
@@ -182,18 +206,38 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                     </thead>
                     <tbody className="divide-y divide-base-border">
                         {filteredReports.length > 0 ? filteredReports.map((report) => {
-                        const completion = calculateCompletion(report);
+                        const { percentage, missingFields } = calculateCompletion(report);
                         return (
                         <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
                             <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.codigo || 'N/A'}</td>
                             <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.empresa_nombre || 'N/A'}</td>
                             <td className="px-6 py-4 text-sm text-neutral break-words">{report.empresa_planta || 'N/A'}</td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${report.estado === 'Finalizado' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                                <button
+                                    onClick={() => handleStatusToggle(report)}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-base-200 ${
+                                        report.estado === 'Finalizado'
+                                        ? 'bg-success text-white shadow-inner border border-success/80'
+                                        : 'bg-base-100 text-neutral border border-base-border shadow-sm hover:bg-base-300'
+                                    }`}
+                                >
                                     {report.estado || 'En Progreso'}
-                                </span>
+                                </button>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="group relative w-8 h-8">
+                                    <ProgressCircle percentage={percentage} />
+                                    {missingFields.length > 0 && (
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-base-300 text-base-content text-xs rounded py-2 px-3 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 shadow-lg">
+                                            <p className="font-bold border-b border-base-border pb-1 mb-1">Falta completar:</p>
+                                            <ul className="list-disc list-inside text-left">
+                                                {missingFields.map(field => <li key={field}>{field}</li>)}
+                                            </ul>
+                                            <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-base-300 transform rotate-45"></div>
+                                        </div>
+                                    )}
+                                </div>
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{report.created_at ? new Date(report.created_at).toLocaleDateString('es-ES') : 'N/A'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                             <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
@@ -236,7 +280,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
             {/* Mobile Card View */}
             <div className="md:hidden space-y-3">
                 {filteredReports.length > 0 ? filteredReports.map((report) => {
-                    const completion = calculateCompletion(report);
+                    const { percentage, missingFields } = calculateCompletion(report);
                     return (
                         <div key={report.id} className="bg-base-200 rounded-lg shadow-md p-4 space-y-3">
                             <div className="flex justify-between items-start">
@@ -245,9 +289,16 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                                     <p className="text-sm text-neutral">{report.empresa_nombre || 'N/A'}</p>
                                     <p className="text-xs text-neutral">{report.empresa_planta || 'N/A'}</p>
                                 </div>
-                                 <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${report.estado === 'Finalizado' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                                <button
+                                    onClick={() => handleStatusToggle(report)}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-base-200 whitespace-nowrap ${
+                                        report.estado === 'Finalizado'
+                                        ? 'bg-success text-white shadow-inner border border-success/80'
+                                        : 'bg-base-100 text-neutral border border-base-border shadow-sm hover:bg-base-300'
+                                    }`}
+                                >
                                     {report.estado || 'En Progreso'}
-                                </span>
+                                </button>
                             </div>
                              <div className="flex justify-between items-center gap-4">
                                 <div>
@@ -255,7 +306,18 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                                 </div>
                                 <div className="text-right">
                                     <label className="text-xs text-neutral">Completado</label>
-                                    <ProgressCircle percentage={completion} />
+                                    <div className="group relative inline-flex mt-1">
+                                        <ProgressCircle percentage={percentage} />
+                                        {missingFields.length > 0 && (
+                                            <div className="absolute bottom-full right-0 mb-2 w-48 bg-base-300 text-base-content text-xs rounded py-2 px-3 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 shadow-lg">
+                                                <p className="font-bold border-b border-base-border pb-1 mb-1">Falta completar:</p>
+                                                <ul className="list-disc list-inside text-left">
+                                                    {missingFields.map(field => <li key={field}>{field}</li>)}
+                                                </ul>
+                                                <div className="absolute right-3 bottom-[-4px] w-2 h-2 bg-base-300 transform rotate-45"></div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             <div className="border-t border-base-border pt-3 flex justify-end space-x-2">

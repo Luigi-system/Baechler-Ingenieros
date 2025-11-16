@@ -348,6 +348,13 @@ export interface N8nSettings {
     headers: Record<string, string>;
 }
 
+export interface EmailSettings {
+    from: string;
+    url: string;
+    method: 'GET' | 'POST';
+    headers: Record<string, string>;
+}
+
 // Updated AiServiceContextType to include n8n settings
 export interface AiServiceContextType {
     service: AiService; // For main chat/agent

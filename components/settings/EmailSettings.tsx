@@ -1,22 +1,21 @@
-
 import React, { useState, useEffect } from 'react';
 import { useSupabase } from '../../contexts/SupabaseContext';
-import { SaveIcon, MailIcon } from '../ui/Icons';
+import { SaveIcon, MailIcon, TrashIcon, PlusIcon, AlertTriangleIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
+import type { EmailSettings } from '../../types';
 
-interface EmailSettingsData {
-    from: string;
-    url: string;
-}
-
-const DEFAULT_SETTINGS: EmailSettingsData = {
+const DEFAULT_SETTINGS: EmailSettings = {
     from: 'luigi.rm.18@gmail.com',
     url: 'https://lr-system.vercel.app/mail',
+    method: 'POST',
+    headers: {},
 };
 
 const EmailSettings: React.FC = () => {
     const { supabase } = useSupabase();
-    const [settings, setSettings] = useState<EmailSettingsData>(DEFAULT_SETTINGS);
+    const [settings, setSettings] = useState<EmailSettings>(DEFAULT_SETTINGS);
+    const [localHeaders, setLocalHeaders] = useState<{ id: number; key: string; value: string }[]>([]);
+    
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
@@ -37,10 +36,17 @@ const EmailSettings: React.FC = () => {
             } else if (data && data.value) {
                 try {
                     const savedSettings = JSON.parse(data.value as string);
-                    setSettings({ ...DEFAULT_SETTINGS, ...savedSettings });
+                    // Force method to POST, ignore any saved value for method
+                    setSettings({ ...DEFAULT_SETTINGS, ...savedSettings, method: 'POST' });
+                    setLocalHeaders(
+                        Object.entries(savedSettings.headers || {}).map(([key, value], index) => ({ id: index, key, value: value as string }))
+                    );
                 } catch (e) {
                     setFeedback({ type: 'error', message: 'Error al parsear la configuración guardada.' });
                 }
+            } else {
+                 // Ensure new/default settings also have POST
+                 setSettings(prev => ({ ...prev, method: 'POST' }));
             }
             setIsLoading(false);
         };
@@ -52,6 +58,20 @@ const EmailSettings: React.FC = () => {
         setSettings(prev => ({ ...prev, [name]: value }));
     };
 
+    const handleHeaderChange = (index: number, field: 'key' | 'value', value: string) => {
+        const newHeaders = [...localHeaders];
+        newHeaders[index][field] = value;
+        setLocalHeaders(newHeaders);
+    };
+
+    const addHeader = () => {
+        setLocalHeaders([...localHeaders, { id: Date.now(), key: '', value: '' }]);
+    };
+
+    const removeHeader = (id: number) => {
+        setLocalHeaders(localHeaders.filter(h => h.id !== id));
+    };
+
     const handleSave = async () => {
         if (!supabase) {
             setFeedback({ type: 'error', message: 'Cliente Supabase no disponible.' });
@@ -61,6 +81,16 @@ const EmailSettings: React.FC = () => {
         setFeedback(null);
 
         try {
+            const headersObject = localHeaders.reduce((acc, header) => {
+                if (header.key.trim()) {
+                    acc[header.key.trim()] = header.value.trim();
+                }
+                return acc;
+            }, {} as Record<string, string>);
+            
+            // Always save with POST method
+            const settingsToSave = { ...settings, headers: headersObject, method: 'POST' as const };
+
             const { data: existing, error: selectError } = await supabase
                 .from('Configuracion')
                 .select('id')
@@ -71,10 +101,10 @@ const EmailSettings: React.FC = () => {
             if (selectError) throw selectError;
 
             if (existing) {
-                const { error } = await supabase.from('Configuracion').update({ value: JSON.stringify(settings) }).eq('id', existing.id);
+                const { error } = await supabase.from('Configuracion').update({ value: JSON.stringify(settingsToSave) }).eq('id', existing.id);
                 if (error) throw error;
             } else {
-                const { error } = await supabase.from('Configuracion').insert({ key: 'email_settings', value: JSON.stringify(settings), id_usuario: null });
+                const { error } = await supabase.from('Configuracion').insert({ key: 'email_settings', value: JSON.stringify(settingsToSave), id_usuario: null });
                 if (error) throw error;
             }
             setFeedback({ type: 'success', message: '¡Configuración de correo guardada exitosamente!' });
@@ -109,7 +139,7 @@ const EmailSettings: React.FC = () => {
                     </div>
                 </div>
                 
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div>
                         <label htmlFor="from" className="block text-sm font-medium">Correo Remitente (From)</label>
                         <input 
@@ -136,6 +166,29 @@ const EmailSettings: React.FC = () => {
                             disabled={isSaving}
                         />
                          <p className="mt-1 text-xs text-neutral">El servicio debe aceptar un POST con `from`, `to`, `subject`, `message`.</p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium">Método HTTP</label>
+                        <div className="mt-2 p-3 bg-base-100 border border-base-border rounded-md max-w-md">
+                            <span className="text-sm font-semibold text-base-content">POST</span>
+                            <p className="text-xs text-neutral">Este método es requerido por el endpoint del servidor de correo y se usará para todos los envíos.</p>
+                        </div>
+                    </div>
+
+                     <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="block text-sm font-medium">Headers (Opcional)</label>
+                            <button type="button" onClick={addHeader} className="flex items-center gap-1 text-xs bg-primary/20 text-primary hover:bg-primary/30 px-2 py-1 rounded-md"><PlusIcon className="h-4 w-4"/>Añadir Header</button>
+                        </div>
+                        <div className="space-y-2">
+                        {localHeaders.map((header, index) => (
+                            <div key={header.id} className="flex items-center gap-2">
+                                <input type="text" placeholder="Clave (ej. Authorization)" value={header.key} onChange={e => handleHeaderChange(index, 'key', e.target.value)} className="w-1/3 input-style text-sm" />
+                                <input type="text" placeholder="Valor (ej. Bearer ...)" value={header.value} onChange={e => handleHeaderChange(index, 'value', e.target.value)} className="flex-1 input-style text-sm" />
+                                <button type="button" onClick={() => removeHeader(header.id)} className="p-2 text-error hover:bg-error/10 rounded-full"><TrashIcon className="h-4 w-4" /></button>
+                            </div>
+                        ))}
+                        </div>
                     </div>
                 </div>
 

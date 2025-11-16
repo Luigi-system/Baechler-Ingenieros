@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Modal from './Modal';
 import Spinner from './Spinner';
@@ -7,7 +5,7 @@ import { useSupabase } from '../../contexts/SupabaseContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { generateServiceReport, generateVisitReport } from '../../services/pdfGenerator';
 import { SendIcon, PaperclipIcon, XIcon, UserCircleIcon, SearchIcon } from './Icons';
-import type { User, Supervisor } from '../../types';
+import type { User, Supervisor, EmailSettings } from '../../types';
 
 interface Recipient {
     email: string;
@@ -15,14 +13,11 @@ interface Recipient {
     type: 'user' | 'supervisor';
 }
 
-interface EmailSettingsData {
-    from: string;
-    url: string;
-}
-
-const DEFAULT_EMAIL_SETTINGS: EmailSettingsData = {
+const DEFAULT_EMAIL_SETTINGS: EmailSettings = {
     from: 'luigi.rm.18@gmail.com',
     url: 'https://lr-system.vercel.app/mail',
+    method: 'POST',
+    headers: {},
 };
 
 interface EmailModalProps {
@@ -54,7 +49,7 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
     const searchRef = useRef<HTMLDivElement>(null);
 
     // Email Config state
-    const [emailConfig, setEmailConfig] = useState<EmailSettingsData>(DEFAULT_EMAIL_SETTINGS);
+    const [emailConfig, setEmailConfig] = useState<EmailSettings>(DEFAULT_EMAIL_SETTINGS);
     const [configLoaded, setConfigLoaded] = useState(false);
 
 
@@ -94,9 +89,12 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
             setConfigLoaded(false);
 
             try {
-                // Fetch email settings and report data in parallel
-                const [emailSettingsRes] = await Promise.all([
+                // Fetch email settings, report data, and supervisors in parallel
+                const tableName = reportType === 'service' ? 'Reporte_Servicio' : 'Reporte_Visita';
+                const [emailSettingsRes, reportRes, supervisorsRes] = await Promise.all([
                     supabase.from('Configuracion').select('value').eq('key', 'email_settings').is('id_usuario', null).maybeSingle(),
+                    supabase.from(tableName).select('*').eq('id', reportId).single(),
+                    supabase.from('Encargado').select('nombre, apellido, email'),
                 ]);
 
                 // Process email settings
@@ -110,35 +108,42 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
                 }
                 setConfigLoaded(true);
 
+                // Process report data
+                if (reportRes.error) throw new Error(`Error al cargar el reporte: ${reportRes.error.message}`);
+                const reportData = reportRes.data;
 
-                // Process report data and generate PDF
-                const tableName = reportType === 'service' ? 'Reporte_Servicio' : 'Reporte_Visita';
-                const { data: reportData, error: reportError } = await supabase.from(tableName).select('*, empresa:Empresa(*), encargado:Encargado(*), usuario:Usuarios(nombres)').eq('id', reportId).single();
-                if (reportError) throw reportError;
-
-                const generator = reportType === 'service' ? generateServiceReport : generateVisitReport;
-                const pdfDataUri = await generator(reportData as any, logoUrl, 'datauristring');
-                
-                const reportCode = (reportData as any).codigo_reporte || reportId;
-                const filename = `reporte-${reportType}-${reportCode}.pdf`;
-
-                if (pdfDataUri) {
-                    const base64Content = (pdfDataUri as string).split('base64,')[1];
-                    setAttachment({ filename, content: base64Content });
-                    
-                    const reportTitle = reportType === 'service' ? 'Servicio' : 'Visita';
-                    setSubject(`Reporte de ${reportTitle}: ${reportCode} - ${(reportData as any).empresa?.nombre || ''}`);
-                    setBody(`Estimado(a),\n\nAdjunto encontrará el reporte de ${reportTitle} con código ${reportCode} realizado en la fecha ${(reportData as any).fecha}.\n\nSaludos cordiales.`);
-
-                    // Pre-fill recipient if available
-                    if ((reportData as any).encargado?.email) {
+                // Pre-fill recipient by finding a match in the supervisor list
+                if (reportData.encargado_nombre && supervisorsRes.data) {
+                    const matchingSupervisor = supervisorsRes.data.find(s => 
+                        `${s.nombre} ${s.apellido || ''}`.trim().toLowerCase() === reportData.encargado_nombre.trim().toLowerCase() && s.email
+                    );
+                    if (matchingSupervisor) {
                         const supervisorRecipient: Recipient = {
-                            email: (reportData as any).encargado.email,
-                            name: `${(reportData as any).encargado.nombre} ${(reportData as any).encargado.apellido || ''}`.trim(),
+                            email: matchingSupervisor.email!,
+                            name: reportData.encargado_nombre,
                             type: 'supervisor' as const,
                         };
                         setRecipients([supervisorRecipient]);
                     }
+                }
+
+                // Generate PDF
+                const generator = reportType === 'service' ? generateServiceReport : generateVisitReport;
+                const pdfDataUri = await generator(reportData as any, logoUrl, 'datauristring');
+                
+                const reportCode = reportData.codigo || reportId;
+                const filename = `reporte-${reportType}-${reportCode}.pdf`;
+
+                if (pdfDataUri && (pdfDataUri as string).includes('base64,')) {
+                    const base64Content = (pdfDataUri as string).split('base64,')[1];
+                    setAttachment({ filename, content: base64Content });
+                    
+                    const reportTitle = reportType === 'service' ? 'Servicio' : 'Visita';
+                    setSubject(`Reporte de ${reportTitle}: ${reportCode} - ${reportData.empresa_nombre || ''}`);
+                    const reportDate = reportData.fecha || (reportData.created_at ? new Date(reportData.created_at).toLocaleDateString('es-ES') : 'N/A');
+                    setBody(`Estimado(a),\n\nAdjunto encontrará el reporte de ${reportTitle} con código ${reportCode} realizado en la fecha ${reportDate}.\n\nSaludos cordiales.`);
+                } else {
+                    throw new Error("La generación del PDF no devolvió un Data URI válido.");
                 }
 
             } catch (err: any) {
@@ -163,7 +168,7 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
 
 
     const handleSend = async () => {
-        if (isSending || !attachment || !configLoaded) return;
+        if (isSending || !configLoaded) return;
         if (recipients.length === 0) {
             setFeedback({ type: 'error', message: 'Por favor, añade al menos un destinatario.' });
             return;
@@ -175,30 +180,32 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
         let errorCount = 0;
         let lastErrorMessage = '';
 
+        const { url, headers } = emailConfig;
+
         for (const recipient of recipients) {
             try {
                  const payload = {
                     from: emailConfig.from,
                     to: recipient.email,
                     subject: subject,
-                    message: body,
+                    message: body.replace(/\n/g, '<br />'),
                     attachments: attachment ? [
                         {
                             filename: attachment.filename,
                             content: attachment.content,
-                            encoding: "base64",
                         }
                     ] : [],
                 };
 
-                 const response = await fetch(emailConfig.url, {
-                    method: 'POST',
+                const response = await fetch(url, {
+                    method: 'POST', // Always use POST as required by the backend
                     headers: {
                         'Content-Type': 'application/json',
+                        ...headers,
                     },
                     body: JSON.stringify(payload),
                 });
-
+                
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(`El servidor respondió con estado ${response.status}: ${errorText}`);

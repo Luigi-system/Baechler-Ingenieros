@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import type { ServiceReport } from '../../types';
 import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon, MailIcon } from '../ui/Icons';
@@ -17,22 +16,28 @@ interface ReportListProps {
   onEditReport: (id: number) => void;
 }
 
-const calculateCompletion = (report: ServiceReport): number => {
-    const totalFields = 10;
-    let completedFields = 0;
+const calculateCompletion = (report: ServiceReport): { percentage: number; missingFields: string[] } => {
+    const fields = [
+        { name: 'Código', isComplete: !!report.codigo },
+        { name: 'Fecha', isComplete: !!report.fecha },
+        { name: 'Empresa', isComplete: !!report.empresa_nombre },
+        { name: 'Planta', isComplete: !!report.enpresa_planta },
+        { name: 'N° Serie de Máquina', isComplete: !!report.maquina_seria },
+        { name: 'Problemas Encontrados', isComplete: !!report.problemas_encontraados },
+        { name: 'Acciones Realizadas', isComplete: !!report.acciones_realizadas },
+        { name: 'Estado de Máquina', isComplete: report.operatio !== undefined && report.operatio !== null },
+        { name: 'Nombre del Encargado', isComplete: !!report.encargado_nombre },
+        { name: 'Firma de Conformidad', isComplete: !!report.foto_firma },
+        { name: 'Reporte Finalizado', isComplete: !!report.estado },
+    ];
 
-    if (report.codigo) completedFields++;
-    if (report.fecha) completedFields++;
-    if (report.empresa_nombre) completedFields++;
-    if (report.enpresa_planta) completedFields++;
-    if (report.maquina_seria) completedFields++;
-    if (report.problemas_encontraados) completedFields++;
-    if (report.acciones_realizadas) completedFields++;
-    if (report.operatio || report.en_prueba) completedFields++; // Simplified status
-    if (report.encargado_nombre) completedFields++;
-    if (report.foto_firma) completedFields++;
+    const completedCount = fields.filter(f => f.isComplete).length;
+    const missingFields = fields.filter(f => !f.isComplete).map(f => f.name);
 
-    return (completedFields / totalFields) * 100;
+    return {
+        percentage: (completedCount / fields.length) * 100,
+        missingFields,
+    };
 };
 
 const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onEditReport }) => {
@@ -224,7 +229,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Creado Por</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Facturación</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Estado Reporte</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Estado</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
                         </tr>
@@ -232,7 +237,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                     <tbody className="divide-y divide-base-border">
                         {filteredReports.length > 0 ? filteredReports.map((report) => {
                         const billingStatus = getBillingStatusInfo(report);
-                        const completion = calculateCompletion(report);
+                        const { percentage, missingFields } = calculateCompletion(report);
                         return (
                         <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-base-content">{report.codigo || 'N/A'}</td>
@@ -243,13 +248,31 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                                 {billingStatus.text}
                             </span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" checked={!!report.estado} onChange={() => handleStatusToggle(report)} className="sr-only peer" />
-                                    <div className="w-11 h-6 bg-base-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary-focus peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-base-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                    <span className="ml-3 text-sm font-medium">{report.estado ? 'Finalizado' : 'En Progreso'}</span>
-                                </label>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="group relative w-8 h-8">
+                                    <ProgressCircle percentage={percentage} />
+                                    {missingFields.length > 0 && (
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-base-300 text-base-content text-xs rounded py-2 px-3 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 shadow-lg">
+                                            <p className="font-bold border-b border-base-border pb-1 mb-1">Falta completar:</p>
+                                            <ul className="list-disc list-inside text-left">
+                                                {missingFields.map(field => <li key={field}>{field}</li>)}
+                                            </ul>
+                                            <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-base-300 transform rotate-45"></div>
+                                        </div>
+                                    )}
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <button
+                                    onClick={() => handleStatusToggle(report)}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-base-200 ${
+                                        report.estado
+                                        ? 'bg-success text-white shadow-inner border border-success/80'
+                                        : 'bg-base-100 text-neutral border border-base-border shadow-sm hover:bg-base-300'
+                                    }`}
+                                >
+                                    {report.estado ? 'Finalizado' : 'En Progreso'}
+                                </button>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{new Date(report.fecha || '').toLocaleDateString('es-ES', { timeZone: 'UTC' })}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
@@ -294,7 +317,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
             <div className="md:hidden space-y-3">
                 {filteredReports.length > 0 ? filteredReports.map((report) => {
                     const billingStatus = getBillingStatusInfo(report);
-                    const completion = calculateCompletion(report);
+                    const { percentage, missingFields } = calculateCompletion(report);
                     return (
                     <div key={report.id} className="bg-base-200 rounded-lg shadow-md p-4 space-y-3">
                         <div className="flex justify-between items-start">
@@ -315,16 +338,30 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                         <div className="flex justify-between items-center gap-4">
                             <div className="flex-1">
                                 <label className="text-xs text-neutral">Completado</label>
-                                <div className="flex items-center gap-2">
-                                    <ProgressCircle percentage={completion} />
+                                <div className="group relative inline-flex mt-1">
+                                    <ProgressCircle percentage={percentage} />
+                                    {missingFields.length > 0 && (
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-base-300 text-base-content text-xs rounded py-2 px-3 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 shadow-lg">
+                                            <p className="font-bold border-b border-base-border pb-1 mb-1">Falta completar:</p>
+                                            <ul className="list-disc list-inside text-left">
+                                                {missingFields.map(field => <li key={field}>{field}</li>)}
+                                            </ul>
+                                            <div className="absolute left-1/2 -translate-x-1/2 bottom-[-4px] w-2 h-2 bg-base-300 transform rotate-45"></div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex-1 text-right">
-                                <label className="text-xs text-neutral">Estado</label>
-                                <label className="relative inline-flex items-center cursor-pointer mt-1">
-                                    <input type="checkbox" checked={!!report.estado} onChange={() => handleStatusToggle(report)} className="sr-only peer" />
-                                    <div className="w-11 h-6 bg-base-300 rounded-full peer peer-focus:ring-2 peer-focus:ring-primary-focus peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-base-border after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-                                </label>
+                                <button
+                                    onClick={() => handleStatusToggle(report)}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-base-200 ${
+                                        report.estado
+                                        ? 'bg-success text-white shadow-inner border border-success/80'
+                                        : 'bg-base-100 text-neutral border border-base-border shadow-sm hover:bg-base-300'
+                                    }`}
+                                >
+                                    {report.estado ? 'Finalizado' : 'En Progreso'}
+                                </button>
                             </div>
                         </div>
 
