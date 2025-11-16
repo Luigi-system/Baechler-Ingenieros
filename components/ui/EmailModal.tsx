@@ -180,7 +180,7 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
         let errorCount = 0;
         let lastErrorMessage = '';
 
-        const { url, headers } = emailConfig;
+        const { url } = emailConfig;
 
         for (const recipient of recipients) {
             try {
@@ -197,11 +197,12 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
                     ] : [],
                 };
 
+                console.log('Enviando correo con el siguiente payload:', payload);
+
                 const response = await fetch(url, {
-                    method: 'POST', // Always use POST as required by the backend
+                    method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        ...headers,
                     },
                     body: JSON.stringify(payload),
                 });
@@ -248,6 +249,30 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
             p => (p.name.toLowerCase().includes(lowercasedTerm) || p.email.toLowerCase().includes(lowercasedTerm)) && !recipients.some(r => r.email === p.email)
         );
     }, [searchTerm, allPossibleRecipients, recipients]);
+
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+    const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' && searchTerm.trim() !== '') {
+            e.preventDefault();
+            const term = searchTerm.trim();
+            
+            const exactMatch = filteredSuggestions.find(p => p.email.toLowerCase() === term.toLowerCase());
+            if (exactMatch) {
+                addRecipient(exactMatch);
+            } else if (isValidEmail(term)) {
+                const newRecipient: Recipient = {
+                    email: term,
+                    name: term.split('@')[0],
+                    type: 'supervisor', // Treat manually added emails as a supervisor type for simplicity
+                };
+                addRecipient(newRecipient);
+            } else {
+                setFeedback({ type: 'error', message: 'Por favor, introduce un correo electrónico válido y presiona Enter.' });
+                setTimeout(() => setFeedback(null), 3000);
+            }
+        }
+    };
     
     return (
         <Modal isOpen={isOpen} onClose={onClose} title="Enviar Reporte por Correo" maxWidth="max-w-3xl">
@@ -267,7 +292,8 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 onFocus={() => setShowSuggestions(true)}
-                                placeholder="Buscar por nombre o email..."
+                                onKeyDown={handleSearchKeyDown}
+                                placeholder="Buscar o añadir nuevo correo y presionar Enter..."
                                 className="flex-grow bg-transparent focus:outline-none text-sm p-1"
                             />
                         </div>
