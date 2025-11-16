@@ -362,8 +362,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             return;
         }
 
+        if (autocompleteService === 'openai' && file.type === 'application/pdf') {
+            setAiError(`OpenAI no soporta PDFs para esta función, solo imágenes. Por favor, selecciona Gemini como servicio de autocompletado o sube una imagen.`);
+            setIsAiLoading(false);
+            return;
+        }
+
+        const getBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+
         try {
-            const base64Data = await fileToPngDataUrl(file);
+            const dataUrl = await getBase64(file);
+            const mimeType = dataUrl.substring(dataUrl.indexOf(':') + 1, dataUrl.indexOf(';'));
+            const base64Data = dataUrl.split(',')[1];
+
             const textPrompt = 'Del documento adjunto, extrae la siguiente información: codigo, fecha (YYYY-MM-DD), hora_entrada (HH:MM), hora_salida (HH:MM), empresa_nombre (que es lo mismo que "cliente"), enpresa_planta (que es la ubicación del servicio), maquina_seria (que puede aparecer como "equipo" o "marca"), maquina_modelo, encargado_nombre (que puede aparecer como "responsable"), problemas_encontraados, acciones_realizadas, observaciones. Proporciona la salida en formato JSON.';
             
             let parsed: any;
@@ -371,7 +387,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             if (autocompleteService === 'gemini' && geminiClient) {
                  const response = await geminiClient.models.generateContent({
                     model: "gemini-2.5-flash",
-                    contents: [{ parts: [ { inlineData: { mimeType: 'image/png', data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
+                    contents: [{ parts: [ { inlineData: { mimeType: mimeType, data: base64Data } }, { text: textPrompt } ] }],
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: {
@@ -405,7 +421,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                 { 
                                     type: "image_url",
                                     image_url: {
-                                        url: base64Data, // Full data URI with prefix
+                                        url: dataUrl, // Full data URI with prefix
                                         detail: "low"
                                     }
                                 }

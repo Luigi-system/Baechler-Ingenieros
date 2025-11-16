@@ -367,8 +367,24 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             return;
         }
 
+        if (autocompleteService === 'openai' && file.type === 'application/pdf') {
+            setAiError(`OpenAI no soporta PDFs para esta función, solo imágenes. Por favor, selecciona Gemini como servicio de autocompletado o sube una imagen.`);
+            setIsAiLoading(false);
+            return;
+        }
+
+        const getBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = error => reject(error);
+        });
+
         try {
-            const base64Data = await fileToPngDataUrl(file);
+            const dataUrl = await getBase64(file);
+            const mimeType = dataUrl.substring(dataUrl.indexOf(':') + 1, dataUrl.indexOf(';'));
+            const base64Data = dataUrl.split(',')[1];
+            
             const textPrompt = `Del documento adjunto, extrae la siguiente información y proporciona la salida en formato JSON:
 - codigo
 - empresa_nombre
@@ -390,7 +406,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             if (autocompleteService === 'gemini' && geminiClient) {
                  const response = await geminiClient.models.generateContent({
                     model: "gemini-2.5-flash",
-                    contents: [{ parts: [ { inlineData: { mimeType: 'image/png', data: base64Data.split(',')[1] } }, { text: textPrompt } ] }],
+                    contents: [{ parts: [ { inlineData: { mimeType, data: base64Data } }, { text: textPrompt } ] }],
                     config: {
                         responseMimeType: "application/json",
                         responseSchema: {
@@ -426,7 +442,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             } else if (autocompleteService === 'openai' && openaiClient) {
                  const response = await openaiClient.chat.completions.create({
                     model: "gpt-4o",
-                    messages: [ { role: "user", content: [ { type: "text", text: textPrompt }, { type: "image_url", image_url: { url: base64Data } } ] } ],
+                    messages: [ { role: "user", content: [ { type: "text", text: textPrompt }, { type: "image_url", image_url: { url: dataUrl } } ] } ],
                     response_format: { type: "json_object" }
                 });
                 const content = response.choices[0]?.message?.content;
