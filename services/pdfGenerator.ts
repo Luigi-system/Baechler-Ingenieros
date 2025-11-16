@@ -1,4 +1,5 @@
 
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { ServiceReport, VisitReport } from '../types';
@@ -381,61 +382,55 @@ export const generateVisitReport = async (
         }
     };
     
-    // --- Image Processing for Visit Report ---
     const [
         observacionesImages,
         sugerenciasImages,
         firmaImageArray,
     ] = await Promise.all([
-        prepareImages([...(report.fotosObservacionesBase64 || []), ...(report.foto_observaciones ? [report.foto_observaciones] : [])]),
-        prepareImages([...(report.fotosSugerenciasBase64 || []), ...(report.foto_sugerencias ? [report.foto_sugerencias] : [])]),
-        prepareImages([...(report.fotoFirmaBase64 ? [report.fotoFirmaBase64] : []), ...(report.firma ? [report.firma] : [])]),
+        prepareImages([...(report.fotosObservacionesBase64 || []), ...(report.fotos_observaciones ? [report.fotos_observaciones] : [])]),
+        prepareImages([...(report.fotosSugerenciasBase64 || []), ...(report.fotos_sugerencias ? [report.fotos_sugerencias] : [])]),
+        prepareImages([...(report.fotoFirmaBase64 ? [report.fotoFirmaBase64] : []), ...(report.foto_firma ? [report.foto_firma] : [])]),
     ]);
-    const firmaImage = firmaImageArray.length > 0 ? firmaImageArray[0] : undefined;
+    const firmaImage = firmaImageArray.length > 0 ? firmaImageArray[0] : null;
 
-
-    // --- DETAILS TABLE ---
-     autoTable(doc, {
+    autoTable(doc, {
         ...commonAutoTableOptions,
         startY: finalY,
         body: [
-            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa ?? 'N/A'],
-            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.planta ?? 'N/A'],
-            [{ content: 'FECHA', styles: { fontStyle: 'bold' } }, report.fecha ? new Date(report.fecha + 'T00:00:00Z').toLocaleDateString('es-ES') : 'N/A'],
-            [{ content: 'HORAS', styles: { fontStyle: 'bold' } }, `Ingreso: ${report.hora_ingreso ?? '--:--'} - Salida: ${report.hora_salida ?? '--:--'}`],
-            [{ content: 'REALIZADO POR (TÉCNICO)', styles: { fontStyle: 'bold' } }, report.usuario?.nombres ?? 'N/A'],
+            [{ content: 'CLIENTE', styles: { fontStyle: 'bold' } }, report.empresa_nombre ?? 'N/A', { content: 'CÓDIGO', styles: { fontStyle: 'bold' } }, report.codigo ?? 'N/A'],
+            [{ content: 'PLANTA / SEDE', styles: { fontStyle: 'bold' } }, report.empresa_planta ?? 'N/A', { content: 'FECHA', styles: { fontStyle: 'bold' } }, report.created_at ? new Date(report.created_at).toLocaleDateString('es-ES') : 'N/A'],
+            [{ content: 'REALIZADO POR (TÉCNICO)', styles: { fontStyle: 'bold' } }, { content: report.usuario_nombre ?? 'N/A', colSpan: 3 }],
         ],
         styles: { fontSize: 9, cellPadding: 2 },
-        columnStyles: { 0: { cellWidth: 40 } },
     });
     finalY = (doc as any).lastAutoTable.finalY;
     
-    // --- CONTACTS TABLE ---
     autoTable(doc, {
         ...commonAutoTableOptions,
         startY: finalY + 2,
-        head: [[{ content: 'CONTACTOS', colSpan: 2, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
+        head: [[{ content: 'CONTACTO EN PLANTA', colSpan: 2, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
         body: [
-            ['Encargado de Planta', `${report.nombre_encargado || 'N/A'} | Cel: ${report.celular_encargado || 'N/A'} | Email: ${report.email_encargado || 'N/A'}`],
-            ['Operador de Máquina', `${report.nombre_operador || 'N/A'} | Cel: ${report.celular_operador || 'N/A'}`],
+            ['Encargado', `${report.encargado_nombre || 'N/A'} | Cel: ${report.encargado_cel || 'N/A'}`],
         ],
         styles: { fontSize: 9, cellPadding: 2 },
         columnStyles: { 0: { cellWidth: 50, fontStyle: 'bold' } },
     });
     finalY = (doc as any).lastAutoTable.finalY;
 
-
-    // --- CHECKLIST & MACHINES ---
+    const checklistBody = [
+        ['Voltaje Estable', `(${report.voltaje_establecido ? 'SI' : 'NO'})`],
+        ['Línea a Tierra', `(${report.linea_a_tierra ? 'SI' : 'NO'})`],
+        ['Presurización de Cabezal', `(${report.presurizacion_de_cabezal ? 'SI' : 'NO'})`],
+        ['Transformador de Aislamiento', `(${report.transformador_de_aislamiento ? 'SI' : 'NO'})`],
+        ['Limpieza de Cabezal', `(${report.limpieza_cabezal ? 'SI' : 'NO'})`],
+    ];
     autoTable(doc, {
         ...commonAutoTableOptions,
         startY: finalY + 5,
-        head: [[{ content: 'CHECKLIST TÉCNICO', colSpan: 6, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
-        body: [[
-            'Voltaje Estable', `(${report.voltaje_establecido ? 'SI' : 'NO'})`,
-            'Presurización', `(${report.presurizacion ? 'SI' : 'NO'})`,
-            'Transformador', `(${report.transformador ? 'SI' : 'NO'})`,
-        ]],
-        styles: { fontSize: 9, cellPadding: 1.5, halign: 'center' },
+        head: [[{ content: 'CHECKLIST TÉCNICO', colSpan: 2, styles: { halign: 'center', fillColor: '#EAEAEA', textColor: '#333' } }]],
+        body: checklistBody,
+        styles: { fontSize: 9, cellPadding: 1.5 },
+        columnStyles: { 1: { halign: 'center' } },
     });
     finalY = (doc as any).lastAutoTable.finalY;
 
@@ -449,18 +444,34 @@ export const generateVisitReport = async (
             columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 'auto' } },
         });
         finalY = (doc as any).lastAutoTable.finalY;
+    } else if (report.maquinas && report.maquinas.length > 0) {
+        const machineData = report.maquinas.map(maquinaString => {
+            const parts = maquinaString.split(': ');
+            const machinePart = parts[0] || 'N/A';
+            const observaciones = parts.length > 1 ? parts.slice(1).join(': ') : 'N/A';
+            return [machinePart.trim(), observaciones.trim()];
+        });
+
+        autoTable(doc, {
+            ...commonAutoTableOptions,
+            startY: finalY + 5,
+            head: [['Máquina (Serie / Modelo / Marca)', 'Observaciones']],
+            body: machineData,
+            styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak' },
+            columnStyles: { 0: { cellWidth: 80 }, 1: { cellWidth: 'auto' } },
+        });
+        finalY = (doc as any).lastAutoTable.finalY;
     } else {
         autoTable(doc, {
             ...commonAutoTableOptions,
             startY: finalY + 5,
             head: [['MÁQUINAS ATENDIDAS']],
-            body: report.maquinas && report.maquinas.length > 0 ? report.maquinas.map(m => [m]) : [['N/A']],
+            body: [['N/A']],
             styles: { fontSize: 9, cellPadding: 2 },
         });
         finalY = (doc as any).lastAutoTable.finalY;
     }
 
-    // --- DYNAMIC SECTIONS HELPER ---
     const drawSection = (title: string, content: string | undefined, images: string[] | undefined) => {
         autoTable(doc, {
             ...commonAutoTableOptions,
@@ -480,16 +491,16 @@ export const generateVisitReport = async (
         }
     };
     
-    drawSection('OBSERVACIONES / FOTOS GENERALES', undefined, observacionesImages);
+    drawSection('OBSERVACIONES', report.observaciones, observacionesImages);
     drawSection('SUGERENCIAS', report.sugerencias, sugerenciasImages);
-
+    
     // --- SIGNATURES ---
-    let signatureBlockStartY = finalY + 10;
+    let signatureBlockStartY = finalY + 15;
     const signatureImageHeight = 20;
     const signatureTextHeight = 15;
     const signatureBlockHeight = signatureImageHeight + signatureTextHeight;
 
-    if (signatureBlockStartY + signatureBlockHeight > doc.internal.pageSize.height - 20) { // Check space for footer
+    if (signatureBlockStartY + signatureBlockHeight > doc.internal.pageSize.height - 20) {
         doc.addPage();
         signatureBlockStartY = pageHeaderMargin;
     }
@@ -497,35 +508,31 @@ export const generateVisitReport = async (
     const centerX = doc.internal.pageSize.getWidth() / 2;
     const signatureLineWidth = 70;
 
-    // Draw signature image if it exists, centered above the client signature line
     if (firmaImage) {
         try {
-            const imageX = centerX - (60 / 2); // Center image over the signature line
+            const imageX = centerX - (60 / 2);
             doc.addImage(firmaImage, 'PNG', imageX, signatureBlockStartY, 60, signatureImageHeight, undefined, 'FAST');
         } catch(e) { console.error("Could not add signature image", e); }
     }
     
-    // Y position for the CLIENT's signature line, placed after the image space
     const clientLineY = signatureBlockStartY + signatureImageHeight + 2;
     
-    doc.setDrawColor(0); // black
+    doc.setDrawColor(0);
     doc.setLineWidth(0.2);
-    // Line for "CONFORMIDAD CLIENTE"
     doc.line(centerX - (signatureLineWidth / 2), clientLineY, centerX + (signatureLineWidth / 2), clientLineY);
 
-    // Add signature text below line
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     const encargadoDetails = [
-        report.nombre_encargado ?? 'N/A',
-        report.celular_encargado ? `Cel: ${report.celular_encargado}` : ''
+        report.encargado_nombre ?? 'N/A',
+        report.encargado_cel ? `Cel: ${report.encargado_cel}` : ''
     ].filter(Boolean).join('\n');
     doc.text(`CONFORMIDAD CLIENTE:\n${encargadoDetails}`, centerX, clientLineY + 5, { align: 'center' });
     
     addFooters(doc);
 
     if (outputType === 'save') {
-        doc.save(`reporte-visita-${new Date().toISOString().split('T')[0]}.pdf`);
+        doc.save(`reporte-visita-${report.codigo || 'S-C'}-${new Date().toISOString().split('T')[0]}.pdf`);
     } else {
         return doc.output('datauristring');
     }

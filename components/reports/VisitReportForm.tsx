@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { useSupabase } from '../../contexts/SupabaseContext';
@@ -15,7 +13,7 @@ import Modal from '../ui/Modal';
 import CompanyForm from '../management/companies/CompanyForm';
 import PlantForm from '../management/plants/PlantForm';
 import SupervisorForm from '../management/supervisors/SupervisorForm';
-import MachineForm from '../management/machines/MachineForm'; // Import MachineForm
+import MachineForm from '../management/machines/MachineForm';
 
 interface ReportFormProps {
   reportId?: string | null;
@@ -23,7 +21,6 @@ interface ReportFormProps {
 }
 
 const fileToPngDataUrl = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    // Ensure file is an image before processing
     if (!file.type.startsWith('image/')) {
         return reject(new Error('El archivo no es una imagen.'));
     }
@@ -39,7 +36,6 @@ const fileToPngDataUrl = (file: File): Promise<string> => new Promise((resolve, 
                 return reject(new Error('No se pudo obtener el contexto del canvas'));
             }
             ctx.drawImage(img, 0, 0);
-            // Returns a data URI, e.g., "data:image/png;base64,..."
             resolve(canvas.toDataURL('image/png'));
         };
         img.onerror = (err) => reject(new Error('La imagen no se pudo cargar.'));
@@ -55,12 +51,10 @@ const fileToPngDataUrl = (file: File): Promise<string> => new Promise((resolve, 
 
 const stripDataUriPrefix = (dataUri: string) => dataUri.split('base64,')[1];
 
-// Helper function to robustly create a data URL
 const toDataURL = (b64OrDataURL: string): string => {
     if (b64OrDataURL.startsWith('data:image')) {
-        return b64OrDataURL; // It's already a data URL, return as is.
+        return b64OrDataURL;
     }
-    // Smart-prefixing for raw base64 strings. JPEG base64 often starts with /9j/.
     const prefix = b64OrDataURL.startsWith('/9j/') ? 'data:image/jpeg;base64,' : 'data:image/png;base64,';
     return prefix + b64OrDataURL;
 };
@@ -71,28 +65,24 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const { logoUrl } = useTheme();
     const { autocompleteService, geminiClient, openaiClient, isAutocompleteServiceConfigured } = useAiService();
 
-    // FIX: Explicitly initializing optional fields in formData to ensure TypeScript recognizes them.
     const [formData, setFormData] = useState<Partial<VisitReport>>({
-        fecha: new Date().toISOString().split('T')[0],
-        form_id_empresa: undefined, // Explicitly include for type recognition
-        form_id_planta: undefined,  // Explicitly include for type recognition
-        form_id_encargado: undefined, // Explicitly include for type recognition
+        estado: 'En Progreso',
+        form_id_empresa: undefined,
+        form_id_planta: undefined,
+        form_id_encargado: undefined,
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Relational Data
     const [companies, setCompanies] = useState<Company[]>([]);
     const [plants, setPlants] = useState<Plant[]>([]);
     const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
     const [machines, setMachines] = useState<Machine[]>([]);
     
-    // File states
     const [fotosObservaciones, setFotosObservaciones] = useState<File[]>([]);
     const [fotosSugerencias, setFotosSugerencias] = useState<File[]>([]);
     const [fotoFirma, setFotoFirma] = useState<File[]>([]);
     const [selectedMaquinas, setSelectedMaquinas] = useState<{ machine: Machine, observaciones: string }[]>([]);
 
-    // UI States
     const [isDataLoading, setIsDataLoading] = useState(true);
     const [isSimulatorVisible, setIsSimulatorVisible] = useState(true);
     const [pdfPreviewUri, setPdfPreviewUri] = useState<string | null>(null);
@@ -101,12 +91,10 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const [isPlantsLoading, setIsPlantsLoading] = useState(false);
     const [isSupervisorsLoading, setIsSupervisorsLoading] = useState(false);
     
-    // AI States
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [aiError, setAiError] = useState<string | null>(null);
     const [fileName, setFileName] = useState<string | null>(null);
 
-    // Autocomplete/Modal States
     const [companySearchText, setCompanySearchText] = useState('');
     const [plantSearchText, setPlantSearchText] = useState('');
     const [supervisorSearchText, setSupervisorSearchText] = useState('');
@@ -123,7 +111,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     const [isPlantSearchModalOpen, setIsPlantSearchModalOpen] = useState(false);
     const [isNewSupervisorModalOpen, setIsNewSupervisorModalOpen] = useState(false);
     const [isSupervisorSearchModalOpen, setIsSupervisorSearchModalOpen] = useState(false);
-    // New states for Machine Modals
     const [isNewMachineModalOpen, setIsNewMachineModalOpen] = useState(false);
     const [isMachineSearchModalOpen, setIsMachineSearchModalOpen] = useState(false);
 
@@ -134,7 +121,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 supabase.from('Empresa').select('*'),
                 supabase.from('Planta').select('*'),
                 supabase.from('Encargado').select('*'),
-                supabase.from('Maquinas').select('*, planta:Planta(nombre), empresa:Empresa(nombre)'), // Fetch joined data for machine
+                supabase.from('Maquinas').select('*, planta:Planta(nombre), empresa:Empresa(nombre)'),
             ]);
             if (companyRes.error) throw companyRes.error;
             if (plantRes.error) throw plantRes.error;
@@ -150,7 +137,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             setCompanies(companyRes.data);
             setPlants(plantRes.data);
             setSupervisors(supervisorRes.data);
-            setMachines(formattedMachines); // Use formatted machines
+            setMachines(formattedMachines);
             return { companies: companyRes.data, plants: plantRes.data, supervisors: supervisorRes.data, machines: formattedMachines };
         } catch (error: any) {
              console.error("Error fetching dropdown data", error);
@@ -164,32 +151,28 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             const { companies, plants, supervisors, machines } = await fetchDropdownData();
 
             if (reportId && supabase) {
-                const { data: reportData, error } = await supabase.from('Reporte_Visita').select('*, foto_observaciones, foto_sugerencias, firma').eq('id', reportId).single();
+                const { data: reportData, error } = await supabase.from('Reporte_Visita').select('*').eq('id', reportId).single();
                 if (error) {
                     console.error("Error fetching visit report for editing:", error);
                 } else if (reportData) {
-                    const company = companies.find(c => (c.nombre || '').trim().toLowerCase() === (reportData.empresa || '').trim().toLowerCase());
-                    const plant = company ? plants.find(p => p.id_empresa === company.id && (p.nombre || '').trim().toLowerCase() === (reportData.planta || '').trim().toLowerCase()) : undefined;
+                    const company = companies.find(c => (c.nombre || '').trim().toLowerCase() === (reportData.empresa_nombre || '').trim().toLowerCase());
+                    const plant = company ? plants.find(p => p.id_empresa === company.id && (p.nombre || '').trim().toLowerCase() === (reportData.empresa_planta || '').trim().toLowerCase()) : undefined;
                     const supervisor = (company && plant) ? supervisors.find(s => 
                         (s.nombreEmpresa || '').trim().toLowerCase() === (company.nombre || '').trim().toLowerCase() && 
                         (s.nombrePlanta || '').trim().toLowerCase() === (plant.nombre || '').trim().toLowerCase() &&
-                        `${s.nombre || ''} ${s.apellido || ''}`.trim().toLowerCase() === (reportData.nombre_encargado || '').trim().toLowerCase()
+                        `${s.nombre || ''} ${s.apellido || ''}`.trim().toLowerCase() === (reportData.encargado_nombre || '').trim().toLowerCase()
                     ) : undefined;
-                    
-                    const formattedDate = reportData.fecha ? new Date(reportData.fecha).toISOString().split('T')[0] : reportData.fecha;
 
                     const formDataToSet: Partial<VisitReport> = {
                         ...reportData,
-                        fecha: formattedDate,
                         form_id_empresa: company?.id,
                         form_id_planta: plant?.id,
                         form_id_encargado: supervisor?.id,
                     };
                     
-                    // Convert base64 from bytea to data URIs for display, handling potentially corrupt data
-                    formDataToSet.foto_observaciones = reportData.foto_observaciones ? toDataURL(reportData.foto_observaciones) : null;
-                    formDataToSet.foto_sugerencias = reportData.foto_sugerencias ? toDataURL(reportData.foto_sugerencias) : null;
-                    formDataToSet.firma = reportData.firma ? toDataURL(reportData.firma) : null;
+                    formDataToSet.fotos_observaciones = reportData.fotos_observaciones ? toDataURL(reportData.fotos_observaciones) : null;
+                    formDataToSet.fotos_sugerencias = reportData.fotos_sugerencias ? toDataURL(reportData.fotos_sugerencias) : null;
+                    formDataToSet.foto_firma = reportData.foto_firma ? toDataURL(reportData.foto_firma) : null;
 
                     setFormData(formDataToSet);
 
@@ -235,10 +218,10 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         machineLabel: `${item.machine.serie} - ${item.machine.modelo || ''} (${item.machine.marca || 'S/M'})`,
                         observations: item.observaciones,
                     })),
-                    usuario: { nombres: auth?.user?.nombres || 'N/A' },
-                    fotosObservacionesBase64: [...(formData.foto_observaciones ? [formData.foto_observaciones] : []), ...fotosObservacionesBase64],
-                    fotosSugerenciasBase64: [...(formData.foto_sugerencias ? [formData.foto_sugerencias] : []), ...fotosSugerenciasBase64],
-                    fotoFirmaBase64: fotoFirmaBase64 || formData.firma || undefined,
+                    usuario_nombre: auth?.user?.nombres || 'N/A',
+                    fotosObservacionesBase64: [...(formData.fotos_observaciones ? [formData.fotos_observaciones] : []), ...fotosObservacionesBase64],
+                    fotosSugerenciasBase64: [...(formData.fotos_sugerencias ? [formData.fotos_sugerencias] : []), ...fotosSugerenciasBase64],
+                    fotoFirmaBase64: fotoFirmaBase64 || formData.foto_firma || undefined,
                 };
                 const uri = await generateVisitReport(enrichedData, logoUrl, 'datauristring');
                 setPdfPreviewUri(uri as string);
@@ -251,7 +234,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         }, 500);
     }, [formData, selectedMaquinas, logoUrl, auth?.user, fotosObservaciones, fotosSugerencias, fotoFirma]);
 
-    // Memoized lists for suggestions
     const companySuggestions = useMemo(() => companySearchText ? companies.filter(c => (c.nombre || '').toLowerCase().includes(companySearchText.toLowerCase())).slice(0, 5) : [], [companySearchText, companies]);
     const filteredPlants = useMemo(() => plants.filter(p => p.id_empresa === formData.form_id_empresa), [plants, formData.form_id_empresa]);
     const plantSuggestions = useMemo(() => plantSearchText ? filteredPlants.filter(p => (p.nombre || '').toLowerCase().includes(plantSearchText.toLowerCase())).slice(0, 5) : [], [plantSearchText, filteredPlants]);
@@ -281,8 +263,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         ).slice(0, 5);
     }, [machineSearch, availableMachinesForPlant, selectedMaquinas]);
 
-
-    // Handlers
     const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
         const { name, value, type } = e.target;
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value }));
@@ -293,19 +273,17 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setFormData(prev => ({
             ...prev,
             form_id_empresa: company.id,
-            empresa: company.nombre,
-            cliente: company.nombre,
-            // Reset related fields when company changes
+            empresa_nombre: company.nombre,
             form_id_planta: undefined,
-            planta: undefined,
+            empresa_planta: undefined,
             form_id_encargado: undefined,
-            nombre_encargado: undefined,
-            celular_encargado: undefined,
-            email_encargado: undefined
+            encargado_nombre: undefined,
+            encargado_cel: undefined,
         }));
         setCompanySearchText(company.nombre);
         setPlantSearchText('');
         setSupervisorSearchText('');
+        setSelectedMaquinas([]);
         setShowCompanySuggestions(false);
         setIsCompanySearchModalOpen(false);
         setTimeout(() => setIsPlantsLoading(false), 300);
@@ -316,15 +294,14 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setFormData(prev => ({
             ...prev,
             form_id_planta: plant.id,
-            planta: plant.nombre,
-            // Reset related fields when plant changes
+            empresa_planta: plant.nombre,
             form_id_encargado: undefined,
-            nombre_encargado: undefined,
-            celular_encargado: undefined,
-            email_encargado: undefined
+            encargado_nombre: undefined,
+            encargado_cel: undefined,
         }));
         setPlantSearchText(plant.nombre);
         setSupervisorSearchText('');
+        setSelectedMaquinas([]);
         setShowPlantSuggestions(false);
         setIsPlantSearchModalOpen(false);
         setTimeout(() => setIsSupervisorsLoading(false), 300);
@@ -334,9 +311,8 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setFormData(prev => ({
             ...prev,
             form_id_encargado: supervisor.id,
-            nombre_encargado: `${supervisor.nombre} ${supervisor.apellido || ''}`.trim(),
-            celular_encargado: supervisor.celular?.toString(),
-            email_encargado: supervisor.email
+            encargado_nombre: `${supervisor.nombre} ${supervisor.apellido || ''}`.trim(),
+            encargado_cel: supervisor.celular?.toString(),
         }));
         setSupervisorSearchText(`${supervisor.nombre} ${supervisor.apellido || ''}`.trim());
         setShowSupervisorSuggestions(false);
@@ -344,14 +320,13 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     }, []);
 
     const handleSelectMachine = useCallback((machine: Machine) => {
-        // Add the selected machine to the list if not already present
         if (!selectedMaquinas.some(item => item.machine.id === machine.id)) {
             setSelectedMaquinas(prev => [...prev, { machine, observaciones: '' }]);
         }
-        setMachineSearch(''); // Clear search text after selection
+        setMachineSearch('');
         setShowMachineSuggestions(false);
-        setIsNewMachineModalOpen(false); // Close modal if opened from there
-        setIsMachineSearchModalOpen(false); // Close search modal if opened from there
+        setIsNewMachineModalOpen(false);
+        setIsMachineSearchModalOpen(false);
     }, [selectedMaquinas]);
 
     const handleCompanySaved = useCallback(async (newCompany: Company) => {
@@ -373,9 +348,9 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     }, [fetchDropdownData, handleSelectSupervisor]);
 
     const handleMachineSaved = useCallback(async (newMachine: Machine) => {
-        await fetchDropdownData(); // Re-fetch all data to get the new machine
-        handleSelectMachine(newMachine); // Select the newly created machine
-        setIsNewMachineModalOpen(false); // Close the new machine modal
+        await fetchDropdownData();
+        handleSelectMachine(newMachine);
+        setIsNewMachineModalOpen(false);
     }, [fetchDropdownData, handleSelectMachine]);
 
     const handleAiFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -387,7 +362,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         setAiError(null);
 
         if (!isAutocompleteServiceConfigured()) {
-            setAiError(`El servicio de IA para autocompletado (${autocompleteService}) no está configurado. Por favor, asegúrate de que la clave API esté configurada en la sección de Servicios Autocompletado.`);
+            setAiError(`El servicio de IA (${autocompleteService}) no está configurado.`);
             setIsAiLoading(false);
             return;
         }
@@ -395,20 +370,18 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         try {
             const base64Data = await fileToPngDataUrl(file);
             const textPrompt = `Del documento adjunto, extrae la siguiente información y proporciona la salida en formato JSON:
-- fecha (YYYY-MM-DD)
-- hora_ingreso (HH:MM)
-- hora_salida (HH:MM)
-- empresa (nombre de la empresa, a veces llamado "cliente")
-- planta (nombre de la planta/sede)
-- nombre_encargado (nombre completo del encargado de planta, a veces llamado "responsable")
-- celular_encargado
-- email_encargado
-- nombre_operador (nombre completo del operador de máquina, a veces llamado "técnico" o "colaborador")
-- celular_operador
-- voltaje_establecido (¿se verificó el voltaje establecido? Responde "SI" o "NO")
-- presurizacion (¿se verificó la presurización? Responde "SI" o "NO")
-- transformador (¿se verificó el transformador? Responde "SI" o "NO")
-- maquinas (un array de objetos. Cada objeto debe representar una fila de la tabla de máquinas y tener las propiedades "serie", "modelo" y "observaciones" extraídas de sus respectivas columnas.)
+- codigo
+- empresa_nombre
+- empresa_planta
+- encargado_nombre
+- encargado_cel
+- maquinas (un array de objetos, cada objeto con "serie" y "observaciones")
+- voltaje_establecido (boolean)
+- linea_a_tierra (boolean)
+- presurizacion_de_cabezal (boolean)
+- transformador_de_aislamiento (boolean)
+- limpieza_cabezal (boolean)
+- observaciones
 - sugerencias
 `;
             
@@ -423,30 +396,27 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         responseSchema: {
                             type: Type.OBJECT,
                             properties: {
-                                fecha: { type: Type.STRING },
-                                hora_ingreso: { type: Type.STRING },
-                                hora_salida: { type: Type.STRING },
-                                empresa: { type: Type.STRING },
-                                planta: { type: Type.STRING },
-                                nombre_encargado: { type: Type.STRING },
-                                celular_encargado: { type: Type.STRING },
-                                email_encargado: { type: Type.STRING },
-                                nombre_operador: { type: Type.STRING },
-                                celular_operador: { type: Type.STRING },
-                                voltaje_establecido: { type: Type.STRING },
-                                presurizacion: { type: Type.STRING },
-                                transformador: { type: Type.STRING },
+                                codigo: { type: Type.STRING },
+                                empresa_nombre: { type: Type.STRING },
+                                empresa_planta: { type: Type.STRING },
+                                encargado_nombre: { type: Type.STRING },
+                                encargado_cel: { type: Type.STRING },
                                 maquinas: {
                                     type: Type.ARRAY,
                                     items: {
                                         type: Type.OBJECT,
                                         properties: {
                                             serie: { type: Type.STRING },
-                                            modelo: { type: Type.STRING },
                                             observaciones: { type: Type.STRING },
                                         }
                                     }
                                 },
+                                voltaje_establecido: { type: Type.BOOLEAN },
+                                linea_a_tierra: { type: Type.BOOLEAN },
+                                presurizacion_de_cabezal: { type: Type.BOOLEAN },
+                                transformador_de_aislamiento: { type: Type.BOOLEAN },
+                                limpieza_cabezal: { type: Type.BOOLEAN },
+                                observaciones: { type: Type.STRING },
                                 sugerencias: { type: Type.STRING },
                             }
                         }
@@ -454,127 +424,60 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 });
                 parsed = JSON.parse(response.text);
             } else if (autocompleteService === 'openai' && openaiClient) {
-                const response = await openaiClient.chat.completions.create({
+                 const response = await openaiClient.chat.completions.create({
                     model: "gpt-4o",
-                    messages: [
-                        {
-                            role: "user",
-                            content: [
-                                { type: "text", text: textPrompt },
-                                { 
-                                    type: "image_url",
-                                    image_url: {
-                                        url: base64Data, // Full data URI with prefix
-                                        detail: "low"
-                                    }
-                                }
-                            ]
-                        }
-                    ],
+                    messages: [ { role: "user", content: [ { type: "text", text: textPrompt }, { type: "image_url", image_url: { url: base64Data } } ] } ],
                     response_format: { type: "json_object" }
                 });
                 const content = response.choices[0]?.message?.content;
                 if (!content) throw new Error("OpenAI returned an empty response.");
                 parsed = JSON.parse(content);
             } else {
-                 throw new Error(`Servicio de IA desconocido o no configurado para autocompletado: ${autocompleteService}`);
+                 throw new Error(`Servicio de IA desconocido o no configurado: ${autocompleteService}`);
             }
             
-            // Map parsed data to form state
             const newFormData: Partial<VisitReport> = {};
-
-            if (parsed.fecha) newFormData.fecha = parsed.fecha;
-            if (parsed.hora_ingreso) newFormData.hora_ingreso = parsed.hora_ingreso;
-            if (parsed.hora_salida) newFormData.hora_salida = parsed.hora_salida;
-            if (parsed.nombre_operador) newFormData.nombre_operador = parsed.nombre_operador;
-            if (parsed.celular_operador) newFormData.celular_operador = parsed.celular_operador;
-            if (parsed.sugerencias) newFormData.sugerencias = parsed.sugerencias;
+            for (const key of ['codigo', 'observaciones', 'sugerencias', 'voltaje_establecido', 'linea_a_tierra', 'presurizacion_de_cabezal', 'transformador_de_aislamiento', 'limpieza_cabezal']) {
+                if(parsed[key] !== undefined) (newFormData as any)[key] = parsed[key];
+            }
             
-            // Boolean conversions
-            newFormData.voltaje_establecido = parsed.voltaje_establecido?.toLowerCase() === 'si';
-            newFormData.presurizacion = parsed.presurizacion?.toLowerCase() === 'si';
-            newFormData.transformador = parsed.transformador?.toLowerCase() === 'si';
+            setFormData(prev => ({...prev, ...newFormData}));
 
-            // Relational data mapping and auto-selection
-            let selectedCompany: Company | undefined;
-            if (parsed.empresa) {
-                const companyNameToFind = parsed.empresa.toLowerCase();
-                selectedCompany = companies.find(c => (c.nombre || '').toLowerCase().includes(companyNameToFind));
-                if (selectedCompany) {
-                    handleSelectCompany(selectedCompany);
-                    newFormData.form_id_empresa = selectedCompany.id;
-                    newFormData.empresa = selectedCompany.nombre;
-                    newFormData.cliente = selectedCompany.nombre; // cliente is same as empresa for visit report
-                }
-            }
+            if (parsed.empresa_nombre) {
+                const foundCompany = companies.find(c => (c.nombre || '').toLowerCase().includes(parsed.empresa_nombre.toLowerCase()));
+                if (foundCompany) {
+                    handleSelectCompany(foundCompany);
+                    await new Promise(r => setTimeout(r, 400)); // Wait for state update
 
-            let selectedPlant: Plant | undefined;
-            if (parsed.planta && newFormData.form_id_empresa) { // << Accessing newFormData.form_id_empresa here
-                const plantNameToFind = parsed.planta.toLowerCase();
-                selectedPlant = plants.find(p => p.id_empresa === newFormData.form_id_empresa && (p.nombre || '').toLowerCase().includes(plantNameToFind));
-                if (selectedPlant) {
-                    // Use a timeout to ensure company state is updated before selecting plant,
-                    // or directly call internal logic if handleSelectPlant is not strictly needed for UI interaction.
-                    // For now, let's update form data directly and then trigger the search text.
-                    newFormData.form_id_planta = selectedPlant.id;
-                    newFormData.planta = selectedPlant.nombre;
-                    setPlantSearchText(selectedPlant.nombre); // Update search text after setting form data
-                }
-            }
+                    if (parsed.empresa_planta) {
+                        const foundPlant = plants.find(p => p.id_empresa === foundCompany.id && (p.nombre || '').toLowerCase().includes(parsed.empresa_planta.toLowerCase()));
+                        if (foundPlant) {
+                            handleSelectPlant(foundPlant);
+                             await new Promise(r => setTimeout(r, 400)); // Wait for state update
 
-            if (parsed.nombre_encargado && newFormData.form_id_empresa && newFormData.form_id_planta) {
-                const supervisorNameToFind = parsed.nombre_encargado.toLowerCase();
-                const selectedSupervisor = supervisors.find(s => 
-                    s.nombreEmpresa === selectedCompany?.nombre &&
-                    s.nombrePlanta === selectedPlant?.nombre &&
-                    `${s.nombre || ''} ${s.apellido || ''}`.trim().toLowerCase() === (parsed.nombre_encargado || '').toLowerCase()
-                );
-                if (selectedSupervisor) {
-                    newFormData.form_id_encargado = selectedSupervisor.id;
-                    newFormData.nombre_encargado = `${selectedSupervisor.nombre} ${selectedSupervisor.apellido || ''}`.trim();
-                    newFormData.celular_encargado = selectedSupervisor.celular?.toString();
-                    newFormData.email_encargado = selectedSupervisor.email;
-                    setSupervisorSearchText(newFormData.nombre_encargado); // Update search text
-                }
-            }
-
-            // Maquinas parsing
-            if (parsed.maquinas && Array.isArray(parsed.maquinas)) {
-                const parsedSelectedMaquinas: { machine: Machine, observaciones: string }[] = [];
-                for (const machineInfo of parsed.maquinas) {
-                    if (machineInfo.serie) {
-                        const serieToFind = machineInfo.serie.trim().toLowerCase();
-                        // Find the machine in the database list based on the serial number
-                        const foundMachine = machines.find(m => 
-                            m.serie && m.serie.trim().toLowerCase() === serieToFind && 
-                            m.id_planta === newFormData.form_id_planta
-                        );
-                        
-                        if (foundMachine) {
-                            // If found, add it to the list with the observations from the AI
-                            parsedSelectedMaquinas.push({ 
-                                machine: foundMachine, 
-                                observaciones: machineInfo.observaciones || '' 
-                            });
-                        } else {
-                            console.warn(`Machine with serial "${machineInfo.serie}" not found in database for the selected plant.`);
+                            if (parsed.encargado_nombre) {
+                                const foundSupervisor = supervisors.find(s => s.nombreEmpresa === foundCompany.nombre && s.nombrePlanta === foundPlant.nombre && `${s.nombre} ${s.apellido || ''}`.toLowerCase().includes(parsed.encargado_nombre.toLowerCase()));
+                                if(foundSupervisor) handleSelectSupervisor(foundSupervisor);
+                            }
                         }
                     }
                 }
-                setSelectedMaquinas(parsedSelectedMaquinas);
             }
-            
-            // Only update parts of formData that are not already handled by handleSelectCompany/Plant/Supervisor
-            setFormData(prev => ({ ...prev, ...newFormData }));
 
+            if (parsed.maquinas && Array.isArray(parsed.maquinas)) {
+                const parsedSelectedMaquinas = parsed.maquinas.map((machineInfo: any) => {
+                    const machine = machines.find(m => m.serie === machineInfo.serie);
+                    return machine ? { machine, observaciones: machineInfo.observaciones || '' } : null;
+                }).filter(Boolean);
+                setSelectedMaquinas(parsedSelectedMaquinas as any);
+            }
         } catch (e: any) {
             console.error(e);
-            setAiError(`Error al procesar con ${autocompleteService}: ${e.message || "Por favor, inténtalo de nuevo."}`);
+            setAiError(`Error al procesar: ${e.message}`);
         } finally {
             setIsAiLoading(false);
         }
     };
-
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -585,49 +488,37 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
         }
 
         try {
-            const convertFileToBase64 = async (files: File[]): Promise<string | null> => {
-                if (files.length === 0) return null;
-                return fileToPngDataUrl(files[0]).then(stripDataUriPrefix);
-            };
-            
-            const [
-                newObservacionesB64,
-                newSugerenciasB64,
-                newFirmaB64,
-            ] = await Promise.all([
-                convertFileToBase64(fotosObservaciones),
-                convertFileToBase64(fotosSugerencias),
-                convertFileToBase64(fotoFirma),
+            const [newObservacionesB64, newSugerenciasB64, newFirmaB64] = await Promise.all([
+                fotosObservaciones.length > 0 ? fileToPngDataUrl(fotosObservaciones[0]).then(stripDataUriPrefix) : Promise.resolve(null),
+                fotosSugerencias.length > 0 ? fileToPngDataUrl(fotosSugerencias[0]).then(stripDataUriPrefix) : Promise.resolve(null),
+                fotoFirma.length > 0 ? fileToPngDataUrl(fotoFirma[0]).then(stripDataUriPrefix) : Promise.resolve(null),
             ]);
 
             const payload: { [key: string]: any } = {
                 id: formData.id,
-                fecha: formData.fecha || null,
-                hora_ingreso: formData.hora_ingreso,
-                hora_salida: formData.hora_salida,
-                empresa: formData.empresa,
-                cliente: formData.cliente,
-                planta: formData.planta,
-                nombre_encargado: formData.nombre_encargado,
-                celular_encargado: formData.celular_encargado,
-                email_encargado: formData.email_encargado,
-                nombre_operador: formData.nombre_operador,
-                celular_operador: formData.celular_operador,
-                voltaje_establecido: formData.voltaje_establecido,
-                presurizacion: formData.presurizacion,
-                transformador: formData.transformador,
+                codigo: formData.codigo,
+                estado: formData.estado,
+                empresa_nombre: formData.empresa_nombre,
+                empresa_planta: formData.empresa_planta,
+                usuario_nombre: auth.user.nombres,
+                usuario_cel: auth.user.celular?.toString(),
+                encargado_nombre: formData.encargado_nombre,
+                encargado_cel: formData.encargado_cel,
                 maquinas: selectedMaquinas.map(item => `${item.machine.serie} - ${item.machine.modelo || ''}: ${item.observaciones}`),
+                voltaje_establecido: formData.voltaje_establecido,
+                linea_a_tierra: formData.linea_a_tierra,
+                presurizacion_de_cabezal: formData.presurizacion_de_cabezal,
+                transformador_de_aislamiento: formData.transformador_de_aislamiento,
+                limpieza_cabezal: formData.limpieza_cabezal,
+                fotos_observaciones: newObservacionesB64 || (formData.fotos_observaciones ? stripDataUriPrefix(formData.fotos_observaciones) : null),
+                fotos_sugerencias: newSugerenciasB64 || (formData.fotos_sugerencias ? stripDataUriPrefix(formData.fotos_sugerencias) : null),
+                foto_firma: newFirmaB64 || (formData.foto_firma ? stripDataUriPrefix(formData.foto_firma) : null),
+                observaciones: formData.observaciones,
                 sugerencias: formData.sugerencias,
-                id_usuario: auth.user.id,
-                foto_observaciones: newObservacionesB64 !== null ? newObservacionesB64 : (formData.foto_observaciones ? stripDataUriPrefix(formData.foto_observaciones) : null),
-                foto_sugerencias: newSugerenciasB64 !== null ? newSugerenciasB64 : (formData.foto_sugerencias ? stripDataUriPrefix(formData.foto_sugerencias) : null),
-                firma: newFirmaB64 !== null ? newFirmaB64 : (formData.firma ? stripDataUriPrefix(formData.firma) : null),
             };
             
-            Object.keys(payload).forEach(key => (payload[key] === undefined || payload[key] === null) && delete payload[key]);
-            if (formData.id === undefined) {
-                delete payload.id;
-            }
+            Object.keys(payload).forEach(key => (payload[key] === undefined) && delete payload[key]);
+            if (formData.id === undefined) delete payload.id;
 
             const { error } = await supabase.from('Reporte_Visita').upsert(payload);
             if (error) throw error;
@@ -645,7 +536,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
     
     const selectedCompanyForNewSupervisor = useMemo(() => companies.find(c => c.id === formData.form_id_empresa), [formData.form_id_empresa, companies]);
     const selectedPlantForNewSupervisor = useMemo(() => plants.find(p => p.id === formData.form_id_planta), [formData.form_id_planta, plants]);
-    
     const selectedCompanyForNewMachine = useMemo(() => companies.find(c => c.id === formData.form_id_empresa), [formData.form_id_empresa, companies]);
     const selectedPlantForNewMachine = useMemo(() => plants.find(p => p.id === formData.form_id_planta), [formData.form_id_planta, plants]);
 
@@ -660,7 +550,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
             </div>
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg">
-                    <div className="flex items-start"><SparklesIcon className="h-8 w-8 text-primary mr-3 shrink-0"/><div><h3 className="font-bold text-lg text-primary">Autocompletado con IA</h3><p className="text-sm text-neutral">Sube una orden de trabajo (PDF/Imagen) para rellenar campos.</p></div></div>
+                    <div className="flex items-start"><SparklesIcon className="h-8 w-8 text-primary mr-3 shrink-0"/><div><h3 className="font-bold text-lg text-primary">Autocompletado con IA</h3><p className="text-sm text-neutral">Sube una orden de trabajo para rellenar campos.</p></div></div>
                     <div className="mt-4">
                     <label htmlFor="ai-file-upload" className="relative cursor-pointer bg-base-200 rounded-md font-medium text-primary hover:text-primary-focus focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary">
                         <div className="flex items-center justify-center w-full px-6 py-4 border-2 border-base-border border-dashed rounded-md"><UploadIcon className="h-8 w-8 text-neutral mr-3" /><span className="text-neutral">{fileName || "Haz clic para subir un documento"}</span></div>
@@ -674,12 +564,14 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-4">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información General</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                        <div className="grid grid-cols-2 gap-2">
-                             <div><label htmlFor="hora_ingreso" className="block text-sm font-medium">Hora Ingreso</label><input type="time" name="hora_ingreso" value={formData.hora_ingreso || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                            <div><label htmlFor="hora_salida" className="block text-sm font-medium">Hora Salida</label><input type="time" name="hora_salida" value={formData.hora_salida || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                        <div><label htmlFor="codigo" className="block text-sm font-medium">Código Reporte</label><input type="text" name="codigo" value={formData.codigo || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                        <div>
+                            <label htmlFor="estado" className="block text-sm font-medium">Estado</label>
+                            <select name="estado" id="estado" value={formData.estado || 'En Progreso'} onChange={handleChange} className="mt-1 block w-full input-style">
+                                <option>En Progreso</option>
+                                <option>Finalizado</option>
+                            </select>
                         </div>
-                         {/* Empresa */}
                         <div>
                             <label htmlFor="company-search" className="block text-sm font-medium">Empresa</label>
                             <div onBlur={() => setTimeout(() => setShowCompanySuggestions(false), 100)}>
@@ -697,7 +589,6 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                 </div>
                             </div>
                         </div>
-                        {/* Planta */}
                         <div>
                             <label htmlFor="plant-search" className="block text-sm font-medium flex items-center gap-2">Planta / Sede {isPlantsLoading && <Spinner />}</label>
                             <div onBlur={() => setTimeout(() => setShowPlantSuggestions(false), 100)}>
@@ -715,14 +606,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-
-                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-4">
-                    <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información de Contactos</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         {/* Encargado */}
-                        <div>
+                         <div>
                             <label htmlFor="supervisor-search" className="block text-sm font-medium flex items-center gap-2">Encargado de Planta {isSupervisorsLoading && <Spinner />}</label>
                             <div onBlur={() => setTimeout(() => setShowSupervisorSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
@@ -739,23 +623,10 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                                 </div>
                             </div>
                         </div>
-                        {/* New separate fields for supervisor */}
                         <div>
-                            <label htmlFor="nombre_encargado" className="block text-sm font-medium">Nombre del Encargado</label>
-                            <input type="text" name="nombre_encargado" value={formData.nombre_encargado || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
+                            <label htmlFor="encargado_cel" className="block text-sm font-medium">Celular del Encargado</label>
+                            <input type="text" name="encargado_cel" value={formData.encargado_cel || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
                         </div>
-                        <div>
-                            <label htmlFor="celular_encargado" className="block text-sm font-medium">Celular del Encargado</label>
-                            <input type="text" name="celular_encargado" value={formData.celular_encargado || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
-                        </div>
-                        <div>
-                            <label htmlFor="email_encargado" className="block text-sm font-medium">Email del Encargado</label>
-                            <input type="email" name="email_encargado" value={formData.email_encargado || ''} onChange={handleChange} className="mt-1 block w-full input-style" />
-                        </div>
-                        {/* End new fields */}
-
-                        <div><label htmlFor="nombre_operador" className="block text-sm font-medium">Nombre Operador</label><input type="text" name="nombre_operador" value={formData.nombre_operador || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
-                        <div><label htmlFor="celular_operador" className="block text-sm font-medium">Celular Operador</label><input type="text" name="celular_operador" value={formData.celular_operador || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                     </div>
                 </div>
 
@@ -763,8 +634,8 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Detalles Técnicos</h3>
                     <div>
                         <label className="block text-sm font-medium">Checklist Técnico</label>
-                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            {['voltaje_establecido', 'presurizacion', 'transformador'].map(field => (
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {['voltaje_establecido', 'linea_a_tierra', 'presurizacion_de_cabezal', 'transformador_de_aislamiento', 'limpieza_cabezal'].map(field => (
                                 <div key={field} className="flex items-center">
                                     <input id={field} name={field} type="checkbox" checked={!!(formData as any)[field]} onChange={handleChange} className="h-4 w-4 text-primary focus:ring-primary border-base-border rounded" />
                                     <label htmlFor={field} className="ml-2 block text-sm capitalize">{field.replace(/_/g, ' ')}</label>
@@ -777,27 +648,10 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                         <div onBlur={() => setTimeout(() => setShowMachineSuggestions(false), 100)}>
                             <div className="flex items-center gap-2 mt-1">
                                 <div className="relative flex-grow">
-                                    <input 
-                                        id="machine-search"
-                                        type="text"
-                                        value={machineSearch}
-                                        onChange={e => setMachineSearch(e.target.value)}
-                                        onFocus={() => setShowMachineSuggestions(true)}
-                                        placeholder="Buscar máquina por serie o modelo para añadir..."
-                                        className="w-full input-style"
-                                        disabled={!formData.form_id_planta}
-                                    />
+                                    <input id="machine-search" type="text" value={machineSearch} onChange={e => setMachineSearch(e.target.value)} onFocus={() => setShowMachineSuggestions(true)} placeholder="Buscar máquina para añadir..." className="w-full input-style" disabled={!formData.form_id_planta} />
                                     {showMachineSuggestions && machineSuggestions.length > 0 && (
                                         <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
-                                            {machineSuggestions.map(machine => (
-                                                <li 
-                                                    key={machine.id} 
-                                                    onMouseDown={() => handleSelectMachine(machine)}
-                                                    className="px-3 py-2 cursor-pointer hover:bg-base-300"
-                                                >
-                                                    {machine.serie} - {machine.modelo}
-                                                </li>
-                                            ))}
+                                            {machineSuggestions.map(machine => (<li key={machine.id} onMouseDown={() => handleSelectMachine(machine)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{machine.serie} - {machine.modelo}</li>))}
                                         </ul>
                                     )}
                                 </div>
@@ -810,47 +664,36 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                             {selectedMaquinas.map((item, index) => (
                                 <div key={item.machine.id} className="p-3 bg-base-100 rounded-lg border border-base-border">
                                     <div className="flex justify-between items-start">
-                                        <div>
-                                            <p className="font-semibold">{item.machine.serie} - {item.machine.modelo}</p>
-                                            <p className="text-xs text-neutral">{item.machine.marca}</p>
-                                        </div>
-                                        <button type="button" onClick={() => setSelectedMaquinas(prev => prev.filter((_, i) => i !== index))} className="text-error hover:text-error/80 p-1">
-                                            <TrashIcon className="h-4 w-4" />
-                                        </button>
+                                        <div><p className="font-semibold">{item.machine.serie} - {item.machine.modelo}</p><p className="text-xs text-neutral">{item.machine.marca}</p></div>
+                                        <button type="button" onClick={() => setSelectedMaquinas(prev => prev.filter((_, i) => i !== index))} className="text-error hover:text-error/80 p-1"><TrashIcon className="h-4 w-4" /></button>
                                     </div>
-                                    <textarea
-                                        placeholder="Añadir observaciones para esta máquina..."
-                                        value={item.observaciones}
-                                        onChange={e => {
-                                            const newObs = e.target.value;
-                                            setSelectedMaquinas(prev => prev.map((m, i) => i === index ? { ...m, observaciones: newObs } : m));
-                                        }}
-                                        className="mt-2 block w-full input-style text-sm"
-                                        rows={2}
-                                    />
+                                    <textarea placeholder="Añadir observaciones para esta máquina..." value={item.observaciones} onChange={e => { const newObs = e.target.value; setSelectedMaquinas(prev => prev.map((m, i) => i === index ? { ...m, observaciones: newObs } : m)); }} className="mt-2 block w-full input-style text-sm" rows={2}/>
                                 </div>
                             ))}
-                            {selectedMaquinas.length === 0 && (
-                                <p className="text-sm text-neutral text-center py-4">No se han añadido máquinas.</p>
-                            )}
+                            {selectedMaquinas.length === 0 && (<p className="text-sm text-neutral text-center py-4">No se han añadido máquinas.</p>)}
                         </div>
                     </div>
-                    <div><label htmlFor="sugerencias" className="block text-sm font-medium">Sugerencias</label><textarea name="sugerencias" rows={3} value={formData.sugerencias || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-sugerencias" label="" files={fotosSugerencias} onFilesChange={setFotosSugerencias} multiple={false} existingImageUrls={formData.foto_sugerencias ? [formData.foto_sugerencias] : []} onRemoveExisting={() => setFormData(prev => ({...prev, foto_sugerencias: null}))} /></div>
-                    <div><ImageUpload id="fotos-observaciones" label="Fotos Generales / Observaciones" files={fotosObservaciones} onFilesChange={setFotosObservaciones} multiple={false} existingImageUrls={formData.foto_observaciones ? [formData.foto_observaciones] : []} onRemoveExisting={() => setFormData(prev => ({...prev, foto_observaciones: null}))} /></div>
+                    <div><label htmlFor="observaciones" className="block text-sm font-medium">Observaciones</label><textarea name="observaciones" rows={3} value={formData.observaciones || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-observaciones" label="" files={fotosObservaciones} onFilesChange={setFotosObservaciones} multiple={false} existingImageUrls={formData.fotos_observaciones ? [formData.fotos_observaciones] : []} onRemoveExisting={() => setFormData(prev => ({...prev, fotos_observaciones: null}))} /></div>
+                    <div><label htmlFor="sugerencias" className="block text-sm font-medium">Sugerencias</label><textarea name="sugerencias" rows={3} value={formData.sugerencias || ''} onChange={handleChange} className="mt-1 block w-full input-style"></textarea><ImageUpload id="fotos-sugerencias" label="" files={fotosSugerencias} onFilesChange={setFotosSugerencias} multiple={false} existingImageUrls={formData.fotos_sugerencias ? [formData.fotos_sugerencias] : []} onRemoveExisting={() => setFormData(prev => ({...prev, fotos_sugerencias: null}))} /></div>
                 </div>
-                
-                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg">
-                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Conformidad del Cliente</h3>
-                     <p className="text-sm mt-2 text-neutral">La firma corresponde al Encargado de Planta seleccionado.</p>
-                     <ImageUpload id="foto-firma" label="Firma de Conformidad" files={fotoFirma} onFilesChange={setFotoFirma} multiple={false} existingImageUrls={formData.firma ? [formData.firma] : []} onRemoveExisting={() => setFormData(prev => ({...prev, firma: null}))} />
+
+                <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-4">
+                    <h3 className="text-xl font-semibold border-b border-base-border pb-2">Conformidad del Cliente</h3>
+                    <ImageUpload
+                        id="foto-firma-visita"
+                        label="Firma de Conformidad"
+                        files={fotoFirma}
+                        onFilesChange={setFotoFirma}
+                        multiple={false}
+                        existingImageUrls={formData.foto_firma ? [formData.foto_firma] : []}
+                        onRemoveExisting={() => setFormData(prev => ({ ...prev, foto_firma: null }))}
+                    />
                 </div>
 
                 <div className="flex justify-end items-center pt-4 gap-4">
                     <button type="button" onClick={onBack} className="bg-base-300 py-2 px-4 rounded-lg hover:bg-neutral/20 transition-colors">Cancelar</button>
                     <button type="submit" disabled={isSubmitting} className="bg-primary text-white py-2 px-6 rounded-lg hover:bg-primary-focus transition-colors disabled:bg-primary/50 flex items-center gap-2">
-                        {isSubmitting && <Spinner />}
-                        <SaveIcon className="h-5 w-5" />
-                        {isSubmitting ? 'Guardando...' : 'Guardar Reporte'}
+                        {isSubmitting && <Spinner />}<SaveIcon className="h-5 w-5" />{isSubmitting ? 'Guardando...' : 'Guardar Reporte'}
                     </button>
                 </div>
             </form>
@@ -864,52 +707,24 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack }) => {
                     </button>
                     <span className="text-sm font-medium lg:hidden">{isSimulatorVisible ? 'Ocultar' : 'Mostrar'} Previsualización</span>
                 </div>
-                
-                {isSimulatorVisible && (
-                    <div className="flex-grow p-2 relative">
+                {isSimulatorVisible && (<div className="flex-grow p-2 relative">
                         {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-10"><Spinner/></div>}
-                        {pdfPreviewUri ? (
-                             <iframe src={pdfPreviewUri} title="PDF Preview" className="w-full h-full border-0 rounded-b-lg"/>
-                        ) : (
-                            <div className="w-full h-full flex items-center justify-center text-neutral">
-                                <p>La previsualización aparecerá aquí.</p>
-                            </div>
-                        )}
-                    </div>
-                )}
+                        {pdfPreviewUri ? (<iframe src={pdfPreviewUri} title="PDF Preview" className="w-full h-full border-0 rounded-b-lg"/>) : (<div className="w-full h-full flex items-center justify-center text-neutral"><p>La previsualización aparecerá aquí.</p></div>)}
+                </div>)}
             </div>
         </div>
 
-        {/* Modals */}
         <Modal isOpen={isNewCompanyModalOpen} onClose={() => setIsNewCompanyModalOpen(false)} title="Añadir Nueva Empresa"><CompanyForm company={null} onSave={handleCompanySaved} onCancel={() => setIsNewCompanyModalOpen(false)}/></Modal>
         <Modal isOpen={isCompanySearchModalOpen} onClose={() => setIsCompanySearchModalOpen(false)} title="Buscar Empresa"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{companies.map(c => <li key={c.id} onMouseDown={() => handleSelectCompany(c)} className="p-3 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}</ul></Modal>
-        
         <Modal isOpen={isNewPlantModalOpen} onClose={() => setIsNewPlantModalOpen(false)} title="Añadir Nueva Planta"><PlantForm plant={null} onSave={handlePlantSaved} onCancel={() => setIsNewPlantModalOpen(false)}/></Modal>
         <Modal isOpen={isPlantSearchModalOpen} onClose={() => setIsPlantSearchModalOpen(false)} title="Buscar Planta"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredPlants.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="p-3 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}</ul></Modal>
-
         <Modal isOpen={isNewSupervisorModalOpen} onClose={() => setIsNewSupervisorModalOpen(false)} title="Añadir Nuevo Encargado"><SupervisorForm supervisor={null} onSave={handleSupervisorSaved} onCancel={() => setIsNewSupervisorModalOpen(false)} defaultCompanyName={selectedCompanyForNewSupervisor?.nombre} defaultPlantName={selectedPlantForNewSupervisor?.nombre} /></Modal>
         <Modal isOpen={isSupervisorSearchModalOpen} onClose={() => setIsSupervisorSearchModalOpen(false)} title="Buscar Encargado"><ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">{filteredSupervisors.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombre} {s.apellido}</li>)}</ul></Modal>
-        
-        {/* New Modals for Machine management in VisitReportForm */}
-        <Modal isOpen={isNewMachineModalOpen} onClose={() => setIsNewMachineModalOpen(false)} title="Añadir Nueva Máquina">
-            <MachineForm 
-                machine={null} 
-                onSave={handleMachineSaved} 
-                onCancel={() => setIsNewMachineModalOpen(false)} 
-                defaultCompanyId={selectedCompanyForNewMachine?.id} // Pass selected company to pre-fill
-                defaultPlantId={selectedPlantForNewMachine?.id} // Pass selected plant to pre-fill
-            />
-        </Modal>
+        <Modal isOpen={isNewMachineModalOpen} onClose={() => setIsNewMachineModalOpen(false)} title="Añadir Nueva Máquina"><MachineForm machine={null} onSave={handleMachineSaved} onCancel={() => setIsNewMachineModalOpen(false)} defaultCompanyId={selectedCompanyForNewMachine?.id} defaultPlantId={selectedPlantForNewMachine?.id} /></Modal>
         <Modal isOpen={isMachineSearchModalOpen} onClose={() => setIsMachineSearchModalOpen(false)} title="Buscar Máquina">
             <ul className="max-h-80 overflow-y-auto divide-y divide-base-border custom-scrollbar">
-                {availableMachinesForPlant.map(m => ( // Show only machines for the selected plant
-                    <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">
-                        {m.serie} - {m.modelo} ({m.marca})
-                    </li>
-                ))}
-                {availableMachinesForPlant.length === 0 && (
-                    <li className="px-3 py-2 text-center text-neutral">No hay máquinas disponibles para esta planta.</li>
-                )}
+                {availableMachinesForPlant.map(m => (<li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{m.serie} - {m.modelo} ({m.marca})</li>))}
+                {availableMachinesForPlant.length === 0 && (<li className="px-3 py-2 text-center text-neutral">No hay máquinas para esta planta.</li>)}
             </ul>
         </Modal>
     </div>

@@ -87,63 +87,53 @@ export interface ServiceReport {
 
 
 export interface VisitReport {
-  id?: number;
-  created_at?: string;
-  fecha?: string; // YYYY-MM-DD
-  hora_ingreso?: string; // HH:MM
-  hora_salida?: string; // HH:MM
+    id?: number;
+    created_at?: string;
 
-  // Client/Location Info (denormalized in DB)
-  empresa?: string;
-  cliente?: string; // Per schema, will populate with same as empresa
-  planta?: string;
+    // Datos generales
+    codigo?: string;
+    estado?: string; // e.g., 'En Progreso', 'Finalizado'
+    pdf?: string; // URL to the PDF
 
-  // Contact Info (denormalized in DB)
-  nombre_encargado?: string;
-  celular_encargado?: string;
-  email_encargado?: string;
-  nombre_operador?: string;
-  celular_operador?: string;
+    // Datos de la empresa
+    empresa_nombre?: string;
+    empresa_planta?: string;
 
-  // Technical Checklist
-  voltaje_establecido?: boolean;
-  presurizacion?: boolean;
-  transformador?: boolean;
-  
-  // Machine Info
-  maquinas?: string[]; // Stored as text[] in DB
+    // Datos del usuario (creator)
+    usuario_nombre?: string;
+    usuario_cel?: string;
 
-  // Details
-  sugerencias?: string;
+    // Datos del encargado (client contact)
+    encargado_nombre?: string;
+    encargado_cel?: string;
+    foto_firma?: string | null;
 
-  // Files - these store URLs/Base64 in DB, now nullable for removal
-  foto_observaciones?: string | null;
-  foto_sugerencias?: string | null;
-  firma?: string | null;
-  
-  // For passing base64 to PDF generator
-  fotosObservacionesBase64?: string[];
-  fotosSugerenciasBase64?: string[];
-  fotoFirmaBase64?: string;
-  
-  // Meta
-  id_usuario?: string;
-  url_pdf?: string;
+    // Datos técnicos
+    maquinas?: string[];
+    voltaje_establecido?: boolean;
+    linea_a_tierra?: boolean;
+    presurizacion_de_cabezal?: boolean;
+    transformador_de_aislamiento?: boolean;
+    limpieza_cabezal?: boolean;
 
-  // --- For form state management & PDF generation ---
-  // Store IDs from dropdowns to manage state
-  form_id_empresa?: number;
-  form_id_planta?: number;
-  form_id_encargado?: number;
-  // Hold full objects for PDF
-  usuario?: { nombres: string } | null;
-  selected_empresa_pdf?: Company | null;
-  selected_planta_pdf?: Plant | null;
-  selected_encargado_pdf?: Supervisor | null;
-  selected_maquinas_pdf?: {
-    machineLabel: string;
-    observations: string;
-  }[];
+    // Observaciones y Sugerencias
+    fotos_observaciones?: string | null;
+    fotos_sugerencias?: string | null;
+    observaciones?: string;
+    sugerencias?: string;
+
+    // --- Fields for form state & PDF generation (not in DB) ---
+    form_id_empresa?: number;
+    form_id_planta?: number;
+    form_id_encargado?: number;
+    usuario?: { nombres: string } | null; // For PDF generation
+    selected_maquinas_pdf?: {
+        machineLabel: string;
+        observations: string;
+    }[];
+    fotosObservacionesBase64?: string[]; // For passing new uploads to PDF
+    fotosSugerenciasBase64?: string[]; // For passing new uploads to PDF
+    fotoFirmaBase64?: string;
 }
 
 

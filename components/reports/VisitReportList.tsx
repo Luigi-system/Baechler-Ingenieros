@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect } from 'react';
 import type { VisitReport } from '../../types';
 import { SearchIcon, PlusIcon, EditIcon, ViewIcon, DownloadIcon, MailIcon } from '../ui/Icons';
@@ -17,16 +15,32 @@ interface VisitReportListProps {
 }
 
 const calculateCompletion = (report: VisitReport): number => {
-    const totalFields = 7;
+    const totalFields = 14; 
     let completedFields = 0;
-    if (report.fecha) completedFields++;
-    if (report.empresa) completedFields++;
-    if (report.planta) completedFields++;
-    if (report.nombre_encargado) completedFields++;
+    
+    if (report.codigo) completedFields++;
+    if (report.empresa_nombre) completedFields++;
+    if (report.empresa_planta) completedFields++;
+    if (report.encargado_nombre) completedFields++;
     if (report.maquinas && report.maquinas.length > 0) completedFields++;
-    if (report.sugerencias) completedFields++;
-    if (report.firma) completedFields++;
-    return (completedFields / totalFields) * 100;
+    
+    // Check for text or photo for observations/suggestions
+    if (report.observaciones || report.fotos_observaciones) completedFields++;
+    if (report.sugerencias || report.fotos_sugerencias) completedFields++;
+    
+    if (report.foto_firma) completedFields++;
+    
+    // Checklist items - check if they have a value (true or false), not just truthy
+    if (report.voltaje_establecido != null) completedFields++;
+    if (report.linea_a_tierra != null) completedFields++;
+    if (report.presurizacion_de_cabezal != null) completedFields++;
+    if (report.transformador_de_aislamiento != null) completedFields++;
+    if (report.limpieza_cabezal != null) completedFields++;
+
+    if (report.estado === 'Finalizado') completedFields++;
+    
+    const percentage = (completedFields / totalFields) * 100;
+    return Math.min(percentage, 100); // Ensure it doesn't exceed 100
 };
 
 const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEditReport }) => {
@@ -54,7 +68,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
             const { data, error } = await supabase
                 .from('Reporte_Visita')
                 .select('*')
-                .order('fecha', { ascending: false });
+                .order('created_at', { ascending: false });
 
             if (error) throw error;
             setReports(data as VisitReport[]);
@@ -115,8 +129,9 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
   };
 
   const filteredReports = reports.filter(report => 
-    (report.empresa || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (report.planta || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (report.codigo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (report.empresa_nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (report.empresa_planta || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -138,7 +153,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
         </div>
         <input
           type="text"
-          placeholder="Buscar por empresa o planta..."
+          placeholder="Buscar por código, empresa o planta..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="block w-full pl-10 pr-3 py-2 sm:text-sm input-style"
@@ -156,10 +171,12 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                     <table className="w-full table-auto">
                     <thead className="bg-base-300 sticky top-0 z-10">
                         <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Código</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Empresa</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Planta</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Estado</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Completado</th>
-                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Fecha Creación</th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-semibold text-neutral uppercase tracking-wider">Acciones</th>
                         </tr>
                     </thead>
@@ -168,10 +185,16 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                         const completion = calculateCompletion(report);
                         return (
                         <tr key={report.id} className="hover:bg-base-300/50 even:bg-base-300/20 transition-colors">
-                            <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.empresa || 'N/A'}</td>
-                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.planta || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.codigo || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm font-medium text-base-content break-words">{report.empresa_nombre || 'N/A'}</td>
+                            <td className="px-6 py-4 text-sm text-neutral break-words">{report.empresa_planta || 'N/A'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${report.estado === 'Finalizado' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                                    {report.estado || 'En Progreso'}
+                                </span>
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap"><ProgressCircle percentage={completion} /></td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{report.fecha ? new Date(report.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-neutral">{report.created_at ? new Date(report.created_at).toLocaleDateString('es-ES') : 'N/A'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
                             <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-1 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
                             <button 
@@ -200,7 +223,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                         )
                         }) : (
                         <tr>
-                            <td colSpan={5} className="text-center py-8 text-neutral">
+                            <td colSpan={7} className="text-center py-8 text-neutral">
                                 No se encontraron reportes de visita.
                             </td>
                         </tr>
@@ -218,15 +241,23 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                         <div key={report.id} className="bg-base-200 rounded-lg shadow-md p-4 space-y-3">
                             <div className="flex justify-between items-start">
                                 <div>
-                                    <p className="font-bold text-base-content">{report.empresa || 'N/A'}</p>
-                                    <p className="text-sm text-neutral">{report.planta || 'N/A'}</p>
+                                    <p className="font-bold text-base-content">{report.codigo || 'N/A'}</p>
+                                    <p className="text-sm text-neutral">{report.empresa_nombre || 'N/A'}</p>
+                                    <p className="text-xs text-neutral">{report.empresa_planta || 'N/A'}</p>
+                                </div>
+                                 <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${report.estado === 'Finalizado' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                                    {report.estado || 'En Progreso'}
+                                </span>
+                            </div>
+                             <div className="flex justify-between items-center gap-4">
+                                <div>
+                                    <p className="text-sm text-neutral"><strong>Fecha:</strong> {report.created_at ? new Date(report.created_at).toLocaleDateString('es-ES') : 'N/A'}</p>
                                 </div>
                                 <div className="text-right">
                                     <label className="text-xs text-neutral">Completado</label>
                                     <ProgressCircle percentage={completion} />
                                 </div>
                             </div>
-                            <p className="text-sm text-neutral"><strong>Fecha:</strong> {report.fecha ? new Date(report.fecha).toLocaleDateString('es-ES', { timeZone: 'UTC' }) : 'N/A'}</p>
                             <div className="border-t border-base-border pt-3 flex justify-end space-x-2">
                                 <button onClick={() => onEditReport(report.id as number)} className="text-primary hover:text-primary-focus p-2 rounded-full hover:bg-primary/10 transition"><EditIcon className="h-5 w-5"/></button>
                                 <button onClick={() => handleViewPDF(report.id as number)} disabled={pdfViewingId === report.id} className="text-info hover:text-info/80 p-2 rounded-full hover:bg-info/10 transition disabled:opacity-50">
