@@ -102,6 +102,30 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
     const [pdfPreviewUri, setPdfPreviewUri] = useState<string | null>(null);
     const [isPdfLoading, setIsPdfLoading] = useState(false);
     const debounceTimeout = useRef<number | null>(null);
+
+    // Resizing States (Desktop only)
+    const [splitWeight, setSplitWeight] = useState(50); // percentage for the first (form) column
+    const [isResizing, setIsResizing] = useState(false);
+
+    const startResizing = useCallback(() => setIsResizing(true), []);
+    const stopResizing = useCallback(() => setIsResizing(false), []);
+    const resize = useCallback((e: MouseEvent) => {
+        if (isResizing) {
+            const newWeight = (e.clientX / window.innerWidth) * 100;
+            if (newWeight > 20 && newWeight < 80) setSplitWeight(newWeight);
+        }
+    }, [isResizing]);
+
+    useEffect(() => {
+        if (isResizing) {
+            window.addEventListener('mousemove', resize);
+            window.addEventListener('mouseup', stopResizing);
+        }
+        return () => {
+            window.removeEventListener('mousemove', resize);
+            window.removeEventListener('mouseup', stopResizing);
+        };
+    }, [isResizing, resize, stopResizing]);
     const [isPlantsLoading, setIsPlantsLoading] = useState(false);
     const [isSupervisorsLoading, setIsSupervisorsLoading] = useState(false);
 
@@ -399,13 +423,18 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
 
         return () => {
              if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
-             // Cleanup blob URLs on unmount
-             setPdfPreviewUri(prev => {
-                if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
-                return prev;
-            });
         };
     }, [formData, selectedMaquinas, fotosObservaciones, fotosSugerencias, fotoFirma, logoUrl, auth?.user]);
+
+    // Final cleanup on unmount
+    useEffect(() => {
+        return () => {
+            setPdfPreviewUri(prev => {
+                if (prev && prev.startsWith('blob:')) URL.revokeObjectURL(prev);
+                return null;
+            });
+        }
+    }, []);
     const companySuggestions = useMemo(() => companies.filter(c => (c.nombre || '').toLowerCase().includes((companySearchText || '').toLowerCase())).slice(0, 10), [companySearchText, companies]);
     const filteredPlants = useMemo(() => {
         if (!formData.form_id_empresa) return [];
@@ -697,10 +726,13 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
     if (isDataLoading) return <div className="flex justify-center items-center h-full"><Spinner /> Cargando datos...</div>
 
   return (
-    <div className="flex flex-col lg:flex-row h-full gap-4 relative overflow-hidden">
+    <div className={`flex flex-col lg:flex-row h-full gap-0 relative overflow-hidden ${isResizing ? 'cursor-col-resize select-none' : ''}`}>
         {/* Form Container */}
-        <div className={`w-full lg:flex-1 overflow-y-auto custom-scrollbar transition-all duration-300 ${isSimulatorVisible && window.innerWidth < 1024 ? 'blur-sm pointer-events-none' : ''}`}>
-            <form onSubmit={handleSubmit} className="space-y-6 pt-4 pb-20 md:pb-4 px-1">
+        <div 
+            style={{ width: isSimulatorVisible && window.innerWidth >= 1024 ? `${splitWeight}%` : undefined }}
+            className={`w-full ${!isSimulatorVisible ? 'lg:w-[calc(100%-3.5rem)]' : 'lg:flex-none'} overflow-y-auto custom-scrollbar transition-all duration-300 ${isSimulatorVisible && window.innerWidth < 1024 ? 'blur-sm pointer-events-none' : ''}`}
+        >
+            <form onSubmit={handleSubmit} className="space-y-6 pt-4 pb-20 md:pb-4 px-1 pr-4">
                 
                 <div className="bg-base-200 p-4 md:p-6 rounded-xl shadow-lg space-y-4 border border-base-border">
                     <h3 className="text-xl font-semibold border-b border-base-border pb-2">Información General</h3>
@@ -858,14 +890,26 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
             </form>
         </div>
 
+        {/* Resizer Divider */}
+        {isSimulatorVisible && (
+            <div 
+                onMouseDown={startResizing}
+                className="hidden lg:flex w-3 cursor-col-resize hover:bg-primary/20 active:bg-primary/40 transition-colors items-center justify-center group z-50"
+                title="Arrastra para redimensionar"
+            >
+                <div className="w-0.5 h-16 bg-base-border group-hover:bg-primary/50 transition-colors rounded-full" />
+            </div>
+        )}
+
         {/* PDF Preview Drawer/Panel */}
         <div 
+            style={{ width: isSimulatorVisible && window.innerWidth >= 1024 ? `${100 - splitWeight}%` : undefined }}
             className={`
                 fixed lg:relative top-0 right-0 h-full z-[100] lg:z-0
                 transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1)
                 bg-base-200 lg:bg-transparent shadow-2xl lg:shadow-none
                 ${isSimulatorVisible 
-                    ? 'w-[92%] sm:w-[80%] lg:w-1/2 translate-x-0' 
+                    ? 'w-[92%] sm:w-[80%] lg:flex-none translate-x-0' 
                     : 'w-0 translate-x-full lg:translate-x-0 lg:w-14 pointer-events-none lg:pointer-events-auto'
                 }
             `}

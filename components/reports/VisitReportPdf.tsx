@@ -84,7 +84,8 @@ const styles = StyleSheet.create({
   // Section Layouts
   sectionHeader: {
     backgroundColor: '#F3F4F6',
-    padding: 3,
+    paddingVertical: 5, // More vertical padding for titles
+    paddingHorizontal: 3,
     width: '100%',
     border: '1px solid #000',
     marginBottom: -1,
@@ -311,8 +312,8 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
           </View>
         )}
 
-        {/* BODY TEXT BLOCKS */}
-        <View>
+        {/* BODY TEXT BLOCKS - OBSERVACIONES */}
+        <View wrap={false}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>OBSERVACIONES ENCONTRADAS:</Text></View>
           <View style={styles.textBlockContent}>
             <Text style={styles.textContent}>{report.observaciones || ''}</Text>
@@ -327,7 +328,8 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
           </View>
         </View>
 
-        <View>
+        {/* BODY TEXT BLOCKS - SUGERENCIAS */}
+        <View wrap={false}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>SUGERENCIAS Y RECOMENDACIONES:</Text></View>
           <View style={styles.textBlockContent}>
             <Text style={styles.textContent}>{report.sugerencias || ''}</Text>

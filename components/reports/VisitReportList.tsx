@@ -4,7 +4,7 @@ import {
     SearchIcon, PlusIcon, EditIcon, ViewIcon, 
     DownloadIcon, MailIcon, ClipboardCheckIcon,
     BriefcaseIcon, MapPinIcon, ClockIcon, TrashIcon,
-    AlertTriangleIcon, DotsVerticalIcon
+    AlertTriangleIcon, DotsVerticalIcon, CopyIcon
 } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -161,6 +161,13 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
     setEmailModalState({ isOpen: true, reportId });
   };
 
+  const handleCopyLink = (reportId: number) => {
+    const link = `${window.location.origin}/preview/reporte-visita/${reportId}`;
+    navigator.clipboard.writeText(link)
+        .then(() => alert('✅ Enlace de firma copiado al portapapeles'))
+        .catch(err => alert('❌ Error al copiar enlace: ' + err));
+  };
+
   const filteredReports = useMemo(() => {
     return reports.filter(report => 
         (String(report.id) || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -283,6 +290,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                                           <Dropdown 
                                             items={[
                                                 { id: 'sign', label: 'Firmar Reporte', icon: <ClipboardCheckIcon />, onClick: () => window.open(`${window.location.origin}/preview/reporte-visita/${report.id}`, '_blank') },
+                                                { id: 'copy-link', label: 'Copiar enlace para firmar', icon: <CopyIcon />, onClick: () => handleCopyLink(report.id as number) },
                                                 { id: 'edit', label: 'Editar Datos', icon: <EditIcon />, onClick: () => onEditReport(report.id as number) },
                                                 { id: 'view', label: 'Ver PDF', icon: <ViewIcon />, onClick: () => handleViewPDF(report.id as number) },
                                                 { id: 'download', label: 'Descargar PDF', icon: <DownloadIcon />, onClick: () => handleDownloadPDF(report.id as number) },
@@ -323,6 +331,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                                         <Dropdown 
                                             items={[
                                                 { id: 'sign', label: 'Firmar', icon: <ClipboardCheckIcon />, onClick: () => window.open(`${window.location.origin}/preview/reporte-visita/${report.id}`, '_blank') },
+                                                 { id: 'copy-link', label: 'Copiar enlace', icon: <CopyIcon />, onClick: () => handleCopyLink(report.id as number) },
                                                 { id: 'edit', label: 'Editar', icon: <EditIcon />, onClick: () => onEditReport(report.id as number) },
                                                 { id: 'view', label: 'Ver PDF', icon: <ViewIcon />, onClick: () => handleViewPDF(report.id as number) },
                                                 { id: 'download', label: 'Descargar', icon: <DownloadIcon />, onClick: () => handleDownloadPDF(report.id as number) },

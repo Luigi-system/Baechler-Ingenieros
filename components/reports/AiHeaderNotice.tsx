@@ -37,7 +37,7 @@ const AiHeaderNotice: React.FC<AiHeaderNoticeProps> = ({ onFileSelected, isProce
                 ${isDragging ? 'border-primary border-solid' : 'border-primary/20 border-dashed'} 
                 p-1 sm:p-2 rounded-xl flex items-center justify-between 
                 max-w-xl mx-auto transition-all cursor-pointer hover:bg-primary/10
-                min-w-0 overflow-hidden
+                min-w-0 overflow-hidden sm:w-auto w-fit
             `}
             onClick={() => fileInputRef.current?.click()}
             onDragOver={handleDragOver}
@@ -58,7 +58,7 @@ const AiHeaderNotice: React.FC<AiHeaderNoticeProps> = ({ onFileSelected, isProce
                         ? <svg className="h-4 w-4 sm:h-5 sm:w-5 text-primary animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         : <SparklesIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 hidden sm:block">
                     <h3 className="text-[10px] sm:text-xs font-black text-primary uppercase tracking-tight sm:tracking-normal truncate">
                         {isProcessing ? 'Procesando...' : 'Autocompletar'}
                     </h3>
@@ -68,7 +68,7 @@ const AiHeaderNotice: React.FC<AiHeaderNoticeProps> = ({ onFileSelected, isProce
                 </div>
             </div>
             
-            <div className="flex items-center gap-2 shrink-0 ml-2">
+            <div className="hidden sm:flex items-center gap-2 shrink-0 ml-2">
                 <div className="hidden sm:flex px-3 py-1 bg-base-300/50 border border-base-border border-dashed rounded-lg text-[9px] items-center gap-2 text-neutral">
                     <UploadIcon className="h-3 w-3" />
                     <span>{isProcessing ? 'Procesando...' : 'Examinar Archivo'}</span>

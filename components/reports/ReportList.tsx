@@ -4,7 +4,8 @@ import {
     SearchIcon, PlusIcon, EditIcon, ViewIcon,
     DownloadIcon, MailIcon, TrashIcon, CheckCircleIcon,
     AlertTriangleIcon, ClockIcon, BriefcaseIcon, MapPinIcon,
-    ClipboardCheckIcon, SparklesIcon, DotsVerticalIcon, QrCodeIcon
+    ClipboardCheckIcon, SparklesIcon, DotsVerticalIcon, QrCodeIcon,
+    CopyIcon
 } from '../ui/Icons';
 import Dropdown from '../ui/Dropdown';
 import Spinner from '../ui/Spinner';
@@ -175,6 +176,13 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
         setEmailModalState({ isOpen: true, reportId });
     };
 
+    const handleCopyLink = (reportId: number) => {
+        const link = `${window.location.origin}/preview/reporte-servicio/${reportId}`;
+        navigator.clipboard.writeText(link)
+            .then(() => alert('✅ Enlace de firma copiado al portapapeles'))
+            .catch(err => alert('❌ Error al copiar enlace: ' + err));
+    };
+
     const filteredReports = useMemo(() => {
         return reports.filter(report =>
             (String(report.id) || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -312,6 +320,12 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                                                             onClick: () => window.open(`${window.location.origin}/preview/reporte-servicio/${report.id}`, '_blank') 
                                                         },
                                                         { 
+                                                            id: 'copy-link', 
+                                                            label: 'Copiar enlace para firmar', 
+                                                            icon: <CopyIcon />, 
+                                                            onClick: () => handleCopyLink(report.id as number) 
+                                                        },
+                                                        { 
                                                             id: 'edit', 
                                                             label: 'Editar Datos', 
                                                             icon: <EditIcon />, 
@@ -390,6 +404,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                                                 <Dropdown 
                                                     items={[
                                                         { id: 'sign', label: 'Firmar', icon: <ClipboardCheckIcon />, onClick: () => window.open(`${window.location.origin}/preview/reporte-servicio/${report.id}`, '_blank') },
+                                                        { id: 'copy-link', label: 'Copiar enlace', icon: <CopyIcon />, onClick: () => handleCopyLink(report.id as number) },
                                                         { id: 'edit', label: 'Editar', icon: <EditIcon />, onClick: () => onEditReport(report.id as number) },
                                                         { id: 'view', label: 'Ver PDF', icon: <ViewIcon />, onClick: () => handleViewPDF(report.id as number) },
                                                         { id: 'download', label: 'Descargar', icon: <DownloadIcon />, onClick: () => handleDownloadPDF(report.id as number) },

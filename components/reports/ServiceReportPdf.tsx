@@ -86,7 +86,8 @@ const styles = StyleSheet.create({
   // Section Layouts
   sectionHeader: {
     backgroundColor: '#F3F4F6',
-    padding: 3,
+    paddingVertical: 5, // More vertical padding for titles
+    paddingHorizontal: 3,
     width: '100%',
     border: '1px solid #000',
     marginBottom: -1,
@@ -362,8 +363,8 @@ const ServiceReportPdf = ({ report, logoUrl, serial }: Props) => {
           </View>
         </View>
 
-        {/* BODY TEXT BLOCKS */}
-        <View>
+        {/* BODY TEXT BLOCKS - PROBLEMAS */}
+        <View wrap={false}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>PROBLEMAS ENCONTRADOS:</Text></View>
           <View style={styles.textBlockContent}>
             <Text style={styles.textContent}>{report.problemas_encontrados || ''}</Text>
@@ -380,7 +381,8 @@ const ServiceReportPdf = ({ report, logoUrl, serial }: Props) => {
           </View>
         </View>
 
-        <View>
+        {/* BODY TEXT BLOCKS - ACCIONES */}
+        <View wrap={false}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>ACCIONES REALIZADAS:</Text></View>
           <View style={styles.textBlockContent}>
             <Text style={styles.textContent}>{report.acciones_realizadas || ''}</Text>
@@ -397,7 +399,8 @@ const ServiceReportPdf = ({ report, logoUrl, serial }: Props) => {
           </View>
         </View>
 
-        <View>
+        {/* BODY TEXT BLOCKS - OBSERVACIONES */}
+        <View wrap={false}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>OBSERVACIONES & SUGERENCIAS:</Text></View>
           <View style={styles.textBlockContent}>
             <Text style={styles.textContent}>{report.observaciones || ''}</Text>
