@@ -102,7 +102,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, isMobileOp
       >
         <div 
             onClick={onShowDomainQr}
-            className={`flex items-center border-b border-base-border h-16 md:h-20 transition-all duration-300 cursor-pointer hover:bg-base-300/30 group ${!showExpanded ? 'justify-center' : 'px-4'}`}
+            className={`hidden md:flex items-center border-b border-base-border h-16 md:h-20 transition-all duration-300 cursor-pointer hover:bg-base-300/30 group ${!showExpanded ? 'justify-center' : 'px-4'}`}
         >
           <img 
             src={logoUrl} 
@@ -193,6 +193,29 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, isMobileOp
             {isCollapsed ? <MenuIcon className="h-5 w-5"/> : <ChevronLeftIcon className="h-5 w-5"/>}
             {!isCollapsed && <span className="ml-4 font-medium">Contraer</span>}
           </button>
+        </div>
+
+        {/* Mobile Logo at Bottom */}
+        <div 
+            onClick={onShowDomainQr}
+            className={`md:hidden flex items-center border-t border-base-border p-6 transition-all duration-300 cursor-pointer hover:bg-base-300/30 group mt-auto`}
+        >
+          <img 
+            src={logoUrl} 
+            alt="App Logo" 
+            className={`transition-all duration-300 object-contain h-10 w-10 shrink-0 ${isLogoAnimated ? 'logo-jiggle-animation' : ''} group-hover:scale-110`} 
+          />
+          <div
+            className="ml-4 font-bold whitespace-pre-wrap group-hover:text-primary transition-colors"
+            style={{
+              fontSize: '18px',
+              fontFamily: logoFontFamily || 'inherit',
+              color: logoColor || 'var(--color-primary)',
+              lineHeight: 1.2,
+            }}
+          >
+            {appTitle}
+          </div>
         </div>
       </aside>
     </>

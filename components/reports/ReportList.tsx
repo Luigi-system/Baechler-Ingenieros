@@ -237,7 +237,11 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                                 {filteredReports.length > 0 ? filteredReports.map((report) => {
                                     const { percentage, missingFields } = calculateCompletion(report);
                                     return (
-                                        <tr key={report.id} className="hover:bg-primary/5 transition-colors group">
+                                        <tr 
+                                            key={report.id} 
+                                            onClick={() => onEditReport(report.id as number)}
+                                            className="hover:bg-primary/5 transition-colors group cursor-pointer"
+                                        >
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
                                                     <span className="text-sm font-black text-base-content leading-tight group-hover:text-primary transition-colors">
@@ -288,7 +292,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                                             </td>
                                             <td className="px-6 py-4">
                                                 <button
-                                                    onClick={() => handleStatusToggle(report)}
+                                                    onClick={(e) => { e.stopPropagation(); handleStatusToggle(report); }}
                                                     className={`flex items-center gap-1.5 px-3 py-1 text-[9px] font-black rounded-full uppercase tracking-widest transition-all border outline-none ${report.estado
                                                             ? 'bg-success/10 text-success border-success/30 hover:bg-success hover:text-white'
                                                             : 'bg-warning/10 text-warning border-warning/30 hover:bg-warning hover:text-white'
@@ -298,7 +302,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                                                     {report.estado ? 'Finalizado' : 'En Proceso'}
                                                 </button>
                                             </td>
-                                            <td className="px-6 py-4 text-right">
+                                            <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                                                 <Dropdown 
                                                     items={[
                                                         { 
@@ -361,7 +365,11 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                             {filteredReports.length > 0 ? filteredReports.map((report) => {
                                 const { percentage } = calculateCompletion(report);
                                 return (
-                                    <div key={report.id} className="p-4 space-y-4 hover:bg-primary/5 transition-colors group">
+                                    <div 
+                                        key={report.id} 
+                                        onClick={() => onEditReport(report.id as number)}
+                                        className="p-4 space-y-4 hover:bg-primary/5 transition-colors group cursor-pointer"
+                                    >
                                         <div className="flex justify-between items-start">
                                             <div className="flex flex-col">
                                                 <span className="text-base font-black text-base-content leading-tight truncate max-w-[200px]">
@@ -372,7 +380,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
                                                     {new Date(report.fecha || '').toLocaleDateString('es-ES', { timeZone: 'UTC' })}
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={() => handleStatusToggle(report)}
                                                     className={`px-2 py-1 text-[8px] font-black rounded-full uppercase tracking-widest border ${report.estado ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'}`}

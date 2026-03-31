@@ -8,6 +8,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import QrScannerModal from '../ui/QrScannerModal';
 import QrResultModal from '../ui/QrResultModal';
 import { useNavigate } from 'react-router-dom';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface HeaderProps {
     onNavigateToProfile: () => void;
@@ -15,6 +16,7 @@ interface HeaderProps {
     onEditReport: (id: number, type: 'service' | 'visit') => void;
     title?: string;
     subtitle?: string;
+    onShowDomainQr?: () => void;
     children?: React.ReactNode;
 }
 
@@ -24,8 +26,9 @@ const tasksData = [{ name: 'Completadas', value: 5 }, { name: 'Pendientes', valu
 const profileData = [{ name: 'Completo', value: 85 }, { name: 'Restante', value: 15 }];
 const COLORS = ['var(--color-primary)', 'var(--color-base-300)'];
 
-const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSidebar, onEditReport, title, subtitle, children }) => {
+const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSidebar, onEditReport, title, subtitle, onShowDomainQr, children }) => {
     const auth = useContext(AuthContext);
+    const { logoUrl, appTitle, isLogoAnimated } = useTheme();
     const navigate = useNavigate();
     const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -49,7 +52,8 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
                 <button onClick={onToggleMobileSidebar} className="lg:hidden p-1.5 sm:p-2 -ml-1 text-neutral hover:bg-base-300 rounded-xl transition-colors shrink-0">
                     <MenuIcon className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
-                <div className="flex flex-col min-w-0 transition-all">
+                
+                <div className="flex flex-col min-w-0 transition-all ml-1 sm:ml-0">
                     <h1 className="text-[11px] sm:text-xl font-black text-base-content truncate uppercase tracking-tight sm:tracking-normal">
                         {title || (auth.user.nombres.split(' ')[0])}
                     </h1>

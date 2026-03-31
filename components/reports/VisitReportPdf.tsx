@@ -129,10 +129,7 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: {
-    position: 'absolute',
-    bottom: 25,
-    left: 20,
-    right: 20,
+    marginTop: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
@@ -176,8 +173,9 @@ interface Props {
 const cleanBase64 = (str: string | null | undefined) => {
   if (!str || typeof str !== 'string') return '';
   const trimmed = str.trim();
-  if (trimmed.startsWith('data:')) return trimmed;
-  return `data:image/png;base64,${trimmed}`;
+  if (trimmed.startsWith('data:') || trimmed.startsWith('http') || trimmed.startsWith('blob:')) return trimmed;
+  if (trimmed.length > 50 && !trimmed.includes(' ')) return `data:image/png;base64,${trimmed}`;
+  return trimmed;
 };
 
 const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
@@ -286,29 +284,24 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
             const [label, ...rest] = maquina.split(': ');
             const observations = rest.join(': ');
             return (
-              <View key={index} style={styles.tableRow} wrap={false}>
-                <View style={[styles.tableCol, styles.lastCol, { flexDirection: 'column', alignItems: 'flex-start', paddingVertical: 8 }]}>
-                  <Text style={[styles.label, { textTransform: 'uppercase', marginBottom: 4 }]}>
-                    • {label}
-                  </Text>
-                  {observations && (
-                    <View style={{ paddingLeft: 12, paddingTop: 2 }}>
-                      <Text style={styles.value}>{observations}</Text>
-                    </View>
-                  )}
+              <View key={index} style={[styles.tableRow, { flexDirection: 'column', padding: 5, minHeight: 35, borderBottomWidth: 1 }]} wrap={false}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+                  <Text style={{ fontWeight: 'bold', fontSize: 8, marginRight: 4 }}>•</Text>
+                  <Text style={[styles.label, { fontSize: 8, textTransform: 'uppercase', marginBottom: 0 }]}>{label}</Text>
+                </View>
+                <View style={{ paddingLeft: 10 }}>
+                  <Text style={[styles.value, { fontSize: 7.5, color: '#333' }]}>{observations || 'Sin observaciones.'}</Text>
                 </View>
               </View>
             );
           })
         ) : (
-          <View style={styles.tableRow}>
-            <View style={[styles.tableCol, styles.lastCol]}>
-              <Text style={styles.value}>
-                {typeof report.maquinas === 'string' && report.maquinas.trim() !== '' 
-                  ? report.maquinas 
-                  : 'No se registraron máquinas.'}
-              </Text>
-            </View>
+          <View style={[styles.tableRow, { padding: 8 }]}>
+            <Text style={[styles.value, { fontStyle: 'italic', color: '#666' }]}>
+              {typeof report.maquinas === 'string' && report.maquinas.trim() !== '' 
+                ? report.maquinas 
+                : 'No se registraron máquinas evaluadas.'}
+            </Text>
           </View>
         )}
 
@@ -344,13 +337,15 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
         {/* FOOTER - ONLY AT THE BOTTOM OF THE LAST PAGE */}
         <View style={styles.footer} wrap={false}>
           <View style={styles.footerCol}>
-            <Text style={styles.footerLabel}>Servicio Realizado Por: <Text style={styles.value}>{report.usuario_nombre || ''}</Text></Text>
-            <Text style={styles.footerLabel}>Celular: <Text style={styles.value}>{report.usuario_cel || ''}</Text></Text>
+            <Text style={styles.footerLabel}>Servicio Realizado Por: <Text style={styles.value}>{report.usuario_nombre || (report as any).nombre_usuario || ''}</Text></Text>
+            <Text style={styles.footerLabel}>Celular: <Text style={styles.value}>{report.usuario_cel || (report as any).celular_usuario || ''}</Text></Text>
           </View>
 
           <View style={styles.footerCol}>
             <View style={styles.signatureContainer}>
-              {report.foto_firma && <Image src={cleanBase64(report.foto_firma)} style={styles.signatureImage} />}
+              {(report.foto_firma || (report as any).fotoFirmaBase64) && (
+                <Image src={cleanBase64(report.foto_firma || (report as any).fotoFirmaBase64)} style={styles.signatureImage} />
+              )}
               <View style={styles.signatureLine}>
                 <Text style={{ fontSize: 7.5, fontWeight: 'bold' }}>Firma del Cliente / Encargado</Text>
                 <Text style={{ fontSize: 7.5 }}>{report.encargado_nombre || ''}</Text>

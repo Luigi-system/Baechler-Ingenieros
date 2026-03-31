@@ -222,7 +222,11 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                           {filteredReports.map((report) => {
                               const { percentage, missingFields } = calculateCompletion(report);
                               return (
-                                  <tr key={report.id} className="hover:bg-primary/5 transition-colors group">
+                                  <tr 
+                                      key={report.id} 
+                                      onClick={() => onEditReport(report.id as number)}
+                                      className="hover:bg-primary/5 transition-colors group cursor-pointer"
+                                  >
                                       <td className="px-6 py-4">
                                           <span className="text-sm font-black text-base-content leading-tight group-hover:text-primary transition-colors">
                                               #{String(report.id).padStart(4, '0')}
@@ -259,7 +263,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                                       </td>
                                       <td className="px-6 py-4">
                                           <button
-                                              onClick={() => handleStatusToggle(report)}
+                                              onClick={(e) => { e.stopPropagation(); handleStatusToggle(report); }}
                                               className={`flex items-center gap-1.5 px-3 py-1 text-[9px] font-black rounded-full uppercase tracking-widest transition-all border outline-none ${report.estado === 1
                                                       ? 'bg-success/10 text-success border-success/30 hover:bg-success hover:text-white'
                                                       : 'bg-warning/10 text-warning border-warning/30 hover:bg-warning hover:text-white'
@@ -275,7 +279,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                                               {report.created_at ? new Date(report.created_at).toLocaleDateString() : 'N/A'}
                                           </span>
                                       </td>
-                                      <td className="px-6 py-4 text-right">
+                                      <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                                           <Dropdown 
                                             items={[
                                                 { id: 'sign', label: 'Firmar Reporte', icon: <ClipboardCheckIcon />, onClick: () => window.open(`${window.location.origin}/preview/reporte-visita/${report.id}`, '_blank') },
@@ -301,7 +305,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                       {filteredReports.map((report) => {
                           const { percentage } = calculateCompletion(report);
                           return (
-                              <div key={report.id} className="p-4 space-y-4 hover:bg-primary/5 transition-colors group">
+                              <div key={report.id} onClick={() => onEditReport(report.id as number)} className="p-4 space-y-4 hover:bg-primary/5 transition-colors group cursor-pointer">
                                   <div className="flex justify-between items-start">
                                       <div className="flex flex-col">
                                           <span className="text-base font-black text-base-content leading-tight truncate max-w-[200px]">
@@ -313,7 +317,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
                                           </span>
                                       </div>
                                       <div className="flex items-center gap-2">
-                                        <button onClick={() => handleStatusToggle(report)} className={`px-2 py-1 text-[8px] font-black rounded-full uppercase border ${report.estado === 1 ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'}`}>
+                                        <button onClick={(e) => { e.stopPropagation(); handleStatusToggle(report); }} className={`px-2 py-1 text-[8px] font-black rounded-full uppercase border ${report.estado === 1 ? 'bg-success/10 text-success border-success/30' : 'bg-warning/10 text-warning border-warning/30'}`}>
                                             {report.estado === 1 ? 'Finalizado' : 'Pendiente'}
                                         </button>
                                         <Dropdown 

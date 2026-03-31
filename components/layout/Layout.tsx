@@ -143,6 +143,7 @@ const Layout: React.FC = () => {
             onNavigateToProfile={() => navigateTo('settings-profile')} 
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
             onEditReport={handleEditReport}
+            onShowDomainQr={() => setIsDomainQrModalOpen(true)}
             title={pageTitle}
             subtitle={pageSubtitle}
         >

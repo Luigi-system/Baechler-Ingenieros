@@ -196,10 +196,7 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: {
-    position: 'absolute',
-    bottom: 25,
-    left: 20,
-    right: 20,
+    marginTop: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
@@ -243,8 +240,10 @@ interface Props {
 const cleanBase64 = (str: string | null | undefined) => {
   if (!str || typeof str !== 'string') return '';
   const trimmed = str.trim();
-  if (trimmed.startsWith('data:')) return trimmed;
-  return `data:image/png;base64,${trimmed}`;
+  if (trimmed.startsWith('data:') || trimmed.startsWith('http') || trimmed.startsWith('blob:')) return trimmed;
+  // If it's pure base64 (no header), add it
+  if (trimmed.length > 50 && !trimmed.includes(' ')) return `data:image/png;base64,${trimmed}`;
+  return trimmed;
 };
 
 const CheckboxField = ({ checked, label, noBorder }: { checked: boolean; label: string; noBorder?: boolean }) => (
@@ -398,8 +397,8 @@ const ServiceReportPdf = ({ report, logoUrl, serial }: Props) => {
         {/* FOOTER - ONLY AT THE BOTTOM OF THE LAST PAGE */}
         <View style={styles.footer} wrap={false}>
           <View style={styles.footerCol}>
-            <Text style={styles.footerLabel}>Servicio Realizado Por: <Text style={styles.value}>{report.usuario_nombre || ''}</Text></Text>
-            <Text style={styles.footerLabel}>Celular: <Text style={styles.value}>{report.usuario_cel || ''}</Text></Text>
+            <Text style={styles.footerLabel}>Servicio Realizado Por: <Text style={styles.value}>{report.usuario_nombre || (report as any).nombre_usuario || ''}</Text></Text>
+            <Text style={styles.footerLabel}>Celular: <Text style={styles.value}>{report.usuario_cel || (report as any).celular_usuario || ''}</Text></Text>
             <View style={{ flexDirection: 'row', marginTop: 4 }}>
               <Text style={[styles.footerLabel, { marginRight: 15 }]}>Hora Ingreso: <Text style={styles.value}>{report.hora_entrada || ''}</Text></Text>
               <Text style={styles.footerLabel}>Hora Salida: <Text style={styles.value}>{report.hora_salida || ''}</Text></Text>
@@ -408,9 +407,9 @@ const ServiceReportPdf = ({ report, logoUrl, serial }: Props) => {
 
           <View style={styles.footerCol}>
             <View style={styles.signatureContainer}>
-              {report.foto_firma && (
+              {(report.foto_firma || (report as any).fotoFirmaBase64) && (
                 <Image 
-                  src={cleanBase64(report.foto_firma)} 
+                  src={cleanBase64(report.foto_firma || (report as any).fotoFirmaBase64)} 
                   style={styles.signatureImage} 
                 />
               )}

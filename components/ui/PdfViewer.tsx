@@ -118,7 +118,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(({ file, className
             </div>
 
             {/* Floating Toolbar */}
-            {numPages && (
+            {numPages && !hideToolbar && (
                 <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2.5 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-[100] animate-in slide-in-from-bottom-4 duration-300">
                     <div className="flex items-center gap-1 border-r border-white/10 pr-2 mr-1">
                         <button 

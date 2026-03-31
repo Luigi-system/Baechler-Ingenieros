@@ -206,6 +206,24 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                     const data = await res.json();
                     const reportData = Array.isArray(data) ? data[0] : (data.data || data);
 
+                    const formatDateForInput = (dateStr: any) => {
+                        if (!dateStr) return '';
+                        if (String(dateStr).includes('T')) return String(dateStr).split('T')[0];
+                        return dateStr;
+                    };
+
+                    const formatTimeForInput = (timeStr: any) => {
+                        if (!timeStr) return '';
+                        if (String(timeStr).includes('T')) {
+                            const date = new Date(timeStr);
+                            if (!isNaN(date.getTime())) {
+                                return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                            }
+                        }
+                        if (/^\d{2}:\d{2}/.test(String(timeStr))) return String(timeStr).substring(0, 5);
+                        return timeStr;
+                    };
+
                     if (reportData) {
                         const company = companies.find(c => c.nombre === reportData.empresa_nombre);
                         const plant = company ? plants.find(p => p.id_empresa === company.id && p.nombre === reportData.empresa_planta) : undefined;
@@ -217,7 +235,12 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                             selectedSupervisorId: supervisor?.id,
                         });
                         
-                        const formDataToSet: Partial<ServiceReport> = { ...reportData };
+                        const formDataToSet: Partial<ServiceReport> = { 
+                            ...reportData,
+                            fecha: formatDateForInput(reportData.fecha),
+                            hora_entrada: formatTimeForInput(reportData.hora_entrada),
+                            hora_salida: formatTimeForInput(reportData.hora_salida)
+                        };
 
                         // Handle images that might be comma-separated strings from API
                         const processImages = (imgs: any) => {
@@ -324,9 +347,14 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
 
                 const getExistingImages = (imgs: any) => {
                     if (!imgs) return [];
-                    if (Array.isArray(imgs)) return imgs.filter((i: any) => !!i).map(i => i.startsWith('data:') ? i : `data:image/png;base64,${i}`);
+                    const process = (i: string) => {
+                        const trimmed = i.trim();
+                        if (trimmed.startsWith('data:') || trimmed.startsWith('http') || trimmed.startsWith('blob:')) return trimmed;
+                        return `data:image/png;base64,${trimmed}`;
+                    };
+                    if (Array.isArray(imgs)) return imgs.filter((i: any) => !!i).map(process);
                     if (typeof imgs === 'string' && imgs.length > 0) {
-                        return imgs.split(',').filter(Boolean).map(i => i.trim().startsWith('data:') ? i.trim() : `data:image/png;base64,${i.trim()}`);
+                        return imgs.split(',').filter(Boolean).map(process);
                     }
                     return [];
                 };
@@ -913,9 +941,8 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg>
                                         </button>
                                         <div className="w-px h-6 bg-base-border mx-1"></div>
-                                        <button type="button" onClick={() => pdfViewerRef.current?.download()} className="flex items-center gap-2 px-3 py-1 bg-primary text-primary-content rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary-focus transition-all active:scale-95 shadow-lg shadow-primary/20" title="Descargar PDF">
+                                        <button type="button" onClick={() => pdfViewerRef.current?.download()} className="p-2 bg-primary text-primary-content rounded-lg hover:bg-primary-focus transition-all active:scale-95 shadow-lg shadow-primary/20" title="Descargar PDF">
                                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                            <span className="hidden lg:inline">Descargar</span>
                                         </button>
                                     </div>
                                 )}
@@ -928,15 +955,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                                 <EyeOffIcon className="h-5 w-5" />
                             </button>
                         </div>
-                        <div className="flex-grow p-1 md:p-3 relative bg-base-300">
+                        <div className="flex-grow p-1 md:p-3 relative bg-base-300 overflow-hidden flex flex-col">
                              {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 backdrop-blur-sm transition-all"><Spinner className="h-10 w-10 text-primary" /></div>}
                             {pdfPreviewUri ? (
                                 <PdfViewer 
                                     ref={pdfViewerRef}
                                     file={pdfPreviewUri} 
-                                    showAllPages={false}
+                                    showAllPages={true}
                                     hideToolbar={true}
-                                    className="rounded-lg shadow-inner bg-white" 
+                                    className="rounded-lg shadow-inner bg-white h-full" 
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center text-neutral p-10 text-center space-y-4">
