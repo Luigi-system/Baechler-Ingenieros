@@ -6,7 +6,7 @@ import type { VisitReport } from '../../types';
 const styles = StyleSheet.create({
   page: {
     padding: 15,
-    paddingBottom: 120, // Espacio para el footer absoluto
+    paddingBottom: 50, // Margen compacto para el footer absoluto
     fontSize: 9,
     fontFamily: 'Helvetica',
     lineHeight: 1.4,
@@ -122,14 +122,20 @@ const styles = StyleSheet.create({
   textBlockContent: {
     border: '1px solid #000',
     padding: 6,
-    minHeight: 120,
-    fontSize: 8.5,
+    minHeight: 60,
     marginBottom: 5,
+  },
+  textContent: {
+    fontSize: 8.5,
+    lineHeight: 1.2,
   },
 
   // Footer
   footer: {
-    marginTop: 20,
+    position: 'absolute',
+    bottom: 25,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
@@ -306,30 +312,34 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
         )}
 
         {/* BODY TEXT BLOCKS */}
-        <View wrap={false}>
+        <View>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>OBSERVACIONES ENCONTRADAS:</Text></View>
-          <Text style={styles.textBlockContent}>{report.observaciones || ''}</Text>
+          <View style={styles.textBlockContent}>
+            <Text style={styles.textContent}>{report.observaciones || ''}</Text>
           
-          {report.fotos_observaciones && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5 }}>
-              {(typeof report.fotos_observaciones === 'string' ? report.fotos_observaciones.split(',') : []).filter(Boolean).map((img, i) => (
-                <Image key={i} src={cleanBase64(img)} style={{ width: 130, height: 'auto', marginRight: 10, marginBottom: 10, border: '1px solid #CCC', borderRadius: 2 }} />
-              ))}
-            </View>
-          )}
+            {((report as any).fotosObservacionesBase64?.length > 0 || report.fotos_observaciones) && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5 }}>
+                {((report as any).fotosObservacionesBase64 || (typeof report.fotos_observaciones === 'string' ? report.fotos_observaciones.split(',') : [])).filter(Boolean).map((imgTag, i) => (
+                  <Image key={i} src={cleanBase64(imgTag)} style={{ width: 130, height: 'auto', marginRight: 10, marginBottom: 10, border: '1px solid #CCC', borderRadius: 2 }} />
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
-        <View wrap={false}>
+        <View>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>SUGERENCIAS Y RECOMENDACIONES:</Text></View>
-          <Text style={styles.textBlockContent}>{report.sugerencias || ''}</Text>
+          <View style={styles.textBlockContent}>
+            <Text style={styles.textContent}>{report.sugerencias || ''}</Text>
 
-          {report.fotos_sugerencias && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5 }}>
-              {(typeof report.fotos_sugerencias === 'string' ? report.fotos_sugerencias.split(',') : []).filter(Boolean).map((img, i) => (
-                <Image key={i} src={cleanBase64(img)} style={{ width: 130, height: 'auto', marginRight: 10, marginBottom: 10, border: '1px solid #CCC', borderRadius: 2 }} />
-              ))}
-            </View>
-          )}
+            {((report as any).fotosSugerenciasBase64?.length > 0 || report.fotos_sugerencias) && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 5 }}>
+                {((report as any).fotosSugerenciasBase64 || (typeof report.fotos_sugerencias === 'string' ? report.fotos_sugerencias.split(',') : [])).filter(Boolean).map((imgTag, i) => (
+                  <Image key={i} src={cleanBase64(imgTag)} style={{ width: 130, height: 'auto', marginRight: 10, marginBottom: 10, border: '1px solid #CCC', borderRadius: 2 }} />
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={{ flexGrow: 1 }} />

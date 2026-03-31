@@ -6,7 +6,7 @@ import type { ServiceReport } from '../../types';
 const styles = StyleSheet.create({
   page: {
     padding: 15,
-    paddingBottom: 120, // Espacio para el footer absoluto
+    paddingBottom: 50, // Margen compacto para el footer absoluto
     fontSize: 9,
     fontFamily: 'Helvetica',
     lineHeight: 1.4,
@@ -174,8 +174,11 @@ const styles = StyleSheet.create({
     border: '1px solid #000',
     padding: 6,
     minHeight: 40,
-    fontSize: 8.5,
     marginBottom: 5,
+  },
+  textContent: {
+    fontSize: 8.5,
+    lineHeight: 1.2,
   },
   imageGrid: {
     flexDirection: 'row',
@@ -196,7 +199,10 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: {
-    marginTop: 20,
+    position: 'absolute',
+    bottom: 25,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
@@ -357,39 +363,45 @@ const ServiceReportPdf = ({ report, logoUrl, serial }: Props) => {
         </View>
 
         {/* BODY TEXT BLOCKS */}
-        <View wrap={false}>
+        <View>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>PROBLEMAS ENCONTRADOS:</Text></View>
-          <Text style={styles.textBlockContent}>{report.problemas_encontrados || ''}</Text>
+          <View style={styles.textBlockContent}>
+            <Text style={styles.textContent}>{report.problemas_encontrados || ''}</Text>
 
-          {report.foto_problemas_encontrados && (
-            <View style={styles.imageGrid}>
-              {(typeof report.foto_problemas_encontrados === 'string' ? report.foto_problemas_encontrados.split(',') : []).filter(Boolean).map((img: string, i: number) => (
-                <View key={i} style={styles.imageContainer}>
-                  <Image src={cleanBase64(img)} style={styles.reportImage} />
-                </View>
-              ))}
-            </View>
-          )}
+            {((report as any).fotosProblemasBase64?.length > 0 || report.foto_problemas_encontrados) && (
+              <View style={styles.imageGrid}>
+                {((report as any).fotosProblemasBase64 || (typeof report.foto_problemas_encontrados === 'string' ? report.foto_problemas_encontrados.split(',') : [])).filter(Boolean).map((imgTag: string, i: number) => (
+                  <View key={i} style={styles.imageContainer}>
+                    <Image src={cleanBase64(imgTag)} style={styles.reportImage} />
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
-        <View wrap={false}>
+        <View>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>ACCIONES REALIZADAS:</Text></View>
-          <Text style={styles.textBlockContent}>{report.acciones_realizadas || ''}</Text>
+          <View style={styles.textBlockContent}>
+            <Text style={styles.textContent}>{report.acciones_realizadas || ''}</Text>
 
-          {report.foto_acciones_realizadas && (
-            <View style={styles.imageGrid}>
-              {(typeof report.foto_acciones_realizadas === 'string' ? report.foto_acciones_realizadas.split(',') : []).filter(Boolean).map((img: string, i: number) => (
-                <View key={i} style={styles.imageContainer}>
-                  <Image key={i} src={cleanBase64(img)} style={styles.reportImage} />
-                </View>
-              ))}
-            </View>
-          )}
+            {((report as any).fotosAccionesBase64?.length > 0 || report.foto_acciones_realizadas) && (
+              <View style={styles.imageGrid}>
+                {((report as any).fotosAccionesBase64 || (typeof report.foto_acciones_realizadas === 'string' ? report.foto_acciones_realizadas.split(',') : [])).filter(Boolean).map((imgTag: string, i: number) => (
+                  <View key={i} style={styles.imageContainer}>
+                    <Image key={i} src={cleanBase64(imgTag)} style={styles.reportImage} />
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
-        <View wrap={false}>
+        <View>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>OBSERVACIONES & SUGERENCIAS:</Text></View>
-          <Text style={styles.textBlockContent}>{report.observaciones || ''}</Text>
+          <View style={styles.textBlockContent}>
+            <Text style={styles.textContent}>{report.observaciones || ''}</Text>
+          </View>
         </View>
 
         <View style={{ flexGrow: 1 }} />

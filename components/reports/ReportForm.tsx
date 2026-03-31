@@ -923,17 +923,10 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                 {isSimulatorVisible ? (
                     <>
                         <div className="flex-shrink-0 p-4 bg-base-200 border-b border-base-border flex justify-between items-center">
-                            <div className="flex items-center gap-6">
-                                <div className="flex items-center gap-3">
-                                    <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary lg:hidden">
-                                        <ViewIcon className="h-5 w-5" />
-                                    </div>
-                                    <span className="font-bold text-base uppercase tracking-wider">Vista Previa PDF</span>
-                                </div>
-
-                                {/* Header PDF Controls - Externalized from PdfViewer */}
+                            <div className="flex items-center gap-2">
+                                {/* Header PDF Controls - Permanently visible icons */}
                                 {pdfPreviewUri && (
-                                    <div className="hidden sm:flex items-center gap-1.5 p-1 bg-base-300 rounded-xl border border-base-border">
+                                    <div className="flex items-center gap-1.5 p-1 bg-base-300 rounded-xl border border-base-border transition-all">
                                         <button type="button" onClick={() => pdfViewerRef.current?.zoomOut()} className="p-1 px-2 hover:bg-base-100 rounded-lg text-base-content transition-all border border-transparent hover:border-base-border shadow-sm active:scale-95" title="Reducir">
                                             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M20 12H4" /></svg>
                                         </button>
@@ -946,6 +939,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                                         </button>
                                     </div>
                                 )}
+                                <span className="hidden sm:inline font-bold text-sm uppercase tracking-wider ml-2 opacity-70">Vista Previa</span>
                             </div>
                             <button 
                                 onClick={() => setIsSimulatorVisible(false)} 
