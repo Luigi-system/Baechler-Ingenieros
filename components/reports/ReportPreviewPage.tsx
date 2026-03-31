@@ -399,13 +399,22 @@ const ReportPreviewPage: React.FC<ReportPreviewPageProps> = ({ type }) => {
     return (
         <div className="min-h-screen bg-base-100 p-4 md:p-8 flex flex-col items-center justify-center font-sans">
             <div className="w-full max-w-5xl h-full flex flex-col">
-                <div className="flex items-center gap-3 mb-8 self-start">
-                    <div className="bg-primary p-2 rounded-xl">
-                        <EditIcon className="h-6 w-6 text-primary-content" />
+                <div className="flex flex-col items-center mb-12 w-full animate-in fade-in slide-in-from-top-6 duration-1000">
+                    <div className="flex items-center gap-5 group">
+                        <div className="bg-primary p-3.5 rounded-[1.2rem] shadow-xl shadow-primary/20 group-hover:rotate-12 transition-all duration-500">
+                            <EditIcon className="h-8 w-8 text-primary-content" />
+                        </div>
+                        <div className="flex flex-col">
+                            <h1 className="text-3xl md:text-4xl font-black italic tracking-tighter uppercase leading-none text-base-content">
+                                PREVIEW <span className="text-primary">&</span> FIRMA
+                            </h1>
+                            <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
+                                <div className="h-[1px] w-4 bg-primary/40"></div>
+                                <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] text-neutral opacity-50 whitespace-nowrap">PLATAFORMA TÉCNICA BAECHLER</p>
+                                <div className="h-[1px] w-32 bg-primary/40"></div>
+                            </div>
+                        </div>
                     </div>
-                    <h1 className="text-2xl font-black italic tracking-tighter uppercase">
-                        PREVIEW <span className="text-primary">&</span> FIRMA
-                    </h1>
                 </div>
                 
                 {renderContents()}

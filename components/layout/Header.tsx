@@ -3,7 +3,7 @@
 import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import ThemeToggle from '../ui/ThemeToggle';
-import { BellIcon, LogoutIcon, UserIcon, CheckCircleIcon, MenuIcon, QrCodeIcon } from '../ui/Icons';
+import { BellIcon, LogoutIcon, UserIcon, CheckCircleIcon, MenuIcon, QrCodeIcon, ChevronDownIcon } from '../ui/Icons';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import QrScannerModal from '../ui/QrScannerModal';
 import { useNavigate } from 'react-router-dom';
@@ -65,24 +65,29 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
         </div>
       )}
 
-      <div className="flex items-center space-x-2 sm:space-x-4 ml-auto">
-
-        <div className="relative">
-            <button onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} className="relative p-1">
-                <BellIcon className="h-5 w-5 text-neutral cursor-pointer hover:text-primary"/>
-                <span className="absolute top-0 right-0 flex h-2.5 w-2.5">
+      <div className="flex items-center gap-2 sm:gap-4 ml-auto flex-nowrap h-full">
+        <div className="flex items-center h-full">
+            <button 
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} 
+                className="relative p-2 text-neutral hover:text-primary transition-colors hover:bg-base-300/50 rounded-xl"
+            >
+                <BellIcon className="h-5 w-5 cursor-pointer"/>
+                <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-error"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-error"></span>
                 </span>
             </button>
 
             {isNotificationsOpen && (
                  <div 
-                    className="absolute right-0 mt-2 w-80 bg-base-200 rounded-lg shadow-lg py-2 z-50 border border-base-border"
+                    className="absolute right-0 top-16 mt-2 w-80 bg-base-200 rounded-2xl shadow-2xl py-2 z-[60] border border-base-border animate-in fade-in slide-in-from-top-4 duration-300"
                     onMouseLeave={() => setIsNotificationsOpen(false)}
                  >
-                    <div className="px-4 py-2 border-b border-base-border">
-                        <h4 className="font-semibold">Resumen de Actividad</h4>
+                    <div className="px-5 py-4 border-b border-base-border bg-base-300/30">
+                        <h4 className="font-black uppercase tracking-widest text-xs text-base-content flex items-center gap-2">
+                           <div className="w-2 h-2 bg-primary rounded-full"></div>
+                           Resumen de Actividad
+                        </h4>
                     </div>
                     <div className="p-4 grid grid-cols-3 gap-2 text-center">
                         <div className="flex flex-col items-center">
@@ -93,17 +98,17 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
                                     </Pie>
                                 </PieChart>
                             </ResponsiveContainer>
-                            <p className="text-xs mt-1">12/20 Reportes</p>
+                            <p className="text-[10px] uppercase font-black mt-1 text-base-content opacity-70">12/20 Reportes</p>
                         </div>
                         <div className="flex flex-col items-center">
                              <ResponsiveContainer width="100%" height={60}>
-                                <PieChart>
+                                 <PieChart>
                                     <Pie data={tasksData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={25} fill="#82ca9d" paddingAngle={5}>
                                         {tasksData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
                                     </Pie>
                                 </PieChart>
                             </ResponsiveContainer>
-                             <p className="text-xs mt-1">3 Tareas Pend.</p>
+                             <p className="text-[10px] uppercase font-black mt-1 text-base-content opacity-70">3 Pendientes</p>
                         </div>
                         <div className="flex flex-col items-center">
                             <ResponsiveContainer width="100%" height={60}>
@@ -113,61 +118,78 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
                                     </Pie>
                                 </PieChart>
                             </ResponsiveContainer>
-                            <p className="text-xs mt-1">Perfil al 85%</p>
+                            <p className="text-[10px] uppercase font-black mt-1 text-base-content opacity-70">Perfil 85%</p>
                         </div>
                     </div>
-                     <div className="px-4 py-3 border-t border-base-border">
-                        <div className="flex items-start">
-                            <CheckCircleIcon className="h-5 w-5 text-success mr-2 mt-0.5"/>
-                            <p className="text-sm">¡Todo está al día! No hay nuevas notificaciones.</p>
+                     <div className="px-5 py-4 border-t border-base-border bg-base-300/10">
+                        <div className="flex items-start gap-3">
+                            <CheckCircleIcon className="h-5 w-5 text-success shrink-0"/>
+                            <div>
+                                <p className="text-xs font-bold text-base-content">¡Todo al día!</p>
+                                <p className="text-[10px] text-neutral mt-0.5">No hay nuevas notificaciones de mantenimiento.</p>
+                            </div>
                         </div>
                     </div>
                  </div>
             )}
-        <div className="relative">
-            <button 
-                onClick={() => setIsQrScannerOpen(true)} 
-                className="p-2 text-neutral hover:text-primary transition-colors bg-base-300/30 rounded-lg hover:bg-primary/10 group"
-                title="Escanear QR de Reporte"
+        </div>
+
+        <button 
+            onClick={() => setIsQrScannerOpen(true)} 
+            className="p-2 text-neutral hover:text-primary transition-all duration-300 bg-base-300/50 rounded-xl hover:bg-primary/20 group border border-transparent hover:border-primary/30"
+            title="Escanear QR de Reporte"
+        >
+            <QrCodeIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+        </button>
+
+        <div className="flex items-center h-full">
+            <ThemeToggle />
+        </div>
+
+        <div className="h-8 w-[1px] bg-base-border/50 mx-1 hidden sm:block"></div>
+
+        <div className="relative group">
+            <div 
+              className="flex items-center gap-3 cursor-pointer p-1.5 hover:bg-base-300/50 rounded-xl transition-all duration-300" 
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
             >
-                <QrCodeIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
-            </button>
-        </div>
-        </div>
-
-        <ThemeToggle />
-
-        <div className="relative">
-            <div className="flex items-center space-x-2 cursor-pointer" onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}>
-                <img 
-                  className="h-10 w-10 rounded-full object-cover" 
-                  src={`https://i.pravatar.cc/150?u=${auth.user.email}`} 
-                  alt="User avatar" 
-                />
-                <div className="hidden sm:block">
-                  <p className="font-medium text-base-content truncate max-w-24">{auth.user.nombres}</p>
-                  <p className="text-xs text-neutral truncate max-w-24">{auth.user.email}</p>
+                <div className="relative">
+                    <img 
+                      className="h-9 w-9 rounded-full object-cover border-2 border-primary/20 ring-4 ring-primary/5 shadow-lg group-hover:scale-105 transition-transform" 
+                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${auth.user.email}`} 
+                      alt="User avatar" 
+                    />
+                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-base-200 shadow-sm"></div>
                 </div>
+                <div className="hidden md:block">
+                  <p className="text-xs font-black uppercase tracking-wider text-base-content leading-tight">{auth.user.nombres.split(' ')[0]}</p>
+                  <p className="text-[10px] text-neutral font-bold opacity-70 leading-tight uppercase tracking-tighter">{auth.user.roleName}</p>
+                </div>
+                <ChevronDownIcon className={`h-4 w-4 text-neutral transition-transform duration-300 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
             </div>
             
             {isProfileMenuOpen && (
                  <div 
-                    className="absolute right-0 mt-2 w-48 bg-base-200 rounded-md shadow-lg py-1 z-50 border border-base-border"
+                    className="absolute right-0 top-14 mt-2 w-56 bg-base-200 rounded-2xl shadow-2xl py-2 z-[60] border border-base-border animate-in fade-in slide-in-from-top-4 duration-300"
                     onMouseLeave={() => setIsProfileMenuOpen(false)}
                 >
+                    <div className="px-4 py-3 border-b border-base-border bg-base-300/20 mb-1">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-neutral opacity-60">Gestionar Cuenta</p>
+                    </div>
                     <button
                         onClick={() => { onNavigateToProfile(); setIsProfileMenuOpen(false); }}
-                        className="w-full text-left flex items-center px-4 py-2 text-sm text-base-content hover:bg-base-300"
+                        className="w-[calc(100%-1rem)] mx-2 text-left flex items-center px-3 py-2.5 text-xs font-bold text-base-content hover:bg-primary/10 hover:text-primary rounded-xl transition-colors group"
                     >
-                        <UserIcon className="h-5 w-5 mr-2" />
-                        Mi Perfil
+                        <UserIcon className="h-5 w-5 mr-3 opacity-60 group-hover:opacity-100" />
+                        Mi Perfil Técnico
                     </button>
+                    <div className="h-[1px] bg-base-border/50 my-1 mx-4"></div>
                     <button
                       onClick={() => { auth.logout(); setIsProfileMenuOpen(false); }}
-                      className="w-full text-left flex items-center px-4 py-2 text-sm text-error hover:bg-base-300"
+                      className="w-[calc(100%-1rem)] mx-2 text-left flex items-center px-3 py-2.5 text-xs font-bold text-error hover:bg-error/10 rounded-xl transition-colors group"
                     >
-                      <LogoutIcon className="h-5 w-5 mr-2" />
-                      Cerrar sesión
+                      <LogoutIcon className="h-5 w-5 mr-3 opacity-60 group-hover:opacity-100" />
+                      Cerrar Sesión Activa
                     </button>
                 </div>
             )}
