@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Machine, Plant, Company } from '../../../types';
 import Spinner from '../../ui/Spinner';
 import SearchableSelect from '../../ui/SearchableSelect';
+import { useNotification } from '../../../contexts/NotificationContext';
 import { BuildingIcon, MapPinIcon, CpuChipIcon, HashIcon, SettingsIcon, CheckCircleIcon } from '../../ui/Icons';
 
 interface MachineFormProps {
@@ -13,6 +14,7 @@ interface MachineFormProps {
 }
 
 const MachineForm: React.FC<MachineFormProps> = ({ machine, onSave, onCancel, defaultCompanyName, defaultPlantName }) => {
+    const { addNotification } = useNotification();
     const [formData, setFormData] = useState<Partial<Machine>>(() => ({
         serie: machine?.serie || '',
         modelo: machine?.modelo || '',
@@ -71,7 +73,7 @@ const MachineForm: React.FC<MachineFormProps> = ({ machine, onSave, onCancel, de
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.serie || !formData.empresa_nombre || !formData.planta_nombre) {
-             alert("Por favor, proporciona al menos el N° de Serie, Empresa y Sede.");
+             addNotification({ type: 'warning', title: 'Campos requeridos', message: 'Por favor, proporciona al menos el N° de Serie, Empresa y Sede.' });
             return;
         }
         
@@ -102,9 +104,10 @@ const MachineForm: React.FC<MachineFormProps> = ({ machine, onSave, onCancel, de
             if (!response.ok) throw new Error('Error al procesar la solicitud');
             
             const result = await response.json();
+            addNotification({ type: 'success', title: 'Éxito', message: 'Máquina guardada correctamente.' });
             onSave(result.data || result);
         } catch (err: any) {
-            alert(`Error: ${err.message}`);
+            addNotification({ type: 'error', title: 'Error', message: `Error: ${err.message}` });
         } finally {
             setIsSaving(false);
         }

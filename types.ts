@@ -41,6 +41,9 @@ export interface ServiceReport {
   // Datos de empresa / planta / sede
   empresa_nombre?: string;
   empresa_planta?: string;
+  empresa_ruc?: string;
+  empresa_distrito?: string;
+  empresa_direccion?: string;
 
   // Datos de usuario (creator)
   usuario_nombre?: string;
@@ -102,6 +105,9 @@ export interface VisitReport {
     // Datos de la empresa
     empresa_nombre?: string;
     empresa_planta?: string;
+    empresa_ruc?: string;
+    empresa_distrito?: string;
+    empresa_direccion?: string;
 
     // Datos del usuario (creator)
     usuario_nombre?: string;

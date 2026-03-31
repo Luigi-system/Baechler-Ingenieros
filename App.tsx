@@ -19,28 +19,63 @@ const AppContent: React.FC = () => {
     // It takes the user data directly from the Usuarios table or the new API response.
     const fetchUserProfile = useCallback(async (userDataFromDb: any): Promise<User> => {
         // Basic user identifier
-        const userIdentifier = userDataFromDb.usuario || userDataFromDb.email || 'Usuario';
+        const userIdentifier = userDataFromDb.email || userDataFromDb.usuario || 'Usuario';
         
             // Step 2: Set default permissions
             let permissions: string[] = ['dashboard', 'reports', 'management', 'settings']; 
-            let roleName = userDataFromDb.role?.nombre || 'Usuario';
+            let roleName = userDataFromDb.rol_nombre || (userDataFromDb.rol === 1 ? 'Administrador' : 'Usuario');
             let roleId = userDataFromDb.rol;
-            let themeSettings: { color_palette_name?: string } = {};
             
         return {
             id: userDataFromDb.id?.toString() || Date.now().toString(),
             nombres: userDataFromDb.nombres || userIdentifier.split('@')[0],
+            apellidos: userDataFromDb.apellidos || '',
             usuario: userIdentifier,
             email: userDataFromDb.email || (userIdentifier.includes('@') ? userIdentifier : undefined),
             rol: roleId || 0,
             roleName: roleName,
             permissions: permissions,
-            dni: userDataFromDb.dni,
+            dni: userDataFromDb.numero_doc || userDataFromDb.dni,
             celular: userDataFromDb.celular,
-            color_palette_name: themeSettings.color_palette_name || userDataFromDb.color_palette_name,
-            pass: userDataFromDb.pass,
+            cargo: userDataFromDb.cargo,
+            foto: userDataFromDb.foto,
+            nacimiento: userDataFromDb.nacimiento,
+            color_palette_name: userDataFromDb.color_palette_name,
+            pass: userDataFromDb.pass || userDataFromDb.password,
         };
     }, []);
+
+    // Function to validate user still exists on the server
+    const validateUserSession = useCallback(async (userToValidate: User): Promise<boolean | User> => {
+        try {
+            if (!userToValidate.id) return false;
+
+            // Use the specific get endpoint as confirmed by user
+            const response = await fetch(`https://app.lr-system.com/bi/usuarios/get/${userToValidate.id}`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (!response.ok) {
+                console.error("Error al validar sesión en el servidor:", response.status);
+                return false;
+            }
+
+            const result = await response.json();
+            const userRecord = result.data || (Array.isArray(result) ? result[0] : result);
+            
+            if (!userRecord) {
+                console.warn("Usuario no encontrado en la base de datos.");
+                return false;
+            }
+
+            // Return fresh user profile
+            return await fetchUserProfile(userRecord);
+        } catch (error) {
+            console.error("Error validating user session:", error);
+            return false;
+        }
+    }, [fetchUserProfile]);
 
     // Effect for initial session check on component mount
     useEffect(() => {
@@ -49,23 +84,43 @@ const AppContent: React.FC = () => {
             if (savedUser) {
                 try {
                     const parsedUser = JSON.parse(savedUser);
+                    // Set user immediately for a faster UI response
                     setUser(parsedUser);
+                    console.log("Sesión persistente encontrada para:", parsedUser.usuario);
+                    
+                    // Validate in the background/concurrently
+                    setIsLoadingAuth(false); // Stop loading early since we have local data
+
+                    const validationResult = await validateUserSession(parsedUser);
+                    if (validationResult === false) {
+                        console.warn("Sesión de usuario ya no es válida en el servidor. Cerrando sesión...");
+                        localStorage.removeItem('auth_user');
+                        setUser(null);
+                    } else if (typeof validationResult === 'object') {
+                        // Update with fresh data if available
+                        const freshUser = validationResult as User;
+                        setUser(freshUser);
+                        localStorage.setItem('auth_user', JSON.stringify(freshUser));
+                    }
                 } catch (error) {
                     console.error("Error parsing saved user session:", error);
                     localStorage.removeItem('auth_user');
+                    setUser(null);
+                    setIsLoadingAuth(false);
                 }
+            } else {
+                setIsLoadingAuth(false);
             }
-            setIsLoadingAuth(false);
         };
         checkInitialAuthStatus();
-    }, []); // Check for saved session on mount
+    }, [validateUserSession]); // Check for saved session on mount
 
     // Removed the useEffect that handled Supabase authentication state changes (onAuthStateChange)
     // as we are implementing custom authentication.
 
 
     // Custom login function using external API endpoint
-    const login = async (username: string, password: string): Promise<void> => {
+    const login = async (username: string, password: string, remember: boolean = false): Promise<void> => {
         try {
             const trimmedUsername = username.trim();
             const trimmedPassword = password.trim();
@@ -86,26 +141,23 @@ const AppContent: React.FC = () => {
                 throw new Error(`Error en el servidor: ${response.statusText}`);
             }
 
-            const userData = await response.json();
-
-            if (!userData || (Array.isArray(userData) && userData.length === 0)) {
-                throw new Error("Credenciales de inicio de sesión inválidas.");
-            }
-
-            // The API might return an array or a single object.
-            // Based on previous logic, we expect a user object or the first element of an array.
-            const userRecord = Array.isArray(userData) ? userData[0] : userData;
+            const result = await response.json();
+            const userRecord = result.data || (Array.isArray(result) ? result[0] : result);
 
             if (!userRecord) {
                 throw new Error("Credenciales de inicio de sesión inválidas.");
             }
 
-            // Step 3: Fetch the full user profile (roles, permissions, etc.)
-            // Note: fetchUserProfile now uses the REST API.
+            // Step 3: Fetch the full user profile
             const profile = await fetchUserProfile(userRecord);
             setUser(profile);
-            // Save session for persistence
-            localStorage.setItem('auth_user', JSON.stringify(profile));
+            
+            // Only save session for persistence if "Remember Me" is checked
+            if (remember) {
+                localStorage.setItem('auth_user', JSON.stringify(profile));
+            } else {
+                localStorage.removeItem('auth_user'); // Ensure previous sessions are cleared
+            }
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Error de autenticación desconocido.";

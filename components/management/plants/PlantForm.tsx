@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import type { Plant, Company } from '../../../types';
 import Spinner from '../../ui/Spinner';
 import SearchableSelect from '../../ui/SearchableSelect';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 interface PlantFormProps {
     plant: Plant | null;
@@ -13,6 +14,7 @@ interface PlantFormProps {
 }
 
 const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel, defaultCompanyId }) => {
+    const { addNotification } = useNotification();
     const [formData, setFormData] = useState<Partial<Plant>>(plant || {
         nombre: '',
         direccion: '',
@@ -56,7 +58,7 @@ const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel, defaultC
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.nombre || !formData.id_empresa) {
-            alert("Por favor, proporciona un nombre para la planta y selecciona una empresa.");
+            addNotification({ type: 'warning', title: 'Campos requeridos', message: 'Por favor, proporciona un nombre para la planta y selecciona una empresa.' });
             return;
         }
 
@@ -86,9 +88,10 @@ const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel, defaultC
 
             if (!response.ok) throw new Error('Error al guardar la planta');
             
+            addNotification({ type: 'success', title: 'Éxito', message: 'Planta guardada correctamente.' });
             onSave();
         } catch (err: any) {
-            alert(`Error: ${err.message}`);
+            addNotification({ type: 'error', title: 'Error', message: `Error: ${err.message}` });
         } finally {
             setIsSaving(false);
         }

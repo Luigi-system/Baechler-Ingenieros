@@ -185,6 +185,13 @@ const cleanBase64 = (str: string | null | undefined) => {
   return trimmed;
 };
 
+const formatTime = (timeStr: string | null | undefined) => {
+  if (!timeStr || typeof timeStr !== 'string') return '';
+  // Try to match HH:mm in any string (ISO or HH:mm:ss)
+  const match = timeStr.match(/(\d{2}:\d{2})/);
+  return match ? match[1] : timeStr;
+};
+
 const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
   return (
     <Document>
@@ -235,6 +242,16 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
             <Text style={styles.value}>{report.empresa_nombre || ''}</Text>
           </View>
           <View style={[styles.tableCol, styles.lastCol]}>
+            <Text style={styles.label}>RUC:</Text>
+            <Text style={styles.value}>{report.empresa_ruc || ''}</Text>
+          </View>
+        </View>
+        <View style={styles.tableRow}>
+          <View style={styles.tableCol}>
+            <Text style={styles.label}>DISTRITO:</Text>
+            <Text style={styles.value}>{report.empresa_distrito || ''}</Text>
+          </View>
+          <View style={[styles.tableCol, styles.lastCol]}>
             <Text style={styles.label}>FECHA:</Text>
             <Text style={styles.value}>{
               report.fecha ? report.fecha : 
@@ -245,11 +262,17 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
         <View style={styles.tableRow}>
           <View style={styles.tableCol}>
             <Text style={styles.label}>PLANTA / SEDE:</Text>
-            <Text style={styles.value}>{report.empresa_planta || ''}</Text>
+            <Text style={styles.value}>{report.empresa_planta || (report as any).planta_nombre || (report as any).planta || (report as any).nombre_planta || ''}</Text>
           </View>
           <View style={[styles.tableCol, styles.lastCol]}>
             <Text style={styles.label}>TÉCNICO:</Text>
-            <Text style={styles.value}>{report.usuario_nombre || ''}</Text>
+            <Text style={styles.value}>{report.usuario_nombre || (report as any).nombre_usuario || ''}</Text>
+          </View>
+        </View>
+        <View style={styles.tableRow}>
+          <View style={[styles.tableCol, styles.lastCol]}>
+            <Text style={styles.label}>DIRECCIÓN:</Text>
+            <Text style={styles.value}>{report.empresa_direccion || ''}</Text>
           </View>
         </View>
 

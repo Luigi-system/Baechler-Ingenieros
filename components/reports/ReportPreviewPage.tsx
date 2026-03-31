@@ -72,10 +72,28 @@ const ReportPreviewPage: React.FC<ReportPreviewPageProps> = ({ type }) => {
                     fetch('https://app.lr-system.com/bi/encargado/getall').then(r => r.json())
                 ]);
 
-                const reportData = Array.isArray(repRes) ? repRes[0] : (repRes.data || repRes);
+                let reportData = Array.isArray(repRes) ? repRes[0] : (repRes.data || repRes);
                 const supervisorsData = Array.isArray(supRes) ? supRes : (supRes.data || []);
 
                 if (!reportData) throw new Error('Reporte no encontrado');
+
+                // REFRESH COMPANY DATA by name (to fill in blanks like RUC, district, address)
+                if (reportData.empresa_nombre) {
+                    try {
+                        const companyByRes = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(reportData.empresa_nombre)}`).then(r => r.json());
+                        const companyData = Array.isArray(companyByRes) ? companyByRes[0] : (Array.isArray(companyByRes.data) ? companyByRes.data[0] : (companyByRes.data || companyByRes));
+                        if (companyData && companyData.id) {
+                            reportData = {
+                                ...reportData,
+                                empresa_ruc: reportData.empresa_ruc || companyData.ruc || (companyData as any).numero_doc || '',
+                                empresa_distrito: reportData.empresa_distrito || companyData.distrito || '',
+                                empresa_direccion: reportData.empresa_direccion || companyData.direccion || '',
+                            };
+                        }
+                    } catch (err) {
+                        console.warn("Could not sync latest company data", err);
+                    }
+                }
 
                 setReport(reportData);
                 setSupervisors(supervisorsData);

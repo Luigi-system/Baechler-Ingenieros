@@ -3,9 +3,11 @@ import type { Company } from '../../../types';
 import { PlusIcon, EditIcon, TrashIcon, SearchIcon, ViewIcon, BuildingIcon, ClockIcon, MapPinIcon, HashIcon } from '../../ui/Icons';
 import Spinner from '../../ui/Spinner';
 import Modal from '../../ui/Modal';
+import { useNotification } from '../../../contexts/NotificationContext';
 import CompanyForm from './CompanyForm';
 
 const CompanyList: React.FC = () => {
+    const { addNotification, confirm } = useNotification();
     const [companies, setCompanies] = useState<Company[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -72,14 +74,20 @@ const CompanyList: React.FC = () => {
     }
 
     const handleDelete = async (id: number) => {
-        if (!window.confirm('¿Estás seguro de que quieres eliminar esta empresa?')) return;
-        try {
-            const response = await fetch(`https://app.lr-system.com/bi/empresas/delete/${id}`, { method: 'DELETE' });
-            if (!response.ok) throw new Error('Error al eliminar');
-            fetchCompanies();
-        } catch (err: any) {
-            alert(err.message);
-        }
+        confirm({
+            title: '¿Eliminar empresa?',
+            message: '¿Estás seguro de que quieres eliminar esta empresa? Todos los datos asociados se perderán.',
+            onConfirm: async () => {
+                try {
+                    const response = await fetch(`https://app.lr-system.com/bi/empresas/delete/${id}`, { method: 'DELETE' });
+                    if (!response.ok) throw new Error('Error al eliminar');
+                    addNotification({ type: 'success', title: 'Empresa Eliminada', message: 'La empresa ha sido eliminada correctamente.' });
+                    fetchCompanies();
+                } catch (err: any) {
+                    addNotification({ type: 'error', title: 'Error', message: err.message });
+                }
+            }
+        });
     };
 
     return (

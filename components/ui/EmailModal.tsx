@@ -94,10 +94,37 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
 
             try {
                 const reportEndpoint = reportType === 'service' ? 'reporte-servicio' : 'reporte-visita';
-                const [reportData, supervisorRes] = await Promise.all([
+                const [reportRawData, supervisorRes] = await Promise.all([
                     fetch(`https://app.lr-system.com/bi/${reportEndpoint}/get/${reportId}`).then(r => r.json()),
                     fetch('https://app.lr-system.com/bi/encargado/getall').then(r => r.json()),
                 ]);
+
+                // Extract the actual report object from array or data wrapper
+                let reportData = Array.isArray(reportRawData) ? reportRawData[0] : (reportRawData.data || reportRawData);
+
+                if (!reportData || Object.keys(reportData).length === 0) {
+                    throw new Error("No se pudo encontrar la información del reporte.");
+                }
+
+                // FETCH LATEST COMPANY DATA by name (to fill in blanks like RUC, district, address)
+                if (reportData.empresa_nombre) {
+                    try {
+                        const companyByRes = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(reportData.empresa_nombre)}`).then(r => r.json());
+                        const companyData = Array.isArray(companyByRes) ? companyByRes[0] : (Array.isArray(companyByRes.data) ? companyByRes.data[0] : (companyByRes.data || companyByRes));
+                        if (companyData && companyData.id) {
+                            reportData = {
+                                ...reportData,
+                                empresa_ruc: reportData.empresa_ruc || companyData.ruc || (companyData as any).numero_doc || '',
+                                empresa_distrito: reportData.empresa_distrito || companyData.distrito || '',
+                                empresa_direccion: reportData.empresa_direccion || companyData.direccion || '',
+                                // Visit reports use different field naming in some parts
+                                planta_nombre: reportData.planta_nombre || reportData.empresa_planta || '',
+                            };
+                        }
+                    } catch (err) {
+                        console.warn("Could not fetch latest company data, using report data only", err);
+                    }
+                }
 
                 setEmailConfig(DEFAULT_EMAIL_SETTINGS); // Fallback to default
                 setConfigLoaded(true);

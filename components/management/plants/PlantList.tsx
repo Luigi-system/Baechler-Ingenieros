@@ -4,9 +4,11 @@ import type { Plant } from '../../../types';
 import { PlusIcon, EditIcon, TrashIcon, SearchIcon, ViewIcon, BuildingIcon, ClockIcon, MapPinIcon, HashIcon } from '../../ui/Icons';
 import Spinner from '../../ui/Spinner';
 import Modal from '../../ui/Modal';
+import { useNotification } from '../../../contexts/NotificationContext';
 import PlantForm from './PlantForm';
 
 const PlantList: React.FC = () => {
+    const { addNotification, confirm } = useNotification();
     const [plants, setPlants] = useState<Plant[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -81,17 +83,22 @@ const PlantList: React.FC = () => {
     }
 
     const handleDelete = async (id: number) => {
-        if (!window.confirm('¿Estás seguro de que quieres eliminar esta planta?')) return;
-
-        try {
-            const response = await fetch(`https://app.lr-system.com/bi/planta/delete/${id}`, {
-                method: 'DELETE'
-            });
-            if (!response.ok) throw new Error('Error al eliminar la planta');
-            fetchPlants();
-        } catch (err: any) {
-            alert(err.message);
-        }
+        confirm({
+            title: '¿Eliminar planta?',
+            message: '¿Estás seguro de que quieres eliminar esta planta? Todos los datos asociados se perderán.',
+            onConfirm: async () => {
+                try {
+                    const response = await fetch(`https://app.lr-system.com/bi/planta/delete/${id}`, {
+                        method: 'DELETE'
+                    });
+                    if (!response.ok) throw new Error('Error al eliminar la planta');
+                    addNotification({ type: 'success', title: 'Planta Eliminada', message: 'La planta ha sido eliminada correctamente.' });
+                    fetchPlants();
+                } catch (err: any) {
+                    addNotification({ type: 'error', title: 'Error', message: err.message });
+                }
+            }
+        });
     };
 
     return (

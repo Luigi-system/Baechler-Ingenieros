@@ -8,6 +8,7 @@ import {
 } from '../../ui/Icons';
 import Spinner from '../../ui/Spinner';
 import Modal from '../../ui/Modal';
+import { useNotification } from '../../../contexts/NotificationContext';
 import MachineForm from './MachineForm';
 
 type StatusFilter = 'all' | 'active' | 'inactive';
@@ -20,6 +21,7 @@ interface LocationSelection {
 }
 
 const MachineList: React.FC = () => {
+    const { addNotification, confirm } = useNotification();
     // Data states
     const [machines, setMachines] = useState<Machine[]>([]);
     const [companies, setCompanies] = useState<Company[]>([]);
@@ -158,14 +160,20 @@ const MachineList: React.FC = () => {
     }
 
     const handleDelete = async (id: number) => {
-        if (!window.confirm('¿Estás seguro de que quieres eliminar esta máquina?')) return;
-        try {
-            const response = await fetch(`https://app.lr-system.com/bi/maquinas/delete/${id}`, { method: 'DELETE' });
-            if (!response.ok) throw new Error('Error al eliminar');
-            fetchData();
-        } catch (err: any) {
-            alert(err.message);
-        }
+        confirm({
+            title: '¿Eliminar máquina?',
+            message: '¿Estás seguro de que quieres eliminar esta máquina? Esta acción no se puede deshacer.',
+            onConfirm: async () => {
+                try {
+                    const response = await fetch(`https://app.lr-system.com/bi/maquinas/delete/${id}`, { method: 'DELETE' });
+                    if (!response.ok) throw new Error('Error al eliminar');
+                    addNotification({ type: 'success', title: 'Máquina Eliminada', message: 'La máquina ha sido eliminada correctamente.' });
+                    fetchData();
+                } catch (err: any) {
+                    addNotification({ type: 'error', title: 'Error', message: err.message });
+                }
+            }
+        });
     };
 
     const selectLocation = (selection: LocationSelection) => {

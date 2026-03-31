@@ -8,6 +8,7 @@ import {
 } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNotification } from '../../contexts/NotificationContext';
 import { pdf } from '@react-pdf/renderer';
 import VisitReportPdf from './VisitReportPdf';
 import PdfViewerModal from '../ui/PdfViewerModal';
@@ -42,6 +43,7 @@ const calculateCompletion = (report: VisitReport): { percentage: number; missing
 
 const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEditReport }) => {
   const { logoUrl } = useTheme();
+  const { addNotification, confirm } = useNotification();
   const [reports, setReports] = useState<VisitReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
@@ -81,7 +83,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
         if (!response.ok) throw new Error('Error al actualizar');
         setReports(prev => prev.map(r => r.id === report.id ? { ...r, estado: newStatus } : r));
     } catch (err: any) {
-        alert(err.message);
+        addNotification({ type: 'error', title: 'Error', message: err.message });
     }
   };
 
@@ -107,7 +109,7 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
       link.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      addNotification({ type: 'error', title: 'Error', message: `Error: ${err.message}` });
     } finally {
       setPdfLoadingId(null);
     }
@@ -118,7 +120,25 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
     try {
       const response = await fetch(`https://app.lr-system.com/bi/reporte-visita/get/${reportId}`);
       const data = await response.json();
-      const reportData = Array.isArray(data) ? data[0] : (data.data || data);
+      let reportData = Array.isArray(data) ? data[0] : (data.data || data);
+
+      // FETCH LATEST COMPANY DATA by name to complete missing profile info
+      if (reportData.empresa_nombre) {
+        try {
+          const companyByRes = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(reportData.empresa_nombre)}`).then(r => r.json());
+          const companyData = Array.isArray(companyByRes) ? companyByRes[0] : (Array.isArray(companyByRes.data) ? companyByRes.data[0] : (companyByRes.data || companyByRes));
+          if (companyData && companyData.id) {
+            reportData = {
+              ...reportData,
+              empresa_ruc: reportData.empresa_ruc || companyData.ruc || (companyData as any).numero_doc || '',
+              empresa_distrito: reportData.empresa_distrito || companyData.distrito || '',
+              empresa_direccion: reportData.empresa_direccion || companyData.direccion || '',
+            };
+          }
+        } catch (err) {
+          console.warn("Could not fetch latest company data", err);
+        }
+      }
 
       // Always regenerate to ensure latest ID/QR layout is used
       const pdfBlob = await pdf(
@@ -132,21 +152,27 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
       const blobUrl = URL.createObjectURL(pdfBlob);
       setPdfViewerUri(blobUrl);
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      addNotification({ type: 'error', title: 'Error', message: `Error: ${err.message}` });
     } finally {
       setPdfViewingId(null);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('¿Estás seguro de que quieres eliminar esta visita?')) return;
-    try {
-        const res = await fetch(`https://app.lr-system.com/bi/reporte-visita/delete/${id}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Error al eliminar');
-        fetchReports();
-    } catch (err: any) {
-        alert(err.message);
-    }
+    confirm({
+        title: '¿Eliminar visita?',
+        message: '¿Estás seguro de que quieres eliminar esta visita técnica? Esta acción no se puede deshacer.',
+        onConfirm: async () => {
+            try {
+                const res = await fetch(`https://app.lr-system.com/bi/reporte-visita/delete/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('Error al eliminar');
+                addNotification({ type: 'success', title: 'Eliminado', message: 'Visita eliminada correctamente' });
+                fetchReports();
+            } catch (err: any) {
+                addNotification({ type: 'error', title: 'Error', message: err.message });
+            }
+        }
+    });
   };
 
   useEffect(() => {
@@ -164,8 +190,8 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
   const handleCopyLink = (reportId: number) => {
     const link = `${window.location.origin}/preview/reporte-visita/${reportId}`;
     navigator.clipboard.writeText(link)
-        .then(() => alert('✅ Enlace de firma copiado al portapapeles'))
-        .catch(err => alert('❌ Error al copiar enlace: ' + err));
+        .then(() => addNotification({ type: 'success', title: 'Copiado', message: 'Enlace de firma copiado al portapapeles' }))
+        .catch(err => addNotification({ type: 'error', title: 'Error', message: 'Error al copiar enlace: ' + err }));
   };
 
   const filteredReports = useMemo(() => {

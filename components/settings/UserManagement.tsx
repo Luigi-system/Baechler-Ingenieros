@@ -8,8 +8,10 @@ import {
 } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import Modal from '../ui/Modal';
+import { useNotification } from '../../contexts/NotificationContext';
 
 const UserManagement: React.FC = () => {
+    const { addNotification, confirm } = useNotification();
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -87,25 +89,31 @@ const UserManagement: React.FC = () => {
 
             if (!res.ok) throw new Error('Error al guardar usuario');
             
+            addNotification({ type: 'success', title: 'Usuario Guardado', message: `El usuario ha sido ${isUpdate ? 'actualizado' : 'creado'} correctamente.` });
             await fetchData();
             handleCloseModal();
         } catch (err: any) {
-            alert(err.message);
+            addNotification({ type: 'error', title: 'Error', message: err.message });
         } finally {
             setIsSaving(false);
         }
     };
 
     const handleDelete = async (id: string | number) => {
-        if (!window.confirm('¿Estás seguro de que quieres eliminar este usuario?')) return;
-        
-        try {
-            const res = await fetch(`https://app.lr-system.com/bi/usuarios/delete/${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Error al eliminar');
-            await fetchData();
-        } catch (err: any) {
-            alert(err.message);
-        }
+        confirm({
+            title: '¿Eliminar usuario?',
+            message: '¿Estás seguro de que quieres eliminar este usuario? Esta acción no se puede deshacer.',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`https://app.lr-system.com/bi/usuarios/delete/${id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Error al eliminar');
+                    addNotification({ type: 'success', title: 'Usuario Eliminado', message: 'El usuario ha sido eliminado correctamente.' });
+                    await fetchData();
+                } catch (err: any) {
+                    addNotification({ type: 'error', title: 'Error', message: err.message });
+                }
+            }
+        });
     };
 
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {

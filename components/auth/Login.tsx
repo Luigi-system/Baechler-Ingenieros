@@ -35,16 +35,16 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError(null);
     try {
-      await auth.login(username, password); // Changed email to username
+      await auth.login(username, password, rememberMe); // Changed: Added rememberMe as third argument
       // On successful login:
       if (rememberMe) {
         localStorage.setItem('remembered_username', username);
-        localStorage.setItem('remembered_password', password); // New: Save password to localStorage
+        localStorage.setItem('remembered_password', password); 
       } else {
         localStorage.removeItem('remembered_username');
-        localStorage.removeItem('remembered_password'); // New: Remove password from localStorage
+        localStorage.removeItem('remembered_password'); 
       }
-      // App.tsx will handle setting the user after successful login.
+      // App.tsx will handle setting the user and persistence based on the remember flag.
     } catch (err: any) {
       const message = err.message;
       if (message === 'Credenciales de inicio de sesión inválidas.') {

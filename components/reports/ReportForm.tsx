@@ -16,6 +16,7 @@ import SupervisorForm from '../management/supervisors/SupervisorForm';
 import ImageUpload from '../ui/ImageUpload'; // Import the new reusable component
 import { AuthContext } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNotification } from '../../contexts/NotificationContext';
 import { pdf } from '@react-pdf/renderer';
 import ServiceReportPdf from './ServiceReportPdf';
 import PdfViewer, { PdfViewerHandle } from '../ui/PdfViewer';
@@ -80,12 +81,47 @@ const toDataURL = (b64OrDataURL: string): string => {
     return prefix + b64OrDataURL;
 };
 
+const formatDateForInput = (date: any) => {
+    if (!date) return '';
+    try {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '';
+        return d.toISOString().split('T')[0];
+    } catch {
+        return '';
+    }
+};
+
+const formatTimeForInput = (time: any) => {
+    if (!time) return '';
+    if (typeof time === 'string' && time.includes(':')) {
+        const match = time.match(/(\d{2}:\d{2})/);
+        return match ? match[1] : '';
+    }
+    try {
+        const d = new Date(time);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch {
+        return '';
+    }
+};
+
 // Main Form Component
 const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData }) => {
     const auth = useContext(AuthContext);
     const { logoUrl } = useTheme();
+    const { addNotification } = useNotification();
 
-    const [formData, setFormData] = useState<Partial<ServiceReport>>({ fecha: new Date().toISOString().split('T')[0], estado: true });
+    // Initialize with current date and time in LOCAL timezone
+    const now = new Date();
+    const localDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+    const [formData, setFormData] = useState<Partial<ServiceReport>>({ 
+        fecha: localDate, 
+        hora_entrada: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        hora_salida: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        estado: true 
+    });
     
 
     const [formInternalState, setFormInternalState] = useState<FormInternalState>({});
@@ -238,14 +274,21 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
 
                     const formatTimeForInput = (timeStr: any) => {
                         if (!timeStr) return '';
-                        if (String(timeStr).includes('T')) {
-                            const date = new Date(timeStr);
+                        const timeStrClean = String(timeStr).trim();
+                        if (timeStrClean.includes('T')) {
+                            // If it's an ISO string but doesn't have a timezone indicator, 
+                            // append 'Z' to treat it as UTC so toLocaleTimeString converts it back to Local correctly.
+                            const hasTimezone = timeStrClean.endsWith('Z') || timeStrClean.includes('+') || (timeStrClean.split('T')[1]?.includes('-'));
+                            const normalizedStr = hasTimezone ? timeStrClean : `${timeStrClean}Z`;
+                            
+                            const date = new Date(normalizedStr);
                             if (!isNaN(date.getTime())) {
                                 return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
                             }
                         }
-                        if (/^\d{2}:\d{2}/.test(String(timeStr))) return String(timeStr).substring(0, 5);
-                        return timeStr;
+                        // Handle standard HH:mm:ss strings
+                        if (/^\d{2}:\d{2}/.test(timeStrClean)) return timeStrClean.substring(0, 5);
+                        return timeStrClean;
                     };
 
                     if (reportData) {
@@ -259,12 +302,30 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                             selectedSupervisorId: supervisor?.id,
                         });
                         
-                        const formDataToSet: Partial<ServiceReport> = { 
+                        let formDataToSet: Partial<ServiceReport> = { 
                             ...reportData,
                             fecha: formatDateForInput(reportData.fecha),
                             hora_entrada: formatTimeForInput(reportData.hora_entrada),
                             hora_salida: formatTimeForInput(reportData.hora_salida)
                         };
+
+                        // REFRESH COMPANY DATA by name to ensure all fields (RUC, etc) are filled
+                        if (reportData.empresa_nombre) {
+                            try {
+                                const companyByRes = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(reportData.empresa_nombre)}`).then(r => r.json());
+                                const companyData = Array.isArray(companyByRes) ? companyByRes[0] : (Array.isArray(companyByRes.data) ? companyByRes.data[0] : (companyByRes.data || companyByRes));
+                                if (companyData && companyData.id) {
+                                    formDataToSet = {
+                                        ...formDataToSet,
+                                        empresa_ruc: formDataToSet.empresa_ruc || companyData.ruc || (companyData as any).numero_doc || '',
+                                        empresa_distrito: formDataToSet.empresa_distrito || companyData.distrito || '',
+                                        empresa_direccion: formDataToSet.empresa_direccion || companyData.direccion || '',
+                                    };
+                                }
+                            } catch (err) {
+                                console.warn("Could not sync latest company data", err);
+                            }
+                        }
 
                         // Handle images that might be comma-separated strings from API
                         const processImages = (imgs: any) => {
@@ -492,23 +553,45 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
     
     const handleRadioChange = useCallback((name: string, value: string) => setFormData(prev => ({...prev, [name]: value})), []);
 
-    const handleSelectCompany = useCallback((company: Company) => {
+    const handleSelectCompany = useCallback(async (company: Company) => {
         setIsPlantsLoading(true);
         setFormInternalState(prev => ({...prev, selectedCompanyId: company.id, selectedPlantId: undefined, selectedSupervisorId: undefined}));
-        setFormData(prev => ({ ...prev, empresa_nombre: company.nombre, empresa_planta: undefined, maquina_serie: undefined, maquina_modelo: undefined, maquina_marca: undefined, maquina_linea: undefined, encargado_nombre: undefined, encargado_cel: undefined }));
-        setCompanySearchText(company.nombre);
+        
+        // Use full profile from by-nombre (to get latest RUC, address etc if missing in dropdown item)
+        let fullCompany = company;
+        try {
+            const res = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(company.nombre)}`).then(r => r.json());
+            const data = Array.isArray(res) ? res[0] : (Array.isArray(res.data) ? res.data[0] : (res.data || res));
+            if (data && data.id) fullCompany = data;
+        } catch (err) {
+            console.warn("Could not fetch full company info, using basic item", err);
+        }
+
+        setFormData(prev => ({ 
+            ...prev, 
+            empresa_nombre: fullCompany.nombre, 
+            empresa_ruc: fullCompany.ruc || (fullCompany as any).numero_doc || '',
+            empresa_distrito: fullCompany.distrito || '',
+            empresa_direccion: fullCompany.direccion || '',
+            empresa_planta: undefined, 
+            maquina_serie: undefined, maquina_modelo: undefined, maquina_marca: undefined, maquina_linea: undefined, 
+            encargado_nombre: undefined, encargado_cel: undefined 
+        }));
+        
+        setCompanySearchText(fullCompany.nombre);
         setPlantSearchText(''); setMachineSearchText(''); setSupervisorSearchText('');
         setShowCompanySuggestions(false);
         setIsCompanySearchModalOpen(false);
+        
         // Fetch plants by company name for maximum reliability
-        fetch(`https://app.lr-system.com/bi/planta/by-empresa/${encodeURIComponent(company.nombre)}`)
+        fetch(`https://app.lr-system.com/bi/planta/by-empresa/${encodeURIComponent(fullCompany.nombre)}`)
             .then(r => r.json())
             .then(res => {
                 const data = Array.isArray(res) ? res : (res.data || []);
                 if (data.length > 0) {
                     setPlants(prev => {
                         // Merge: keep plants not from this company, add fetched ones
-                        const others = prev.filter(p => String(p.id_empresa) !== String(company.id) && (p.nombreempresa || '').toLowerCase() !== company.nombre.toLowerCase());
+                        const others = prev.filter(p => String(p.id_empresa) !== String(fullCompany.id) && (p.nombreempresa || '').toLowerCase() !== fullCompany.nombre.toLowerCase());
                         return [...others, ...data];
                     });
                 }
@@ -673,6 +756,9 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                 hora_salida: formData.hora_salida,
                 empresa_nombre: formData.empresa_nombre,
                 empresa_planta: formData.empresa_planta,
+                empresa_ruc: formData.empresa_ruc,
+                empresa_distrito: formData.empresa_distrito,
+                empresa_direccion: formData.empresa_direccion,
                 encargado_nombre: formData.encargado_nombre,
                 encargado_cel: formData.encargado_cel,
                 maquina_linea: formData.maquina_linea,
@@ -719,19 +805,19 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
             if (!reportId) clearDraft();
             
             setIsSubmitting(false);
-            alert("¡Reporte guardado exitosamente!");
+            addNotification({ type: 'success', title: 'Éxito', message: '¡Reporte guardado exitosamente!' });
             onBack();
     
         } catch (error: any) {
             setIsSubmitting(false);
-            alert("Error al guardar el reporte: " + error.message);
+            addNotification({ type: 'error', title: 'Error', message: 'Error al guardar el reporte: ' + error.message });
             console.error("Submit error:", error);
         }
     };
 
     const handleDownloadPDF = async () => {
         if (!reportId) {
-            alert("Guarde el reporte primero para poder descargarlo.");
+            addNotification({ type: 'warning', title: 'Atención', message: 'Guarde el reporte primero para poder descargarlo.' });
             return;
         }
         setIsDownloadingPdf(true);
@@ -758,7 +844,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
             URL.revokeObjectURL(url);
         } catch (err: any) {
             console.error("Error generating PDF from form:", err);
-            alert(`No se pudo generar el PDF: ${err.message}`);
+            addNotification({ type: 'error', title: 'Error', message: `No se pudo generar el PDF: ${err.message}` });
         } finally {
             setIsDownloadingPdf(false);
         }
@@ -835,6 +921,13 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                                     <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formInternalState.selectedCompanyId} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50 text-base-content" title="Buscar Planta"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
+                        </div>
+
+                        {/* RUC / Distrito / Dirección */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 col-span-1 md:col-span-2">
+                             <div><label htmlFor="empresa_ruc" className="block text-sm font-medium">RUC</label><input type="text" name="empresa_ruc" value={formData.empresa_ruc || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                             <div><label htmlFor="empresa_distrito" className="block text-sm font-medium">Distrito</label><input type="text" name="empresa_distrito" value={formData.empresa_distrito || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                             <div><label htmlFor="empresa_direccion" className="block text-sm font-medium">Dirección</label><input type="text" name="empresa_direccion" value={formData.empresa_direccion || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         </div>
                         {/* Encargado */}
                         <div>

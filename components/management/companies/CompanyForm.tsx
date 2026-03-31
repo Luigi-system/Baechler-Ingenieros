@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Company } from '../../../types';
 import Spinner from '../../ui/Spinner';
+import { useNotification } from '../../../contexts/NotificationContext';
 
 interface CompanyFormProps {
     company: Company | null;
@@ -10,6 +11,7 @@ interface CompanyFormProps {
 }
 
 const CompanyForm: React.FC<CompanyFormProps> = ({ company, onSave, onCancel }) => {
+    const { addNotification } = useNotification();
     const [formData, setFormData] = useState<Partial<Company>>(company || {
         nombre: '',
         direccion: '',
@@ -54,9 +56,10 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ company, onSave, onCancel }) 
             // The API might return the saved object directly or inside a 'data' field.
             const savedCompany = data.data || data;
             
+            addNotification({ type: 'success', title: 'Éxito', message: 'Empresa guardada correctamente.' });
             await onSave(savedCompany as Company);
         } catch (err: any) {
-            alert(err.message || "Error al guardar la empresa");
+            addNotification({ type: 'error', title: 'Error', message: err.message || "Error al guardar la empresa" });
             console.error("Save company error:", err);
         } finally {
             setIsSaving(false);

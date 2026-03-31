@@ -10,6 +10,7 @@ import {
 import Dropdown from '../ui/Dropdown';
 import Spinner from '../ui/Spinner';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNotification } from '../../contexts/NotificationContext';
 import { pdf } from '@react-pdf/renderer';
 import ServiceReportPdf from './ServiceReportPdf';
 import PdfViewerModal from '../ui/PdfViewerModal';
@@ -46,6 +47,7 @@ const calculateCompletion = (report: ServiceReport): { percentage: number; missi
 
 const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onEditReport }) => {
     const { logoUrl } = useTheme();
+    const { addNotification, confirm } = useNotification();
     const [reports, setReports] = useState<ServiceReport[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [pdfLoadingId, setPdfLoadingId] = useState<number | null>(null);
@@ -93,20 +95,25 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
 
             setReports(prev => prev.map(r => r.id === report.id ? { ...r, estado: newStatus === 1 } : r));
         } catch (err: any) {
-            alert(err.message);
+            addNotification({ type: 'error', title: 'Error', message: err.message });
         }
     };
 
     const handleDelete = async (id: number) => {
-        if (!window.confirm('¿Estás seguro de que quieres eliminar este reporte?')) return;
-
-        try {
-            const res = await fetch(`https://app.lr-system.com/bi/reporte-servicio/delete/${id}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error('Error al eliminar');
-            await fetchReports();
-        } catch (err: any) {
-            alert(err.message);
-        }
+        confirm({
+            title: '¿Eliminar reporte?',
+            message: '¿Estás seguro de que quieres eliminar este reporte? Esta acción no se puede deshacer.',
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`https://app.lr-system.com/bi/reporte-servicio/delete/${id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Error al eliminar');
+                    addNotification({ type: 'success', title: 'Eliminado', message: 'Reporte eliminado correctamente' });
+                    await fetchReports();
+                } catch (err: any) {
+                    addNotification({ type: 'error', title: 'Error', message: err.message });
+                }
+            }
+        });
     };
 
     const handleDownloadPDF = async (reportId: number) => {
@@ -132,7 +139,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
             URL.revokeObjectURL(url);
         } catch (err: any) {
             console.error("Error in Download PDF List:", err);
-            alert(`No se pudo generar el PDF: ${err.message}`);
+            addNotification({ type: 'error', title: 'Error', message: `No se pudo generar el PDF: ${err.message}` });
         } finally {
             setPdfLoadingId(null);
         }
@@ -143,8 +150,26 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
         try {
             const res = await fetch(`https://app.lr-system.com/bi/reporte-servicio/get/${reportId}`);
             const data = await res.json();
-            const reportData = Array.isArray(data) ? data[0] : (data.data || data);
+            let reportData = Array.isArray(data) ? data[0] : (data.data || data);
             
+            // FETCH LATEST COMPANY DATA using by-nombre to fill in RUC, Distrito, Dirección if they are missing
+            if (reportData.empresa_nombre) {
+                try {
+                    const companyByRes = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(reportData.empresa_nombre)}`).then(r => r.json());
+                    const companyData = Array.isArray(companyByRes) ? companyByRes[0] : (Array.isArray(companyByRes.data) ? companyByRes.data[0] : (companyByRes.data || companyByRes));
+                    if (companyData && companyData.id) {
+                        reportData = {
+                            ...reportData,
+                            empresa_ruc: reportData.empresa_ruc || companyData.ruc || (companyData as any).numero_doc || '',
+                            empresa_distrito: reportData.empresa_distrito || companyData.distrito || '',
+                            empresa_direccion: reportData.empresa_direccion || companyData.direccion || '',
+                        };
+                    }
+                } catch (err) {
+                    console.warn("Could not fetch latest company data, using report data only", err);
+                }
+            }
+
             // Always regenerate to ensure latest ID/QR layout is used
             const pdfBlob = await pdf(
                 <ServiceReportPdf 
@@ -158,7 +183,7 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
             setPdfViewerUri(blobUrl);
         } catch (err: any) {
             console.error("Error in View PDF List:", err);
-            alert(`No se pudo visualizar el PDF: ${err.message}`);
+            addNotification({ type: 'error', title: 'Error', message: `No se pudo visualizar el PDF: ${err.message}` });
         } finally {
             setPdfViewingId(null);
         }
@@ -179,8 +204,8 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
     const handleCopyLink = (reportId: number) => {
         const link = `${window.location.origin}/preview/reporte-servicio/${reportId}`;
         navigator.clipboard.writeText(link)
-            .then(() => alert('✅ Enlace de firma copiado al portapapeles'))
-            .catch(err => alert('❌ Error al copiar enlace: ' + err));
+            .then(() => addNotification({ type: 'success', title: 'Copiado', message: 'Enlace de firma copiado al portapapeles' }))
+            .catch(err => addNotification({ type: 'error', title: 'Error', message: 'Error al copiar enlace: ' + err }));
     };
 
     const filteredReports = useMemo(() => {

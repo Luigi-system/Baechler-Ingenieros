@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useNotification } from '../../contexts/NotificationContext';
 import { pdf } from '@react-pdf/renderer';
 import VisitReportPdf from './VisitReportPdf';
 import type { VisitReport, Company, Plant, Supervisor, Machine } from '../../types';
@@ -14,6 +15,7 @@ import PlantForm from '../management/plants/PlantForm';
 import SupervisorForm from '../management/supervisors/SupervisorForm';
 import PdfViewer, { PdfViewerHandle } from '../ui/PdfViewer';
 import MachineForm from '../management/machines/MachineForm';
+import TimePicker from '../ui/TimePicker';
 
 interface ReportFormProps {
   reportId?: string | null;
@@ -60,11 +62,44 @@ const toDataURL = (b64OrDataURL: string): string => {
     return prefix + b64OrDataURL;
 };
 
+const formatDateForInput = (date: any) => {
+    if (!date) return '';
+    try {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '';
+        return d.toISOString().split('T')[0];
+    } catch {
+        return '';
+    }
+};
+
+const formatTimeForInput = (time: any) => {
+    if (!time) return '';
+    if (typeof time === 'string' && time.includes(':')) {
+        const match = time.match(/(\d{2}:\d{2})/);
+        return match ? match[1] : '';
+    }
+    try {
+        const d = new Date(time);
+        if (isNaN(d.getTime())) return '';
+        return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+    } catch {
+        return '';
+    }
+};
+
 const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData }) => {
     const auth = useContext(AuthContext);
     const { logoUrl } = useTheme();
+    const { addNotification } = useNotification();
 
+    // Initialize with current date and time in LOCAL timezone
+    const now = new Date();
+    const localDate = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
     const [formData, setFormData] = useState<Partial<VisitReport>>({
+        fecha: localDate,
+        hora_entrada: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        hora_salida: now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }),
         estado: 1,
         form_id_empresa: undefined,
         form_id_planta: undefined,
@@ -239,14 +274,20 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
 
                     const formatTimeForInput = (timeStr: any) => {
                         if (!timeStr) return '';
-                        if (String(timeStr).includes('T')) {
-                            const date = new Date(timeStr);
-                            if (!isNaN(date.getTime())) {
-                                return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-                            }
+                        const timeStrClean = String(timeStr).trim();
+                        if (timeStrClean.includes('T')) {
+                             // Correct for UTC shifting: the backend stores UTC but ISO strings might lack 'Z', 
+                             // appending it ensures toLocaleTimeString properly converts back to current Local offset.
+                             const hasTimezone = timeStrClean.endsWith('Z') || timeStrClean.includes('+') || (timeStrClean.split('T')[1]?.includes('-'));
+                             const normalizedStr = hasTimezone ? timeStrClean : `${timeStrClean}Z`;
+                             
+                             const date = new Date(normalizedStr);
+                             if (!isNaN(date.getTime())) {
+                                 return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+                             }
                         }
-                        if (/^\d{2}:\d{2}/.test(String(timeStr))) return String(timeStr).substring(0, 5);
-                        return timeStr;
+                        if (/^\d{2}:\d{2}/.test(timeStrClean)) return timeStrClean.substring(0, 5);
+                        return timeStrClean;
                     };
 
                     if (reportData) {
@@ -254,6 +295,26 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                         const empresaNombre = reportData.empresa_nombre || reportData.empresa || reportData.nombre_empresa;
                         const plantaNombre = reportData.empresa_planta || reportData.planta_nombre || reportData.planta || reportData.nombre_planta;
                         const encargadoNombre = reportData.encargado_nombre || reportData.encargado || reportData.nombre_encargado;
+
+                        let currentReportData = { ...reportData };
+
+                        // REFRESH COMPANY DATA by name (to fill in blanks like RUC, district, address)
+                        if (empresaNombre) {
+                            try {
+                                const companyByRes = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(empresaNombre)}`).then(r => r.json());
+                                const companyData = Array.isArray(companyByRes) ? companyByRes[0] : (Array.isArray(companyByRes.data) ? companyByRes.data[0] : (companyByRes.data || companyByRes));
+                                if (companyData && companyData.id) {
+                                    currentReportData = {
+                                        ...currentReportData,
+                                        empresa_ruc: currentReportData.empresa_ruc || companyData.ruc || (companyData as any).numero_doc || '',
+                                        empresa_distrito: currentReportData.empresa_distrito || companyData.distrito || '',
+                                        empresa_direccion: currentReportData.empresa_direccion || companyData.direccion || '',
+                                    };
+                                }
+                            } catch (err) {
+                                console.warn("Could not sync latest company data", err);
+                            }
+                        }
 
                         const company = companies.find(c => (c.nombre || '').trim().toLowerCase() === (empresaNombre || '').trim().toLowerCase());
                         const plant = company ? plants.find(p => (p.nombre || '').trim().toLowerCase() === (plantaNombre || '').trim().toLowerCase()) : undefined;
@@ -264,10 +325,8 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                         ) : undefined;
 
                         const formDataToSet: Partial<VisitReport> = {
-                            ...reportData,
-                            fecha: formatDateForInput(reportData.fecha),
-                            hora_entrada: formatTimeForInput(reportData.hora_entrada),
-                            hora_salida: formatTimeForInput(reportData.hora_salida),
+                            ...currentReportData,
+                            fecha: formatDateForInput(reportData.fecha || reportData.created_at),
                             empresa_nombre: empresaNombre,
                             empresa_planta: plantaNombre,
                             encargado_nombre: encargadoNombre,
@@ -482,19 +541,33 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
         setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value }));
     }, []);
     
-    const handleSelectCompany = useCallback((company: Company) => {
+    const handleSelectCompany = useCallback(async (company: Company) => {
         setIsPlantsLoading(true);
+        
+        // Use full profile from by-nombre (to get latest RUC, address etc if missing in dropdown item)
+        let fullCompany = company;
+        try {
+            const res = await fetch(`https://app.lr-system.com/bi/empresas/by-nombre/${encodeURIComponent(company.nombre)}`).then(r => r.json());
+            const data = Array.isArray(res) ? res[0] : (Array.isArray(res.data) ? res.data[0] : (res.data || res));
+            if (data && data.id) fullCompany = data;
+        } catch (err) {
+            console.warn("Could not fetch full company info, using basic item", err);
+        }
+
         setFormData(prev => ({
             ...prev,
-            form_id_empresa: company.id,
-            empresa_nombre: company.nombre,
+            form_id_empresa: fullCompany.id,
+            empresa_nombre: fullCompany.nombre,
+            empresa_ruc: fullCompany.ruc || (fullCompany as any).numero_doc || '',
+            empresa_distrito: fullCompany.distrito || '',
+            empresa_direccion: fullCompany.direccion || '',
             form_id_planta: undefined,
             empresa_planta: undefined,
             form_id_encargado: undefined,
             encargado_nombre: undefined,
             encargado_cel: undefined,
         }));
-        setCompanySearchText(company.nombre);
+        setCompanySearchText(fullCompany.nombre);
         setPlantSearchText('');
         setSupervisorSearchText('');
         setSelectedMaquinas([]);
@@ -638,10 +711,16 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                 estado: 1, // Ensure numeric 1 is sent, never the string "Finalizado"
                 empresa_nombre: formData.empresa_nombre,
                 planta_nombre: formData.empresa_planta,
+                empresa_ruc: formData.empresa_ruc,
+                empresa_distrito: formData.empresa_distrito,
+                empresa_direccion: formData.empresa_direccion,
                 usuario_nombre: auth.user.nombres,
                 usuario_cel: auth.user.celular?.toString(),
                 encargado_nombre: formData.encargado_nombre,
                 encargado_cel: formData.encargado_cel,
+                fecha: formData.fecha,
+                hora_entrada: formData.hora_entrada,
+                hora_salida: formData.hora_salida,
                 maquinas: selectedMaquinas.map(item => `${item.machine.serie} - ${item.machine.modelo || ''}: ${item.observaciones}`).join(', '),
                 voltaje_establecido: formData.voltaje_establecido ? 1 : 0,
                 linea_tierra: formData.linea_a_tierra ? 1 : 0,
@@ -674,19 +753,19 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
             }
             
             setIsSubmitting(false);
-            alert("¡Reporte de visita guardado exitosamente!");
+            addNotification({ type: 'success', title: 'Éxito', message: '¡Reporte de visita guardado exitosamente!' });
             onBack();
 
         } catch (error: any) {
             setIsSubmitting(false);
-            alert("Error al guardar el reporte: " + error.message);
+            addNotification({ type: 'error', title: 'Error', message: 'Error al guardar el reporte: ' + error.message });
             console.error("Submit error:", error);
         }
     };
     
     const handleDownloadPDF = async () => {
         if (!reportId) {
-            alert("Guarde el reporte primero para poder descargarlo.");
+            addNotification({ type: 'warning', title: 'Atención', message: 'Guarde el reporte primero para poder descargarlo.' });
             return;
         }
         setIsPdfLoading(true);
@@ -712,7 +791,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
             URL.revokeObjectURL(url);
         } catch (err: any) {
             console.error("Error generating PDF from form:", err);
-            alert(`No se pudo generar el PDF: ${err.message}`);
+            addNotification({ type: 'error', title: 'Error', message: `No se pudo generar el PDF: ${err.message}` });
         } finally {
             setIsPdfLoading(false);
         }
@@ -745,6 +824,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                                 </div>
                             </div>
                         )}
+                        <div><label htmlFor="fecha" className="block text-sm font-medium">Fecha</label><input type="date" name="fecha" value={formData.fecha || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
 
                         <div>
                             <label htmlFor="company-search" className="block text-sm font-medium">Empresa</label>
@@ -779,6 +859,12 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                                     <button type="button" onClick={() => setIsPlantSearchModalOpen(true)} disabled={!formData.form_id_empresa} className="p-2.5 rounded-md hover:bg-base-300 transition disabled:opacity-50 text-base-content" title="Buscar Planta"><SearchIcon className="h-5 w-5"/></button>
                                 </div>
                             </div>
+                        </div>
+                        {/* RUC / Distrito / Dirección */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 col-span-1 md:col-span-2">
+                             <div><label htmlFor="empresa_ruc" className="block text-sm font-medium">RUC</label><input type="text" name="empresa_ruc" value={formData.empresa_ruc || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                             <div><label htmlFor="empresa_distrito" className="block text-sm font-medium">Distrito</label><input type="text" name="empresa_distrito" value={formData.empresa_distrito || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
+                             <div><label htmlFor="empresa_direccion" className="block text-sm font-medium">Dirección</label><input type="text" name="empresa_direccion" value={formData.empresa_direccion || ''} onChange={handleChange} className="mt-1 block w-full input-style" /></div>
                         </div>
                         <div>
                             <label htmlFor="supervisor-search" className="block text-sm font-medium flex items-center gap-2 whitespace-nowrap">
