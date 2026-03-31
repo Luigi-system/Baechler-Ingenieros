@@ -31,9 +31,9 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
 
   const handleScanSuccess = (data: { type: 'service' | 'visit'; id: number }) => {
     if (data.type === 'service') {
-        navigate(`/reporte-servicio/edit/${data.id}`);
+        navigate(`/preview/reporte-servicio/${data.id}`);
     } else if (data.type === 'visit') {
-        navigate(`/reporte-visita/edit/${data.id}`);
+        navigate(`/preview/reporte-visita/${data.id}`);
     }
   };
 
@@ -42,34 +42,36 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
   }
 
   return (
-    <header className="flex items-center h-20 px-4 bg-base-200 border-b border-base-border shadow-sm">
-      <div className="flex items-center gap-2 overflow-hidden">
-        <button onClick={onToggleMobileSidebar} className="md:hidden p-2 -ml-2 text-neutral hover:bg-base-300 rounded-lg transition-colors">
-            <MenuIcon className="h-6 w-6" />
+    <header className="flex items-center h-16 sm:h-20 px-2 sm:px-4 bg-base-200 border-b border-base-border shadow-sm sticky top-0 z-[50]">
+      <div className="flex items-center gap-1 sm:gap-2 overflow-hidden shrink-0 max-w-[30%] xs:max-w-none">
+        <button onClick={onToggleMobileSidebar} className="lg:hidden p-1.5 sm:p-2 -ml-1 text-neutral hover:bg-base-300 rounded-xl transition-colors shrink-0">
+            <MenuIcon className="h-5 w-5 sm:h-6 sm:w-6" />
         </button>
-        <div className="flex flex-col min-w-0">
-            <h1 className="text-base md:text-xl font-black text-base-content truncate uppercase tracking-tight">
+        <div className="flex flex-col min-w-0 transition-all">
+            <h1 className="text-[11px] sm:text-xl font-black text-base-content truncate uppercase tracking-tight sm:tracking-normal">
                 {title || (auth.user.nombres.split(' ')[0])}
             </h1>
             {subtitle ? (
-                <p className="text-[10px] md:text-sm text-neutral truncate font-bold uppercase tracking-widest opacity-70">{subtitle}</p>
+                <p className="text-[8px] sm:text-xs text-neutral truncate font-bold uppercase tracking-tight opacity-70 hidden xs:block">{subtitle}</p>
             ) : (
-                <p className="hidden md:block text-sm text-neutral font-medium">Rol: {auth.user.roleName}</p>
+                <p className="hidden md:block text-xs text-neutral font-medium">Rol: {auth.user.roleName}</p>
             )}
         </div>
       </div>
 
       {children && (
-        <div className="flex-1 flex justify-center px-4">
-          {children}
+        <div className="flex-1 flex justify-center px-1 sm:px-4 min-w-0">
+          <div className="w-full max-w-lg min-w-0">
+            {children}
+          </div>
         </div>
       )}
 
-      <div className="flex items-center gap-2 sm:gap-4 ml-auto flex-nowrap h-full">
+      <div className="flex items-center gap-1.5 sm:gap-4 ml-auto flex-nowrap h-full">
         <div className="flex items-center h-full">
             <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} 
-                className="relative p-2 text-neutral hover:text-primary transition-colors hover:bg-base-300/50 rounded-xl"
+                className="relative p-1.5 sm:p-2 text-neutral hover:text-primary transition-colors hover:bg-base-300/50 rounded-xl shrink-0"
             >
                 <BellIcon className="h-5 w-5 cursor-pointer"/>
                 <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
@@ -136,26 +138,26 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
 
         <button 
             onClick={() => setIsQrScannerOpen(true)} 
-            className="p-2 text-neutral hover:text-primary transition-all duration-300 bg-base-300/50 rounded-xl hover:bg-primary/20 group border border-transparent hover:border-primary/30"
+            className="p-1.5 sm:p-2 text-neutral hover:text-primary transition-all duration-300 bg-base-300/50 rounded-xl hover:bg-primary/20 group border border-transparent hover:border-primary/30 shrink-0"
             title="Escanear QR de Reporte"
         >
             <QrCodeIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
         </button>
 
-        <div className="flex items-center h-full">
+        <div className="flex items-center h-full shrink-0">
             <ThemeToggle />
         </div>
 
         <div className="h-8 w-[1px] bg-base-border/50 mx-1 hidden sm:block"></div>
 
-        <div className="relative group">
+        <div className="relative group shrink-0">
             <div 
-              className="flex items-center gap-3 cursor-pointer p-1.5 hover:bg-base-300/50 rounded-xl transition-all duration-300" 
+              className="flex items-center gap-2 sm:gap-3 cursor-pointer p-1 sm:p-1.5 hover:bg-base-300/50 rounded-xl transition-all duration-300" 
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
             >
-                <div className="relative">
+                <div className="relative h-9 w-9 shrink-0 aspect-square">
                     <img 
-                      className="h-9 w-9 rounded-full object-cover border-2 border-primary/20 ring-4 ring-primary/5 shadow-lg group-hover:scale-105 transition-transform" 
+                      className="h-9 w-9 w-full h-full rounded-full object-cover border-2 border-primary/20 ring-4 ring-primary/5 shadow-lg group-hover:scale-105 transition-transform shrink-0 aspect-square" 
                       src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${auth.user.email}`} 
                       alt="User avatar" 
                     />
@@ -165,7 +167,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
                   <p className="text-xs font-black uppercase tracking-wider text-base-content leading-tight">{auth.user.nombres.split(' ')[0]}</p>
                   <p className="text-[10px] text-neutral font-bold opacity-70 leading-tight uppercase tracking-tighter">{auth.user.roleName}</p>
                 </div>
-                <ChevronDownIcon className={`h-4 w-4 text-neutral transition-transform duration-300 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
+                <ChevronDownIcon className={`h-4 w-4 text-neutral transition-transform duration-300 shrink-0 ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
             </div>
             
             {isProfileMenuOpen && (

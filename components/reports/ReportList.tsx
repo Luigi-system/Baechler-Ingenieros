@@ -113,20 +113,20 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
         try {
             const res = await fetch(`https://app.lr-system.com/bi/reporte-servicio/get/${reportId}`);
             const data = await res.json();
-            const report = Array.isArray(data) ? data[0] : (data.data || data);
+            const reportData = Array.isArray(data) ? data[0] : (data.data || data);
             
             const pdfBlob = await pdf(
                 <ServiceReportPdf 
-                    report={report as ServiceReport} 
+                    report={{ ...reportData, id: reportId } as ServiceReport} 
                     logoUrl={logoUrl || undefined} 
-                    serial={report.codigo || String(reportId)} 
+                    serial={reportData.codigo || String(reportId).padStart(4, '0')} 
                 />
             ).toBlob();
             
             const url = URL.createObjectURL(pdfBlob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Reporte_${report.codigo || reportId}.pdf`;
+            link.download = `Reporte_${reportData.codigo || reportId}.pdf`;
             link.click();
             URL.revokeObjectURL(url);
         } catch (err: any) {
@@ -142,26 +142,22 @@ const ReportList: React.FC<ReportListProps> = ({ reportType, onCreateReport, onE
         try {
             const res = await fetch(`https://app.lr-system.com/bi/reporte-servicio/get/${reportId}`);
             const data = await res.json();
-            const report = Array.isArray(data) ? data[0] : (data.data || data);
+            const reportData = Array.isArray(data) ? data[0] : (data.data || data);
             
-            if (report.pdf && report.pdf.startsWith('data:application/pdf')) {
-                setPdfViewerUri(report.pdf);
-                return;
-            }
-
+            // Always regenerate to ensure latest ID/QR layout is used
             const pdfBlob = await pdf(
                 <ServiceReportPdf 
-                    report={report as ServiceReport} 
+                    report={{ ...reportData, id: reportId } as ServiceReport} 
                     logoUrl={logoUrl || undefined} 
-                    serial={report.codigo || String(reportId)} 
+                    serial={reportData.codigo || String(reportId).padStart(4, '0')} 
                 />
             ).toBlob();
             
             const blobUrl = URL.createObjectURL(pdfBlob);
             setPdfViewerUri(blobUrl);
         } catch (err: any) {
-             console.error("Error in View PDF List:", err);
-             alert(`No se pudo visualizar el PDF: ${err.message}`);
+            console.error("Error in View PDF List:", err);
+            alert(`No se pudo visualizar el PDF: ${err.message}`);
         } finally {
             setPdfViewingId(null);
         }

@@ -223,6 +223,14 @@ const QrScannerModal: React.FC<QrScannerModalProps> = ({ isOpen, onClose, onScan
                     <div id="qr-reader" className="w-full h-full object-cover"></div>
                     
                     <style>{`
+                        @keyframes scan {
+                            0% { top: 15%; opacity: 0; }
+                            50% { opacity: 0.8; }
+                            100% { top: 85%; opacity: 0; }
+                        }
+                        .animate-scan {
+                            animation: scan 3s linear infinite;
+                        }
                         #qr-reader video {
                             width: 100% !important;
                             height: 100% !important;

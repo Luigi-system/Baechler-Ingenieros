@@ -158,8 +158,8 @@ const ReportPreviewPage: React.FC<ReportPreviewPageProps> = ({ type }) => {
             // Create the updated PDF
             const pdfBlob = await pdf(
                 type === 'visit' 
-                ? <VisitReportPdf report={{ ...report, foto_firma: signatureB64 }} />
-                : <ServiceReportPdf report={{ ...report, foto_firma: signatureB64 }} serial={report.codigo || ''} />
+                ? <VisitReportPdf report={{ ...report, id: Number(id) }} />
+                : <ServiceReportPdf report={{ ...report, id: Number(id) }} serial={report.codigo || String(id).padStart(4, '0')} />
             ).toBlob();
 
             const pdfBase64 = await new Promise<string>((resolve) => {
@@ -351,8 +351,8 @@ const ReportPreviewPage: React.FC<ReportPreviewPageProps> = ({ type }) => {
                         <div className="flex-1 bg-base-300 rounded-2xl overflow-hidden border border-base-border shadow-inner">
                             <PDFViewer width="100%" height="100%" showToolbar={true} className="border-none rounded-2xl">
                                 {type === 'visit' 
-                                    ? <VisitReportPdf report={report} />
-                                    : <ServiceReportPdf report={report} serial={report.codigo || ''} />
+                                    ? <VisitReportPdf report={{ ...report, id: Number(id) }} />
+                                    : <ServiceReportPdf report={{ ...report, id: Number(id) }} serial={report.codigo || String(id).padStart(4, '0')} />
                                 }
                             </PDFViewer>
                         </div>
@@ -399,19 +399,19 @@ const ReportPreviewPage: React.FC<ReportPreviewPageProps> = ({ type }) => {
     return (
         <div className="min-h-screen bg-base-100 p-4 md:p-8 flex flex-col items-center justify-center font-sans">
             <div className="w-full max-w-5xl h-full flex flex-col">
-                <div className="flex flex-col items-center mb-12 w-full animate-in fade-in slide-in-from-top-6 duration-1000">
-                    <div className="flex items-center gap-5 group">
-                        <div className="bg-primary p-3.5 rounded-[1.2rem] shadow-xl shadow-primary/20 group-hover:rotate-12 transition-all duration-500">
-                            <EditIcon className="h-8 w-8 text-primary-content" />
+                <div className="flex flex-col items-center mb-10 w-full animate-in fade-in slide-in-from-top-4 duration-1000">
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="bg-primary p-4 rounded-3xl shadow-2xl shadow-primary/20 hover:scale-110 transition-transform duration-500">
+                            <EditIcon className="h-10 w-10 text-primary-content" />
                         </div>
-                        <div className="flex flex-col">
-                            <h1 className="text-3xl md:text-4xl font-black italic tracking-tighter uppercase leading-none text-base-content">
+                        <div className="flex flex-col items-center">
+                            <h1 className="text-4xl md:text-6xl font-black italic tracking-tighter uppercase leading-none text-base-content text-center">
                                 PREVIEW <span className="text-primary">&</span> FIRMA
                             </h1>
-                            <div className="flex items-center gap-2 mt-1.5 overflow-hidden">
-                                <div className="h-[1px] w-4 bg-primary/40"></div>
-                                <p className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.4em] text-neutral opacity-50 whitespace-nowrap">PLATAFORMA TÉCNICA BAECHLER</p>
-                                <div className="h-[1px] w-32 bg-primary/40"></div>
+                            <div className="flex items-center gap-4 mt-4 w-full max-w-[400px]">
+                                <div className="h-[1px] flex-1 bg-gradient-to-r from-transparent via-primary/30 to-primary/50"></div>
+                                <p className="text-[9px] md:text-[11px] font-black uppercase tracking-[0.5em] text-neutral opacity-60 whitespace-nowrap">PLATAFORMA TÉCNICA BAECHLER</p>
+                                <div className="h-[1px] flex-1 bg-gradient-to-l from-transparent via-primary/30 to-primary/50"></div>
                             </div>
                         </div>
                     </div>

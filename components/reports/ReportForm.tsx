@@ -885,37 +885,53 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                 bg-base-200 lg:bg-transparent shadow-2xl lg:shadow-none
                 ${isSimulatorVisible 
                     ? 'w-[92%] sm:w-[80%] lg:w-1/2 translate-x-0' 
-                    : 'w-0 translate-x-full lg:translate-x-0 lg:w-12 pointer-events-none lg:pointer-events-auto'
+                    : 'w-0 translate-x-full lg:translate-x-0 lg:w-14 pointer-events-none lg:pointer-events-auto'
                 }
             `}
         >
-            <div className="h-full flex flex-col bg-base-300/50 lg:rounded-lg overflow-hidden lg:border lg:border-base-border">
-                <div className="flex-shrink-0 p-4 bg-base-200 border-b border-base-border flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary lg:hidden">
-                            <ViewIcon className="h-5 w-5" />
-                        </div>
-                        <span className="font-bold text-base uppercase tracking-wider">Vista Previa PDF</span>
-                    </div>
-                    <button 
-                        onClick={() => setIsSimulatorVisible(!isSimulatorVisible)} 
-                        className="p-2.5 rounded-full hover:bg-base-300 text-base-content transition-colors bg-base-100 lg:bg-transparent border border-base-border lg:border-none"
-                        title={isSimulatorVisible ? "Cerrar Previsualización" : "Mostrar Previsualización"}
-                    >
-                        {isSimulatorVisible ? <EyeOffIcon className="h-5 w-5" /> : <ViewIcon className="h-5 w-5" />}
-                    </button>
-                </div>
-                {isSimulatorVisible && (
-                    <div className="flex-grow p-1 md:p-3 relative bg-base-300">
-                        {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 backdrop-blur-sm"><Spinner className="h-10 w-10 text-primary" /></div>}
-                        {pdfPreviewUri ? (
-                            <iframe src={pdfPreviewUri} title="PDF Preview" className="w-full h-full border-0 rounded-lg shadow-inner bg-white"/>
-                        ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center text-neutral p-10 text-center space-y-4">
-                                <div className="p-4 bg-base-200 rounded-full"><SparklesIcon className="h-10 w-10 opacity-30" /></div>
-                                <p className="text-sm font-medium">Llene los datos del formulario para generar la previsualización.</p>
+            <div className="h-full flex flex-col bg-base-300/50 lg:rounded-lg overflow-hidden lg:border lg:border-base-border relative">
+                {isSimulatorVisible ? (
+                    <>
+                        <div className="flex-shrink-0 p-4 bg-base-200 border-b border-base-border flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary lg:hidden">
+                                    <ViewIcon className="h-5 w-5" />
+                                </div>
+                                <span className="font-bold text-base uppercase tracking-wider">Vista Previa PDF</span>
                             </div>
-                        )}
+                            <button 
+                                onClick={() => setIsSimulatorVisible(false)} 
+                                className="p-2.5 rounded-full hover:bg-base-300 text-base-content transition-colors bg-base-100 lg:bg-transparent border border-base-border lg:border-none"
+                                title="Cerrar Previsualización"
+                            >
+                                <EyeOffIcon className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="flex-grow p-1 md:p-3 relative bg-base-300">
+                            {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 backdrop-blur-sm"><Spinner className="h-10 w-10 text-primary" /></div>}
+                            {pdfPreviewUri ? (
+                                <iframe src={pdfPreviewUri} title="PDF Preview" className="w-full h-full border-0 rounded-lg shadow-inner bg-white"/>
+                            ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center text-neutral p-10 text-center space-y-4">
+                                    <div className="p-4 bg-base-200 rounded-full"><SparklesIcon className="h-10 w-10 opacity-30" /></div>
+                                    <p className="text-sm font-medium">Llene los datos del formulario para generar la previsualización.</p>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                ) : (
+                    <div 
+                        onClick={() => setIsSimulatorVisible(true)}
+                        className="hidden lg:flex flex-col items-center justify-center h-full w-full cursor-pointer hover:bg-primary/10 transition-all border-l border-base-border bg-base-200 group"
+                        title="Ver Previsualización PDF"
+                    >
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 p-2 bg-primary/20 rounded-full group-hover:scale-110 transition-transform">
+                            <ViewIcon className="h-5 w-5 text-primary" />
+                        </div>
+                        <p className="text-[11px] font-black uppercase tracking-[0.4em] text-neutral [writing-mode:vertical-lr] rotate-180 py-4 opacity-60 group-hover:opacity-100 group-hover:text-primary transition-all">
+                            VISTA PREVIA PDF
+                        </p>
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
                     </div>
                 )}
             </div>

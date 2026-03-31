@@ -90,10 +90,14 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
     try {
       const response = await fetch(`https://app.lr-system.com/bi/reporte-visita/get/${reportId}`);
       const data = await response.json();
-      const report = Array.isArray(data) ? data[0] : (data.data || data);
+      const reportData = Array.isArray(data) ? data[0] : (data.data || data);
 
       const pdfBlob = await pdf(
-        <VisitReportPdf report={report as VisitReport} logoUrl={logoUrl || undefined} />
+        <VisitReportPdf 
+          report={{ ...reportData, id: reportId } as VisitReport} 
+          logoUrl={logoUrl || undefined} 
+          serial={reportData.codigo || String(reportId).padStart(4, '0')}
+        />
       ).toBlob();
       
       const url = URL.createObjectURL(pdfBlob);
@@ -114,15 +118,15 @@ const VisitReportList: React.FC<VisitReportListProps> = ({ onCreateReport, onEdi
     try {
       const response = await fetch(`https://app.lr-system.com/bi/reporte-visita/get/${reportId}`);
       const data = await response.json();
-      const report = Array.isArray(data) ? data[0] : (data.data || data);
+      const reportData = Array.isArray(data) ? data[0] : (data.data || data);
 
-      if (report.pdf && report.pdf.startsWith('data:application/pdf')) {
-          setPdfViewerUri(report.pdf);
-          return;
-      }
-
+      // Always regenerate to ensure latest ID/QR layout is used
       const pdfBlob = await pdf(
-        <VisitReportPdf report={report as VisitReport} logoUrl={logoUrl || undefined} />
+        <VisitReportPdf 
+          report={{ ...reportData, id: reportId } as VisitReport} 
+          logoUrl={logoUrl || undefined} 
+          serial={reportData.codigo || String(reportId).padStart(4, '0')}
+        />
       ).toBlob();
       
       const blobUrl = URL.createObjectURL(pdfBlob);
