@@ -3,12 +3,17 @@
 import React, { useContext, useState } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
 import ThemeToggle from '../ui/ThemeToggle';
-import { BellIcon, LogoutIcon, UserIcon, CheckCircleIcon, MenuIcon } from '../ui/Icons';
+import { BellIcon, LogoutIcon, UserIcon, CheckCircleIcon, MenuIcon, QrCodeIcon } from '../ui/Icons';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import QrScannerModal from '../ui/QrScannerModal';
+import { useNavigate } from 'react-router-dom';
 
 interface HeaderProps {
   onNavigateToProfile: () => void;
   onToggleMobileSidebar: () => void;
+  title?: string;
+  subtitle?: string;
+  children?: React.ReactNode;
 }
 
 // Dummy data for the notification charts
@@ -17,33 +22,55 @@ const tasksData = [{ name: 'Completadas', value: 5 }, { name: 'Pendientes', valu
 const profileData = [{ name: 'Completo', value: 85 }, { name: 'Restante', value: 15 }];
 const COLORS = ['var(--color-primary)', 'var(--color-base-300)'];
 
-const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSidebar }) => {
+const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSidebar, title, subtitle, children }) => {
   const auth = useContext(AuthContext);
+  const navigate = useNavigate();
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+
+  const handleScanSuccess = (data: { type: 'service' | 'visit'; id: number }) => {
+    if (data.type === 'service') {
+        navigate(`/reporte-servicio/edit/${data.id}`);
+    } else if (data.type === 'visit') {
+        navigate(`/reporte-visita/edit/${data.id}`);
+    }
+  };
 
   if (!auth || !auth.user) {
     return null;
   }
 
   return (
-    <header className="flex items-center justify-between p-4 bg-base-200 border-b border-base-border shadow-sm">
-      <div className="flex items-center gap-2">
-        <button onClick={onToggleMobileSidebar} className="md:hidden p-2 -ml-2 text-neutral">
+    <header className="flex items-center h-20 px-4 bg-base-200 border-b border-base-border shadow-sm">
+      <div className="flex items-center gap-2 overflow-hidden">
+        <button onClick={onToggleMobileSidebar} className="md:hidden p-2 -ml-2 text-neutral hover:bg-base-300 rounded-lg transition-colors">
             <MenuIcon className="h-6 w-6" />
         </button>
-        <div className="hidden md:block">
-            <h1 className="text-xl font-semibold text-base-content">Bienvenido, {auth.user.nombres}</h1>
-            <p className="text-sm text-neutral">Rol: {auth.user.roleName}</p>
+        <div className="flex flex-col min-w-0">
+            <h1 className="text-base md:text-xl font-black text-base-content truncate uppercase tracking-tight">
+                {title || (auth.user.nombres.split(' ')[0])}
+            </h1>
+            {subtitle ? (
+                <p className="text-[10px] md:text-sm text-neutral truncate font-bold uppercase tracking-widest opacity-70">{subtitle}</p>
+            ) : (
+                <p className="hidden md:block text-sm text-neutral font-medium">Rol: {auth.user.roleName}</p>
+            )}
         </div>
       </div>
 
+      {children && (
+        <div className="flex-1 flex justify-center px-4">
+          {children}
+        </div>
+      )}
 
-      <div className="flex items-center space-x-2 sm:space-x-4">
+      <div className="flex items-center space-x-2 sm:space-x-4 ml-auto">
+
         <div className="relative">
             <button onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} className="relative p-1">
-                <BellIcon className="h-6 w-6 text-neutral cursor-pointer hover:text-primary"/>
-                <span className="absolute top-0 right-0 flex h-3 w-3">
+                <BellIcon className="h-5 w-5 text-neutral cursor-pointer hover:text-primary"/>
+                <span className="absolute top-0 right-0 flex h-2.5 w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-error"></span>
                 </span>
@@ -97,8 +124,17 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
                     </div>
                  </div>
             )}
+        <div className="relative">
+            <button 
+                onClick={() => setIsQrScannerOpen(true)} 
+                className="p-2 text-neutral hover:text-primary transition-colors bg-base-300/30 rounded-lg hover:bg-primary/10 group"
+                title="Escanear QR de Reporte"
+            >
+                <QrCodeIcon className="h-5 w-5 group-hover:scale-110 transition-transform" />
+            </button>
         </div>
-        
+        </div>
+
         <ThemeToggle />
 
         <div className="relative">
@@ -137,6 +173,14 @@ const Header: React.FC<HeaderProps> = ({ onNavigateToProfile, onToggleMobileSide
             )}
         </div>
       </div>
+
+      {isQrScannerOpen && (
+        <QrScannerModal
+            isOpen={isQrScannerOpen}
+            onClose={() => setIsQrScannerOpen(false)}
+            onScan={handleScanSuccess}
+        />
+      )}
     </header>
   );
 };

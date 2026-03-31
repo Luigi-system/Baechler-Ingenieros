@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import ReactECharts from 'echarts-for-react';
 import { useTheme } from '../../contexts/ThemeContext';
 
 interface ChartData {
@@ -13,39 +13,74 @@ interface DashboardBarChartProps {
 }
 
 const DashboardBarChart: React.FC<DashboardBarChartProps> = ({ data }) => {
-  const { themeMode } = useTheme();
-  const tickColor = themeMode === 'dark' ? '#9CA3AF' : '#6B7280';
-  
-  if (!data || data.length === 0) {
-      return <div className="flex items-center justify-center h-full text-sm text-neutral">No hay datos disponibles para mostrar.</div>;
-  }
+    const { themeMode } = useTheme();
+    const isDark = themeMode === 'dark';
 
-  return (
-    <ResponsiveContainer width="100%" height={250}>
-      <BarChart data={data} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--color-base-border)" />
-        <XAxis type="number" stroke={tickColor} fontSize={10} allowDecimals={false} />
-        <YAxis 
-            type="category" 
-            dataKey="name" 
-            stroke={tickColor} 
-            fontSize={10} 
-            width={80} 
-            tick={{ textAnchor: 'end' }}
-            interval={0}
+    if (!data || data.length === 0) {
+        return <div className="flex items-center justify-center h-full text-sm text-neutral">No hay datos disponibles para mostrar.</div>;
+    }
+
+    const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+            borderColor: isDark ? '#4B5563' : '#E5E7EB',
+            textStyle: { color: isDark ? '#F3F4F6' : '#111827' },
+            padding: [10, 14],
+            borderRadius: 8
+        },
+        grid: {
+            left: '3%',
+            right: '10%',
+            top: '5%',
+            bottom: '5%',
+            containLabel: true
+        },
+        xAxis: {
+            type: 'value',
+            splitLine: { lineStyle: { color: isDark ? '#374151' : '#E5E7EB', type: 'dashed' } },
+            axisLabel: { color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 10 }
+        },
+        yAxis: {
+            type: 'category',
+            data: data.map(d => d.name),
+            axisLine: { lineStyle: { color: isDark ? '#374151' : '#E5E7EB' } },
+            axisLabel: { 
+                color: isDark ? '#9CA3AF' : '#6B7280', 
+                fontSize: 10,
+                width: 100,
+                overflow: 'break'
+            }
+        },
+        series: [
+            {
+                name: 'Reportes',
+                type: 'bar',
+                data: data.map(d => d.value),
+                itemStyle: {
+                    color: '#fbbf24', // Secondary
+                    borderRadius: [0, 5, 5, 0]
+                },
+                barWidth: 20,
+                showBackground: true,
+                backgroundStyle: {
+                    color: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                    borderRadius: [0, 5, 5, 0]
+                }
+            }
+        ]
+    };
+
+    return (
+        <ReactECharts 
+            option={option} 
+            style={{ height: '250px', width: '100%' }}
+            notMerge={true}
+            lazyUpdate={true}
         />
-        <Tooltip 
-            cursor={{ fill: 'var(--color-base-300)' }}
-            contentStyle={{ 
-                backgroundColor: 'var(--color-base-200)', 
-                border: '1px solid var(--color-base-border)',
-                borderRadius: '0.5rem'
-            }} 
-        />
-        <Bar dataKey="value" name="Reportes" fill="var(--color-secondary)" radius={[0, 4, 4, 0]} barSize={20} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
+    );
 };
 
 export default DashboardBarChart;

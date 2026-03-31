@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import type { Company } from '../../../types';
-import { useSupabase } from '../../../contexts/SupabaseContext';
 import Spinner from '../../ui/Spinner';
 
 interface CompanyFormProps {
@@ -11,7 +10,6 @@ interface CompanyFormProps {
 }
 
 const CompanyForm: React.FC<CompanyFormProps> = ({ company, onSave, onCancel }) => {
-    const { supabase } = useSupabase();
     const [formData, setFormData] = useState<Partial<Company>>(company || {
         nombre: '',
         direccion: '',
@@ -27,22 +25,41 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ company, onSave, onCancel }) 
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!supabase || !formData.nombre) return;
+        if (!formData.nombre) return;
 
         setIsSaving(true);
-        // FIX: Modified Supabase query to use .select() to get the saved data back.
-        const request = company
-            ? supabase.from('Empresa').update(formData).eq('id', company.id)
-            : supabase.from('Empresa').insert([formData]);
+        try {
+            const url = company 
+                ? `https://app.lr-system.com/bi/empresas/update/${company.id}`
+                : 'https://app.lr-system.com/bi/empresas/create';
+            
+            const method = company ? 'PUT' : 'POST';
 
-        const { data, error } = await request.select().single();
+            const response = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nombre: formData.nombre,
+                    direccion: formData.direccion || '',
+                    distrito: formData.distrito || '',
+                    ruc: formData.ruc || ''
+                })
+            });
 
-        setIsSaving(false);
-        if (error) {
-            alert(`Error: ${error.message}`);
-        // FIX: Pass the returned data to the onSave callback.
-        } else if (data) {
-            await onSave(data as Company);
+            if (!response.ok) {
+                throw new Error(`Error: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            // The API might return the saved object directly or inside a 'data' field.
+            const savedCompany = data.data || data;
+            
+            await onSave(savedCompany as Company);
+        } catch (err: any) {
+            alert(err.message || "Error al guardar la empresa");
+            console.error("Save company error:", err);
+        } finally {
+            setIsSaving(false);
         }
     };
 

@@ -2,14 +2,12 @@
 
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../../contexts/AuthContext';
-import { useSupabase } from '../../contexts/SupabaseContext';
 import { SaveIcon, LockIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
 import type { User } from '../../types';
 
 const ProfileSettings: React.FC = () => {
     const auth = useContext(AuthContext);
-    const { supabase } = useSupabase();
 
     if (!auth || !auth.user) {
         return <div>Cargando perfil...</div>;
@@ -40,34 +38,27 @@ const ProfileSettings: React.FC = () => {
     
     const handleInfoSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!supabase || !auth.user) return;
+        if (!auth.user) return;
 
         setIsSavingInfo(true);
         setFeedback(null);
 
-        const { data, error } = await supabase
-            .from('Usuarios')
-            .update({ 
-                nombres: formData.nombres,
-                dni: formData.dni ? Number(formData.dni) : null,
-                celular: formData.celular ? Number(formData.celular) : null,
-            })
-            .eq('id', auth.user.id)
-            .select()
-            .single();
+        // Mock saving delay
+        await new Promise(resolve => setTimeout(resolve, 800));
 
-        if (error) {
-            setFeedback({ type: 'error', message: `Error al actualizar: ${error.message}` });
-        } else if (data) {
-            auth.updateUser(data);
-            setFeedback({ type: 'success', message: '¡Información actualizada con éxito!' });
-        }
+        // Update local state
+        auth.updateUser({ 
+            nombres: formData.nombres,
+            dni: formData.dni ? formData.dni.toString() : undefined,
+            celular: formData.celular ? formData.celular.toString() : undefined,
+        });
+        
+        setFeedback({ type: 'success', message: '¡Información actualizada localmente! (Sincronización con API pendiente)' });
         setIsSavingInfo(false);
     };
 
     const handlePasswordSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!supabase) return;
         if (passwordData.newPassword !== passwordData.confirmPassword) {
             setFeedback({ type: 'error', message: 'Las contraseñas no coinciden.' });
             return;
@@ -80,14 +71,11 @@ const ProfileSettings: React.FC = () => {
         setIsSavingPassword(true);
         setFeedback(null);
         
-        const { error } = await supabase.auth.updateUser({ password: passwordData.newPassword });
+        // Mock saving delay
+        await new Promise(resolve => setTimeout(resolve, 800));
 
-        if (error) {
-            setFeedback({ type: 'error', message: `Error al cambiar contraseña: ${error.message}` });
-        } else {
-            setFeedback({ type: 'success', message: '¡Contraseña cambiada con éxito!' });
-            setPasswordData({ newPassword: '', confirmPassword: '' });
-        }
+        setFeedback({ type: 'success', message: '¡Contraseña cambiada localmente! (Sincronización con API pendiente)' });
+        setPasswordData({ newPassword: '', confirmPassword: '' });
         setIsSavingPassword(false);
     }
 

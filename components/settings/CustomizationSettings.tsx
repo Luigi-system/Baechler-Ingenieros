@@ -5,7 +5,6 @@
 import React, { useContext, useState } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AuthContext } from '../../contexts/AuthContext';
-import { useSupabase } from '../../contexts/SupabaseContext';
 import { COLOR_PALETTES } from '../../constants/themes';
 import { SaveIcon, PaletteIcon, BuildingIcon } from '../ui/Icons';
 import Spinner from '../ui/Spinner';
@@ -22,7 +21,6 @@ const CustomizationSettings: React.FC = () => {
     isLogoAnimated, setIsLogoAnimated
   } = useTheme();
 
-  const { supabase } = useSupabase();
   const auth = useContext(AuthContext);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -34,74 +32,21 @@ const CustomizationSettings: React.FC = () => {
   }, {} as Record<string, typeof COLOR_PALETTES>);
   
   const handleSave = async () => {
-    if (!supabase || !auth?.user) {
-        setFeedback({ type: 'error', message: 'No se puede guardar: usuario no autenticado o conexión a la base de datos no disponible.' });
+    if (!auth?.user) {
+        setFeedback({ type: 'error', message: 'No se puede guardar: usuario no autenticado.' });
         return;
     }
     setIsSaving(true);
     setFeedback(null);
 
-    // Task 1: Save General Branding
-    const saveBranding = async () => {
-        const brandingValue = { 
-            app_title: appTitle, 
-            logo_url: logoUrl,
-            logo_font_size: logoFontSize,
-            logo_font_family: logoFontFamily,
-            logo_color: logoColor,
-            is_logo_animated: isLogoAnimated
-        };
-        const { data: existing, error: selectError } = await supabase
-            .from('Configuracion')
-            .select('id')
-            .eq('key', 'general_branding')
-            .is('id_usuario', null)
-            .maybeSingle();
-
-        if (selectError) return selectError;
-        
-        if (existing) {
-            const { error } = await supabase.from('Configuracion').update({ value: JSON.stringify(brandingValue) }).eq('id', existing.id);
-            return error;
-        } else {
-            const { error } = await supabase.from('Configuracion').insert({ key: 'general_branding', value: JSON.stringify(brandingValue), id_usuario: null });
-            return error;
-        }
-    };
-
-    // Task 2: Save User Theme
-    const saveTheme = async () => {
-        const themeValue = { color_palette_name: currentPalette.name };
-        const { data: existing, error: selectError } = await supabase
-            .from('Configuracion')
-            .select('id')
-            .eq('key', 'user_theme_settings')
-            .eq('id_usuario', auth.user.id)
-            .maybeSingle();
-
-        if (selectError) return { error: selectError, data: themeValue };
-
-        if (existing) {
-            const { error } = await supabase.from('Configuracion').update({ value: JSON.stringify(themeValue) }).eq('id', existing.id);
-            return { error, data: themeValue };
-        } else {
-            const { error } = await supabase.from('Configuracion').insert({ key: 'user_theme_settings', value: JSON.stringify(themeValue), id_usuario: auth.user.id });
-            return { error, data: themeValue };
-        }
-    };
-
-    const [brandingError, themeResult] = await Promise.all([saveBranding(), saveTheme()]);
+    // Mock saving delay
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     setIsSaving(false);
-
-    if (brandingError || themeResult.error) {
-        const bError = brandingError ? `Branding: ${brandingError.message}` : '';
-        const tError = themeResult.error ? `Theme: ${themeResult.error.message}` : '';
-        setFeedback({ type: 'error', message: `Error al guardar: ${bError} ${tError}`.trim() });
-    } else {
-        auth.updateUser({ color_palette_name: themeResult.data.color_palette_name });
-        setFeedback({ type: 'success', message: '¡Configuración guardada exitosamente!' });
-    }
+    setFeedback({ type: 'success', message: '¡Configuración guardada localmente! (Sincronización con API pendiente)' });
+    
+    // Update local context for the current session
+    auth.updateUser({ color_palette_name: currentPalette.name });
   };
 
 

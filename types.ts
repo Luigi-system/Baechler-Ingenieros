@@ -12,17 +12,21 @@ export enum UserRole {
 export interface User {
   id: string;
   nombres: string;
-  usuario: string; // Changed from email
-  email?: string; // Kept as optional for other uses if needed
+  apellidos?: string; // Added
+  usuario: string; 
+  email?: string; 
   rol: number;
   roleName: string;
   permissions: string[];
-  dni?: number;
-  celular?: number;
+  dni?: string; // Changed to string
+  celular?: string; // Changed to string
+  cargo?: string; // Added
+  foto?: string; // Added
+  nacimiento?: string; // Added
   app_title?: string;
   logo_url?: string;
   color_palette_name?: string;
-  pass?: number | null; // Changed from password and type to number | null
+  pass?: string | null; // Changed to string | null
 }
 
 export interface ServiceReport {
@@ -36,7 +40,7 @@ export interface ServiceReport {
 
   // Datos de empresa / planta / sede
   empresa_nombre?: string;
-  enpresa_planta?: string;
+  empresa_planta?: string;
 
   // Datos de usuario (creator)
   usuario_nombre?: string;
@@ -49,13 +53,13 @@ export interface ServiceReport {
   // Datos de la máquina
   maquina_linea?: string;
   maquina_marca?: string;
-  maquina_seria?: string;
+  maquina_serie?: string;
   maquina_modelo?: string;
 
   // Condiciones del servicio
-  garantia?: boolean;
+  garantia?: string;
   facturado?: boolean;
-  operatio?: boolean;
+  operario?: string;
   en_prueba?: boolean;
   
   // Tiempos
@@ -64,15 +68,15 @@ export interface ServiceReport {
   hora_salida?: string; // HH:MM
 
   // Información del servicio
-  problemas_encontraados?: string;
+  problemas_encontrados?: string;
   acciones_realizadas?: string;
   observaciones?: string;
   control_interno?: string;
 
   // Fotos (Base64)
   foto_firma?: string | null;
-  foto_acciones_realizadas?: (string | null)[];
-  foto_problemas_encontrados?: (string | null)[];
+  foto_acciones_realizadas?: string | (string | null)[];
+  foto_problemas_encontrados?: string | (string | null)[];
 
   // --- Fields for form state & PDF generation ---
   estado_maquina?: 'operativo' | 'inoperativo' | 'en_prueba'; // form state
@@ -92,7 +96,7 @@ export interface VisitReport {
 
     // Datos generales
     codigo?: string;
-    estado?: string; // e.g., 'En Progreso', 'Finalizado'
+    estado?: number; // 0: En Progreso, 1: Finalizado
     pdf?: string; // URL to the PDF
 
     // Datos de la empresa
@@ -109,7 +113,7 @@ export interface VisitReport {
     foto_firma?: string | null;
 
     // Datos técnicos
-    maquinas?: string[];
+    maquinas?: string | string[];
     voltaje_establecido?: boolean;
     linea_a_tierra?: boolean;
     presurizacion_de_cabezal?: boolean;
@@ -187,9 +191,10 @@ export interface Plant {
     created_at?: string;
     nombre: string;
     direccion?: string;
-    estado: boolean;
+    estado?: boolean;
     id_empresa: number;
-    empresa_nombre?: string;
+    empresa_nombre?: string;  // legacy field name
+    nombreempresa?: string;   // API field name from /planta/getall and /by-empresa
 }
 
 export interface Machine {
@@ -200,20 +205,24 @@ export interface Machine {
     marca?: string;
     linea?: string;
     estado: boolean;
-    id_planta: number;
+    id_planta?: number;
     planta_nombre?: string;
-    id_empresa: number;
+    nombre_planta?: string;   // API field name
+    id_empresa?: number;
     empresa_nombre?: string;
+    nombre_empresa?: string;  // API field name
 }
 
 export interface Supervisor {
     id: number;
     created_at?: string;
-    nombre: string;
-    apellido?: string;
+    nombres: string;
+    apellidos?: string;
     dni?: string;
     nacimiento?: string; // date as string
     email?: string;
+    pass?: string;
+    foto?: string;
     celular?: number;
     cargo?: string;
     nombreEmpresa?: string;
@@ -330,7 +339,7 @@ export interface OpenAiClient {
     chat: {
         completions: {
             create: (payload: any) => Promise<any>;
-        >;
+        };
     };
 }
 

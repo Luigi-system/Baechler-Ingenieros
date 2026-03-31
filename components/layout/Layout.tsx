@@ -1,15 +1,11 @@
-
-
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
+import { analyzeReportWithAi } from '../../services/aiService';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import Dashboard from '../dashboard/Dashboard';
 import ReportList from '../reports/ReportList';
-import Assistant from '../assistant/Assistant';
 import ReportForm from '../reports/ReportForm';
 import VisitReportForm from '../reports/VisitReportForm';
-import { AssistantIcon } from '../ui/Icons';
-import { useChat } from '../../contexts/ChatContext';
 import VisitReportList from '../reports/VisitReportList';
 
 // Management Components
@@ -17,37 +13,22 @@ import CompanyList from '../management/companies/CompanyList';
 import PlantList from '../management/plants/PlantList';
 import MachineList from '../management/machines/MachineList';
 import SupervisorList from '../management/supervisors/SupervisorList';
+import AiHeaderNotice from '../reports/AiHeaderNotice';
 
 // Settings Components
 import CustomizationSettings from '../settings/CustomizationSettings';
-import AiSettings from '../settings/AiSettings';
-import DatabaseSettings from '../settings/DatabaseSettings';
 import UserManagement from '../settings/UserManagement';
-import RoleManagement from '../settings/RoleManagement';
-import DataImporter from '../settings/DataImporter';
-import AccessManagement from '../settings/AccessManagement';
 import ProfileSettings from '../settings/ProfileSettings';
-import EmailSettings from '../settings/EmailSettings';
 
 const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
   const [editingReportId, setEditingReportId] = useState<number | null>(null);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const { hasUnreadMessage, clearUnread } = useChat();
 
   // State for sidebars (mobile and desktop)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(true);
-
-
-  const handleOpenAssistant = () => {
-    setIsAssistantOpen(true);
-    clearUnread();
-  };
-  
-  const handleCloseAssistant = () => {
-    setIsAssistantOpen(false);
-  };
+  const [isDesktopSidebarCollapsed, setIsDesktopSidebarCollapsed] = useState(false);
+  const [aiData, setAiData] = useState<any>(null);
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
 
   const navigateTo = (page: string) => {
     setActivePage(page);
@@ -62,7 +43,23 @@ const Layout: React.FC = () => {
   const handleEditReport = (id: number, type: 'service' | 'visit') => {
      setActivePage(`edit-report-${type}`);
      setEditingReportId(id);
+     setAiData(null);
   }
+
+  const handleAiFileSelected = async (file: File) => {
+    setIsAiProcessing(true);
+    setAiData(null);
+    const reportType = activePage.includes('visit') ? 'visit' : 'service';
+    try {
+      const extracted = await analyzeReportWithAi(file, reportType);
+      setAiData(extracted);
+      alert('✅ IA completó el análisis. Los campos han sido autocompletados.');
+    } catch (e: any) {
+      alert('⚠️ Error al analizar el archivo: ' + e.message);
+    } finally {
+      setIsAiProcessing(false);
+    }
+  };
 
   const renderContent = () => {
     switch (activePage) {
@@ -75,14 +72,13 @@ const Layout: React.FC = () => {
       case 'reports-visit':
         return <VisitReportList onCreateReport={() => handleCreateReport('visit')} onEditReport={(id) => handleEditReport(id, 'visit')} />;
       case 'create-report-service':
-        return <ReportForm onBack={() => navigateTo('reports-service')} />;
+        return <ReportForm onBack={() => navigateTo('reports-service')} initialAiData={aiData} />;
       case 'edit-report-service':
-        // FIX: Converted 'editingReportId' from number to string to match the 'reportId' prop type in ReportForm.
-        return <ReportForm reportId={editingReportId?.toString()} onBack={() => navigateTo('reports-service')} />;
+        return <ReportForm reportId={editingReportId?.toString()} onBack={() => navigateTo('reports-service')} initialAiData={aiData} />;
        case 'create-report-visit':
-        return <VisitReportForm onBack={() => navigateTo('reports-visit')} />;
+        return <VisitReportForm onBack={() => navigateTo('reports-visit')} initialAiData={aiData} />;
       case 'edit-report-visit':
-        return <VisitReportForm reportId={editingReportId?.toString()} onBack={() => navigateTo('reports-visit')} />;
+        return <VisitReportForm reportId={editingReportId?.toString()} onBack={() => navigateTo('reports-visit')} initialAiData={aiData} />;
       
       // Management Pages
       case 'management-companies':
@@ -97,20 +93,8 @@ const Layout: React.FC = () => {
       // Settings Pages
       case 'settings-customization':
         return <CustomizationSettings />;
-      case 'settings-ai':
-        return <AiSettings />;
-      case 'settings-email':
-        return <EmailSettings />;
-      case 'settings-database':
-        return <DatabaseSettings />;
       case 'settings-users':
         return <UserManagement />;
-      case 'settings-roles':
-        return <RoleManagement />;
-      case 'settings-access':
-        return <AccessManagement />;
-      case 'settings-import':
-        return <DataImporter />;
       case 'settings-profile':
         return <ProfileSettings />;
         
@@ -118,6 +102,28 @@ const Layout: React.FC = () => {
         return <Dashboard />;
     }
   };
+
+  const getPageTitleInfo = () => {
+    switch (activePage) {
+      case 'dashboard': return { title: 'Dashboard', subtitle: 'Vista general de operaciones' };
+      case 'reports-service': return { title: 'Reportes de Servicio', subtitle: 'Listado y gestión de servicios realizados' };
+      case 'reports-visit': return { title: 'Reportes de Visita', subtitle: 'Control de visitas y mantenimiento preventivo' };
+      case 'create-report-service': return { title: 'Crear Reporte de Servicio', subtitle: 'Inicia un nuevo reporte técnico' };
+      case 'edit-report-service': return { title: 'Editar Reporte de Servicio', subtitle: 'Modifica los datos del servicio seleccionado' };
+      case 'create-report-visit': return { title: 'Crear Reporte de Visita', subtitle: 'Registra una nueva inspección preventiva' };
+      case 'edit-report-visit': return { title: 'Editar Reporte de Visita', subtitle: 'Actualiza la información de la visita' };
+      case 'management-companies': return { title: 'Gestionar Empresas', subtitle: 'Añade, edita o elimina registros de empresas' };
+      case 'management-plants': return { title: 'Gestionar Plantas', subtitle: 'Administración de sedes y plantas' };
+      case 'management-machines': return { title: 'Gestionar Máquinas', subtitle: 'Listado de equipos y maquinaria' };
+      case 'management-supervisors': return { title: 'Gestionar Encargados', subtitle: 'Contactos y responsables por planta' };
+      case 'settings-customization': return { title: 'Personalización', subtitle: 'Configuración visual de la plataforma' };
+      case 'settings-users': return { title: 'Gestión de Usuarios', subtitle: 'Administración de accesos y cuentas' };
+      case 'settings-profile': return { title: 'Mi Perfil', subtitle: 'Ajustes de tu cuenta personal' };
+      default: return { title: undefined, subtitle: undefined };
+    }
+  };
+
+  const { title: pageTitle, subtitle: pageSubtitle } = getPageTitleInfo();
 
   return (
     <div className="flex h-screen bg-base-100 overflow-x-hidden">
@@ -129,28 +135,19 @@ const Layout: React.FC = () => {
         isCollapsed={isDesktopSidebarCollapsed}
         setIsCollapsed={setIsDesktopSidebarCollapsed}
       />
-      <main className={`flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out ${isDesktopSidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+      <main className="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out">
         <Header 
             onNavigateToProfile={() => navigateTo('settings-profile')} 
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
-        />
-        <div className="flex-1 p-3 md:p-6 overflow-y-auto custom-scrollbar">
+            title={pageTitle}
+            subtitle={pageSubtitle}
+        >
+            { (activePage.startsWith('create-report') || activePage.startsWith('edit-report')) && <AiHeaderNotice onFileSelected={handleAiFileSelected} isProcessing={isAiProcessing} /> }
+        </Header>
+       <div className="flex-1 p-2 md:p-4 overflow-hidden">
           {renderContent()}
         </div>
       </main>
-      
-      <button 
-        onClick={handleOpenAssistant}
-        className="fixed bottom-6 right-6 bg-primary text-white p-4 rounded-full shadow-lg hover:bg-primary-focus transition-transform hover:scale-110 z-40"
-        title="Asistente IA"
-      >
-        <AssistantIcon className="h-8 w-8" />
-         {hasUnreadMessage && (
-            <span className="absolute top-0 right-0 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />
-        )}
-      </button>
-
-      <Assistant isOpen={isAssistantOpen} onClose={handleCloseAssistant} />
     </div>
   );
 };

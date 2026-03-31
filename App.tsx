@@ -1,170 +1,135 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 // import type { User as SupabaseUser } from '@supabase/supabase-js'; // Removed SupabaseUser import
 import Login from './components/auth/Login';
 import Layout from './components/layout/Layout';
 import { AuthContext } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
-import { SupabaseProvider, useSupabase } from './contexts/SupabaseContext';
-import { AiServiceProvider } from './contexts/AiServiceContext';
-import { ChatProvider } from './contexts/ChatContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import Spinner from './components/ui/Spinner'; // Import Spinner
 import type { User } from './types';
+import ReportPreviewPage from './components/reports/ReportPreviewPage';
 
 const AppContent: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [isLoadingAuth, setIsLoadingAuth] = useState(true); // New state for authentication loading
-    const { supabase } = useSupabase();
 
     // fetchUserProfile is now called after a successful custom login or during initial check.
-    // It takes the user data directly from the Usuarios table.
+    // It takes the user data directly from the Usuarios table or the new API response.
     const fetchUserProfile = useCallback(async (userDataFromDb: any): Promise<User> => {
-        if (!supabase || !userDataFromDb.usuario) { // Changed to userDataFromDb.usuario
-            throw new Error("Supabase client or user usuario not available from DB.");
-        }
-        try {
-            // Step 1: User data already fetched from 'Usuarios' table for login validation
-            // Now enrich with roles and permissions
-
-            // Step 2: Fetch permissions (existing logic)
-            let permissions: string[] = [];
-            const roleName = userDataFromDb.role?.nombre || 'Usuario';
-            const roleId = userDataFromDb.rol;
-
-            const { data: permissionsData, error: permissionsError } = await supabase
-                .from('role_permissions')
-                .select('permission_name')
-                .eq('role_id', roleId);
-            
-            if (permissionsError) {
-                console.error(`Could not fetch permissions for role ${roleId}:`, permissionsError.message);
-                permissions = ['dashboard'];
-            } else {
-                permissions = permissionsData.map(p => p.permission_name);
-                if (permissions.length === 0) {
-                    permissions.push('dashboard');
-                }
-            }
-            
-            // Step 3: Fetch user-specific theme settings from 'Configuracion'
-            const { data: configData, error: configError } = await supabase
-                .from('Configuracion')
-                .select('value')
-                .eq('id_usuario', userDataFromDb.id)
-                .eq('key', 'user_theme_settings') // Use the new user-specific key
-                .maybeSingle(); 
-
-            let themeSettings: { color_palette_name?: string } = {};
-            if (configError) {
-                console.warn(`Could not fetch theme settings for user ${userDataFromDb.id}: ${configError.message}. Using defaults.`);
-            } else if (configData && configData.value) {
-                try {
-                    // The value is stored as a JSON string, so it needs to be parsed.
-                    themeSettings = JSON.parse(configData.value);
-                } catch(e) {
-                     console.error("Failed to parse theme settings JSON:", e);
-                }
-            }
-            
-            // Step 4: Combine all data into the final User object
-            return {
-                id: userDataFromDb.id,
-                nombres: userDataFromDb.nombres,
-                usuario: userDataFromDb.usuario, // Changed from email
-                email: userDataFromDb.email, // Keep email if it exists in DB for other purposes
-                rol: userDataFromDb.rol,
-                roleName: roleName,
-                permissions: permissions,
-                dni: userDataFromDb.dni,
-                celular: userDataFromDb.celular,
-                color_palette_name: themeSettings.color_palette_name,
-                pass: userDataFromDb.pass, // Changed from password
-            };
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            console.error(`An unexpected error occurred fetching profile: ${errorMessage}. A temporary profile will be used.`);
-        }
+        // Basic user identifier
+        const userIdentifier = userDataFromDb.usuario || userDataFromDb.email || 'Usuario';
         
-        // Fallback user profile - this part should ideally not be reached if login was successful
+            // Step 2: Set default permissions
+            let permissions: string[] = ['dashboard', 'reports', 'management', 'settings']; 
+            let roleName = userDataFromDb.role?.nombre || 'Usuario';
+            let roleId = userDataFromDb.rol;
+            let themeSettings: { color_palette_name?: string } = {};
+            
         return {
-            id: userDataFromDb.id, // Use ID from fetched data
-            nombres: userDataFromDb.usuario?.split('@')[0] || 'Usuario sin nombre', // Changed from email
-            usuario: userDataFromDb.usuario || '', // Changed from email
-            rol: 0, // Default role ID, consider a 'guest' role if needed
-            roleName: 'Usuario',
-            permissions: ['dashboard']
+            id: userDataFromDb.id?.toString() || Date.now().toString(),
+            nombres: userDataFromDb.nombres || userIdentifier.split('@')[0],
+            usuario: userIdentifier,
+            email: userDataFromDb.email || (userIdentifier.includes('@') ? userIdentifier : undefined),
+            rol: roleId || 0,
+            roleName: roleName,
+            permissions: permissions,
+            dni: userDataFromDb.dni,
+            celular: userDataFromDb.celular,
+            color_palette_name: themeSettings.color_palette_name || userDataFromDb.color_palette_name,
+            pass: userDataFromDb.pass,
         };
-    }, [supabase]);
+    }, []);
 
-    // Effect for initial session check on component mount (simplified, no Supabase Auth session check)
+    // Effect for initial session check on component mount
     useEffect(() => {
         const checkInitialAuthStatus = async () => {
-            setIsLoadingAuth(false); // Directly set to false, as there's no session to fetch.
-                                    // The Login component will handle pre-filling username from localStorage.
+            const savedUser = localStorage.getItem('auth_user');
+            if (savedUser) {
+                try {
+                    const parsedUser = JSON.parse(savedUser);
+                    setUser(parsedUser);
+                } catch (error) {
+                    console.error("Error parsing saved user session:", error);
+                    localStorage.removeItem('auth_user');
+                }
+            }
+            setIsLoadingAuth(false);
         };
         checkInitialAuthStatus();
-    }, []); // Removed supabase and fetchUserProfile from dependencies, as there is no session to fetch automatically
+    }, []); // Check for saved session on mount
 
     // Removed the useEffect that handled Supabase authentication state changes (onAuthStateChange)
     // as we are implementing custom authentication.
 
 
-    // Custom login function
-    const login = async (username: string, password: string): Promise<void> => { // Changed email to username
-        if (!supabase) throw new Error("Cliente Supabase no inicializado.");
-        
+    // Custom login function using external API endpoint
+    const login = async (username: string, password: string): Promise<void> => {
         try {
             const trimmedUsername = username.trim();
             const trimmedPassword = password.trim();
 
-            // Step 1: Query the 'Usuarios' table directly for the user
-            const { data: userData, error: userError } = await supabase
-                .from('Usuarios')
-                .select('*, role:Roles(nombre)') // Select all columns, including joined role name
-                .eq('usuario', trimmedUsername) // Changed from 'email' to 'usuario'
-                .single();
+            const response = await fetch('https://app.lr-system.com/bi/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: trimmedUsername,
+                    pass: trimmedPassword
+                })
+            });
 
-            if (userError || !userData) {
-                // Log detailed error for debugging if needed, but return generic message to user
-                console.error("Login query failed:", userError?.message || "No user data found.");
+            if (!response.ok) {
+                if (response.status === 401) {
+                    throw new Error("Credenciales de inicio de sesión inválidas.");
+                }
+                throw new Error(`Error en el servidor: ${response.statusText}`);
+            }
+
+            const userData = await response.json();
+
+            if (!userData || (Array.isArray(userData) && userData.length === 0)) {
                 throw new Error("Credenciales de inicio de sesión inválidas.");
             }
 
-            // Step 2: Compare the provided password with the password stored in the database
-            // WARNING: This assumes a plaintext password column in your 'Usuarios' table.
-            // For production, passwords should ALWAYS be hashed (e.g., bcrypt) and compared securely.
-            // Current schema has 'pass' as BIGINT, so we attempt to parse the input password to a number.
-            console.warn("WARNING: Comparing plaintext numeric passwords directly is highly insecure. Please use hashed passwords for production.");
-            const numericPassword = parseInt(trimmedPassword, 10);
-            if (isNaN(numericPassword) || userData.pass !== numericPassword) {
+            // The API might return an array or a single object.
+            // Based on previous logic, we expect a user object or the first element of an array.
+            const userRecord = Array.isArray(userData) ? userData[0] : userData;
+
+            if (!userRecord) {
                 throw new Error("Credenciales de inicio de sesión inválidas.");
             }
 
-            // Step 3: If passwords match, fetch the full user profile
-            const profile = await fetchUserProfile(userData);
+            // Step 3: Fetch the full user profile (roles, permissions, etc.)
+            // Note: fetchUserProfile now uses the REST API.
+            const profile = await fetchUserProfile(userRecord);
             setUser(profile);
+            // Save session for persistence
+            localStorage.setItem('auth_user', JSON.stringify(profile));
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "Error de autenticación desconocido.";
             console.error("Error during custom login:", errorMessage);
             setUser(null);
-            throw error; // Re-throw to be caught by the Login component
+            throw error;
         }
     };
 
     const logout = async () => {
-        if (!supabase) return;
-        // For custom auth, simply clear local user state. No backend signOut needed.
+        // For custom auth, simply clear local user state and remove persisted session
         setUser(null); 
-        // Optionally, clear remembered username if it's considered part of "session" management for this custom flow
-        localStorage.removeItem('remembered_username'); // Changed from 'remembered_email'
+        localStorage.removeItem('remembered_username');
+        localStorage.removeItem('remembered_password');
+        localStorage.removeItem('auth_user');
     };
 
     const updateUser = useCallback((updates: Partial<User>) => {
         setUser(currentUser => {
             if (!currentUser) return null;
-            return { ...currentUser, ...updates };
+            const updatedUser = { ...currentUser, ...updates };
+            // Update persisted session
+            localStorage.setItem('auth_user', JSON.stringify(updatedUser));
+            return updatedUser;
         });
     }, []);
     
@@ -182,7 +147,11 @@ const AppContent: React.FC = () => {
     return (
         <AuthContext.Provider value={authContextValue}>
           <div className="bg-base-100 text-base-content min-h-screen">
-            {user ? <Layout /> : <Login />}
+            <Routes>
+                <Route path="/preview/reporte-visita/:id" element={<ReportPreviewPage type="visit" />} />
+                <Route path="/preview/reporte-servicio/:id" element={<ReportPreviewPage type="service" />} />
+                <Route path="/*" element={user ? <Layout /> : <Login />} />
+            </Routes>
           </div>
         </AuthContext.Provider>
     );
@@ -191,17 +160,13 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <SupabaseProvider>
-      <AiServiceProvider>
-        <ThemeProvider>
-          <NotificationProvider>
-            <ChatProvider>
-              <AppContent />
-            </ChatProvider>
-          </NotificationProvider>
-        </ThemeProvider>
-      </AiServiceProvider>
-    </SupabaseProvider>
+    <BrowserRouter>
+      <ThemeProvider>
+        <NotificationProvider>
+            <AppContent />
+        </NotificationProvider>
+      </ThemeProvider>
+    </BrowserRouter>
   );
 };
 

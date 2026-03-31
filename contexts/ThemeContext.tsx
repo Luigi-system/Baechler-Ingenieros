@@ -4,7 +4,6 @@ import React, { createContext, useState, useContext, useEffect, useMemo } from '
 import type { ThemeMode, ColorPalette } from '../types';
 import { COLOR_PALETTES, DEFAULT_PALETTE } from '../constants/themes';
 import { AuthContext } from './AuthContext';
-import { useSupabase } from './SupabaseContext';
 
 interface ThemeContextType {
   themeMode: ThemeMode;
@@ -27,11 +26,10 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-const DEFAULT_LOGO_URL = 'https://jhhlrndxepowacrndhni.supabase.co/storage/v1/object/public/assets/report-ai-logo.png';
+const DEFAULT_LOGO_URL = '/logo.png';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const auth = useContext(AuthContext);
-  const { supabase } = useSupabase();
 
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [currentPalette, setCurrentPalette] = useState<ColorPalette>(DEFAULT_PALETTE);
@@ -42,36 +40,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [logoColor, setLogoColor] = useState('#3b82f6');
   const [isLogoAnimated, setIsLogoAnimated] = useState<boolean>(false);
 
-  // Effect to fetch global branding settings once on app load
-  useEffect(() => {
-    const fetchGeneralBranding = async () => {
-        if (!supabase) return;
-
-        const { data, error } = await supabase
-            .from('Configuracion')
-            .select('value')
-            .eq('key', 'general_branding')
-            .is('id_usuario', null)
-            .maybeSingle();
-        
-        if (error) {
-            console.warn(`Could not fetch general branding settings: ${error.message}`);
-        } else if (data && data.value) {
-            try {
-                const settings = JSON.parse(data.value);
-                if (settings.app_title) setAppTitle(settings.app_title);
-                if (settings.logo_url) setLogoUrl(settings.logo_url);
-                if (settings.logo_font_size) setLogoFontSize(settings.logo_font_size);
-                if (settings.logo_font_family) setLogoFontFamily(settings.logo_font_family);
-                if (settings.logo_color) setLogoColor(settings.logo_color);
-                if (settings.is_logo_animated !== undefined) setIsLogoAnimated(settings.is_logo_animated);
-            } catch (e) {
-                console.error("Failed to parse general branding JSON:", e);
-            }
-        }
-    };
-    fetchGeneralBranding();
-  }, [supabase]);
 
   // Effect to load user-specific theme palette on login
   useEffect(() => {

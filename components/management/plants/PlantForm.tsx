@@ -2,23 +2,22 @@
 
 import React, { useState, useEffect } from 'react';
 import type { Plant, Company } from '../../../types';
-import { useSupabase } from '../../../contexts/SupabaseContext';
 import Spinner from '../../ui/Spinner';
+import SearchableSelect from '../../ui/SearchableSelect';
 
 interface PlantFormProps {
     plant: Plant | null;
-    onSave: (plant: Plant) => Promise<void> | void;
+    onSave: () => void;
     onCancel: () => void;
-    defaultCompanyId?: number; // New prop for default company
+    defaultCompanyId?: number;
 }
 
 const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel, defaultCompanyId }) => {
-    const { supabase } = useSupabase();
     const [formData, setFormData] = useState<Partial<Plant>>(plant || {
         nombre: '',
         direccion: '',
         estado: true,
-        id_empresa: defaultCompanyId, // Initialize with defaultCompanyId
+        id_empresa: defaultCompanyId,
     });
     const [companies, setCompanies] = useState<Company[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -26,20 +25,25 @@ const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel, defaultC
 
     useEffect(() => {
         const fetchCompanies = async () => {
-            if (!supabase) return;
             setIsLoadingCompanies(true);
-            const { data, error } = await supabase.from('Empresa').select('id, nombre');
-            if (!error && data) {
-                setCompanies(data as Company[]);
-                // Set default company if creating a new plant and defaultCompanyId is provided, or if no plant and companies exist
-                if (!plant && formData.id_empresa === undefined && (defaultCompanyId !== undefined || data.length > 0)) {
-                    setFormData(prev => ({ ...prev, id_empresa: defaultCompanyId || data[0]?.id }));
+            try {
+                const response = await fetch('https://app.lr-system.com/bi/empresas/getall');
+                if (!response.ok) throw new Error('Error al obtener empresas');
+                const data = await response.json();
+                const companiesList = Array.isArray(data) ? data : (data.data || []);
+                setCompanies(companiesList as Company[]);
+                
+                if (!plant && formData.id_empresa === undefined && (defaultCompanyId !== undefined || companiesList.length > 0)) {
+                    setFormData(prev => ({ ...prev, id_empresa: defaultCompanyId || companiesList[0]?.id }));
                 }
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setIsLoadingCompanies(false);
             }
-            setIsLoadingCompanies(false);
         };
         fetchCompanies();
-    }, [supabase, plant, defaultCompanyId, formData.id_empresa]);
+    }, [plant, defaultCompanyId]);
     
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -51,60 +55,113 @@ const PlantForm: React.FC<PlantFormProps> = ({ plant, onSave, onCancel, defaultC
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!supabase || !formData.nombre || !formData.id_empresa) {
+        if (!formData.nombre || !formData.id_empresa) {
             alert("Por favor, proporciona un nombre para la planta y selecciona una empresa.");
             return;
         }
 
         setIsSaving(true);
-        const payload = { ...formData, id_empresa: Number(formData.id_empresa) };
+        try {
+            const selectedCompany = companies.find(c => c.id === Number(formData.id_empresa));
+            
+            const url = plant 
+                ? `https://app.lr-system.com/bi/planta/update/${plant.id}`
+                : 'https://app.lr-system.com/bi/planta/create';
+            
+            const method = plant ? 'PUT' : 'POST';
+            
+            const payload = {
+                nombre: formData.nombre,
+                direccion: formData.direccion,
+                id_empresa: Number(formData.id_empresa),
+                nombreempresa: selectedCompany?.nombre || formData.empresa_nombre || plant?.empresa_nombre || '',
+                estado: !!formData.estado
+            };
 
-        // FIX: Chained .select().single() to the query builder before awaiting to get the saved record back.
-        const { data, error } = await (plant
-            ? supabase.from('Planta').update(payload).eq('id', plant.id)
-            : supabase.from('Planta').insert([payload])
-        ).select().single();
+            const response = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
 
-        setIsSaving(false);
-        if (error) {
-            alert(`Error: ${error.message}`);
-        } else if(data) {
-            await onSave(data as Plant);
+            if (!response.ok) throw new Error('Error al guardar la planta');
+            
+            onSave();
+        } catch (err: any) {
+            alert(`Error: ${err.message}`);
+        } finally {
+            setIsSaving(false);
         }
     };
 
-    if (isLoadingCompanies) return <div className="flex justify-center"><Spinner /></div>
+    if (isLoadingCompanies) return <div className="flex justify-center p-6"><Spinner /></div>
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label htmlFor="id_empresa" className="block text-sm font-medium">Empresa</label>
-                <select name="id_empresa" id="id_empresa" value={formData.id_empresa || ''} onChange={handleChange} required className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600">
-                    <option value="" disabled>Selecciona una empresa</option>
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                </select>
+                <label className="block text-xs font-bold text-neutral uppercase tracking-wider mb-1">Empresa Responsable</label>
+                <SearchableSelect
+                    options={companies.map(c => ({ id: c.id, label: c.nombre }))}
+                    value={formData.id_empresa}
+                    onChange={(id, label) => setFormData(prev => ({ ...prev, id_empresa: Number(id), empresa_nombre: label }))}
+                   placeholder="Escribe para buscar una empresa..."
+                />
             </div>
             <div>
-                <label htmlFor="nombre" className="block text-sm font-medium">Nombre de la Planta</label>
-                <input type="text" name="nombre" id="nombre" value={formData.nombre || ''} onChange={handleChange} required className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                <label htmlFor="nombre" className="block text-xs font-bold text-neutral uppercase tracking-wider mb-1">Nombre de la Sede / Planta</label>
+                <input 
+                    type="text" 
+                    name="nombre" 
+                    id="nombre" 
+                    placeholder="Ej: Planta Sur, Sede Principal..."
+                    value={formData.nombre || ''} 
+                    onChange={handleChange} 
+                    required 
+                    className="mt-1 block w-full px-3 py-2 text-sm bg-base-200 border border-base-border rounded-lg focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                />
             </div>
             <div>
-                <label htmlFor="direccion" className="block text-sm font-medium">Dirección</label>
-                <input type="text" name="direccion" id="direccion" value={formData.direccion || ''} onChange={handleChange} className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md dark:bg-gray-700 dark:border-gray-600" />
+                <label htmlFor="direccion" className="block text-xs font-bold text-neutral uppercase tracking-wider mb-1">Dirección Completa</label>
+                <input 
+                    type="text" 
+                    name="direccion" 
+                    id="direccion" 
+                    placeholder="Calle, número, ciudad..."
+                    value={formData.direccion || ''} 
+                    onChange={handleChange} 
+                    className="mt-1 block w-full px-3 py-2 text-sm bg-base-200 border border-base-border rounded-lg focus:ring-1 focus:ring-primary focus:border-primary outline-none transition-all"
+                />
             </div>
-             <div className="flex items-center">
-                <input type="checkbox" name="estado" id="estado" checked={formData.estado || false} onChange={handleChange} className="h-4 w-4 text-primary border-gray-300 rounded focus:ring-primary" />
-                <label htmlFor="estado" className="ml-2 block text-sm">Activo</label>
+             <div className="flex items-center gap-3 p-3 bg-base-300/30 rounded-lg border border-base-border border-dashed">
+                <input 
+                    type="checkbox" 
+                    name="estado" 
+                    id="estado" 
+                    checked={formData.estado || false} 
+                    onChange={handleChange} 
+                    className="h-4 w-4 text-primary bg-base-200 border-base-border rounded focus:ring-primary" 
+                />
+                <label htmlFor="estado" className="text-sm font-medium text-base-content select-none">Estado Operativo (Activo)</label>
             </div>
-            <div className="flex justify-end pt-4 space-x-2">
-                <button type="button" onClick={onCancel} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">Cancelar</button>
-                <button type="submit" disabled={isSaving} className="bg-primary text-white py-2 px-4 rounded-lg hover:bg-primary-dark transition-colors disabled:bg-primary/50 flex items-center">
-                    {isSaving && <Spinner />}
-                    {isSaving ? 'Guardando...' : 'Guardar Planta'}
+            <div className="flex justify-end pt-4 space-x-3">
+                <button 
+                    type="button" 
+                    onClick={onCancel} 
+                    className="px-4 py-2 text-sm font-medium text-neutral hover:text-base-content hover:bg-base-300 rounded-lg transition-colors"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    type="submit" 
+                    disabled={isSaving} 
+                    className="bg-primary text-white py-2 px-6 rounded-lg hover:bg-primary-focus transition-all disabled:opacity-50 flex items-center shadow-md active:scale-95 font-semibold"
+                >
+                    {isSaving && <Spinner className="h-4 w-4 mr-2" />}
+                    {isSaving ? 'Guardando...' : plant ? 'Actualizar Planta' : 'Registrar Planta'}
                 </button>
             </div>
         </form>
     );
 };
 
-export default PlantForm;
+export default PlantForm;

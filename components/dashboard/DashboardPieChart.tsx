@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
+import ReactECharts from 'echarts-for-react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface ChartData {
     name: string;
@@ -11,42 +12,76 @@ interface DashboardPieChartProps {
     data: ChartData[];
 }
 
-const COLORS = ['var(--color-success)', 'var(--color-warning)', 'var(--color-info)', 'var(--color-accent)'];
-
 const DashboardPieChart: React.FC<DashboardPieChartProps> = ({ data }) => {
-  if (!data || data.length === 0) {
-      return <div className="flex items-center justify-center h-full text-sm text-neutral">No hay datos disponibles para mostrar.</div>;
-  }
-  
-  return (
-    <ResponsiveContainer width="100%" height={250}>
-      <PieChart>
-        <Pie 
-            data={data} 
-            dataKey="value" 
-            nameKey="name" 
-            cx="50%" 
-            cy="50%" 
-            outerRadius={80} 
-            labelLine={false}
-            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-                const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-                return (
-                    <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12px" fontWeight="bold">
-                        {`${(percent * 100).toFixed(0)}%`}
-                    </text>
-                );
-            }}
-        >
-          {data.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-        </Pie>
-        <Tooltip contentStyle={{ backgroundColor: 'var(--color-base-200)', border: '1px solid var(--color-base-border)' }} />
-        <Legend />
-      </PieChart>
-    </ResponsiveContainer>
-  );
+    const { themeMode } = useTheme();
+    const isDark = themeMode === 'dark';
+
+    if (!data || data.length === 0) {
+        return <div className="flex items-center justify-center h-full text-sm text-neutral">No hay datos disponibles para mostrar.</div>;
+    }
+
+    const option = {
+        backgroundColor: 'transparent',
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+            borderColor: isDark ? '#4B5563' : '#E5E7EB',
+            textStyle: { color: isDark ? '#F3F4F6' : '#111827' },
+            padding: [10, 14],
+            borderRadius: 8,
+            formatter: '{b}: <span style="font-weight:bold">{c}</span> ({d}%)'
+        },
+        legend: {
+            bottom: '0%',
+            left: 'center',
+            textStyle: { color: isDark ? '#9CA3AF' : '#4B5563', fontSize: 11 },
+            icon: 'circle',
+            itemGap: 15
+        },
+        series: [
+            {
+                name: 'Estado de Reportes',
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                itemStyle: {
+                    borderRadius: 10,
+                    borderColor: isDark ? '#111827' : '#fff',
+                    borderWidth: 2
+                },
+                label: {
+                    show: false,
+                    position: 'center'
+                },
+                emphasis: {
+                    label: {
+                        show: true,
+                        fontSize: 14,
+                        fontWeight: 'bold',
+                        color: isDark ? '#F3F4F6' : '#111827'
+                    }
+                },
+                labelLine: {
+                    show: false
+                },
+                data: data.map((item, index) => ({
+                    ...item,
+                    itemStyle: {
+                        color: ['#10b981', '#f59e0b', '#0ea5e9', '#8b5cf6'][index % 4]
+                    }
+                }))
+            }
+        ]
+    };
+
+    return (
+        <ReactECharts 
+            option={option} 
+            style={{ height: '250px', width: '100%' }}
+            notMerge={true}
+            lazyUpdate={true}
+        />
+    );
 };
 
 export default DashboardPieChart;

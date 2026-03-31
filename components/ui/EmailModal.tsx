@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Modal from './Modal';
 import Spinner from './Spinner';
-import { useSupabase } from '../../contexts/SupabaseContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { generateServiceReport, generateVisitReport } from '../../services/pdfGenerator';
+import { pdf } from '@react-pdf/renderer';
+import ServiceReportPdf from '../reports/ServiceReportPdf';
+import VisitReportPdf from '../reports/VisitReportPdf';
+import type { ServiceReport, VisitReport } from '../../types';
 import { SendIcon, PaperclipIcon, XIcon, UserCircleIcon, SearchIcon } from './Icons';
 import type { User, Supervisor, EmailSettings } from '../../types';
 
@@ -28,7 +30,6 @@ interface EmailModalProps {
 }
 
 const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, reportType }) => {
-    const { supabase } = useSupabase();
     const { logoUrl } = useTheme();
 
     // Form state
@@ -56,29 +57,32 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
     // Fetch potential recipients (Users, Supervisors)
     useEffect(() => {
         const fetchRecipients = async () => {
-            if (!supabase) return;
             const combined: Recipient[] = [];
             
-            const { data: users } = await supabase.from('Usuarios').select('nombres, email');
-            if (users) {
-                combined.push(...users.filter(u => u.email).map(u => ({ name: u.nombres, email: u.email!, type: 'user' as const })));
-            }
+            try {
+                const [userRes, supervisorRes] = await Promise.all([
+                    fetch('https://app.lr-system.com/bi/usuarios/getall').then(r => r.json()),
+                    fetch('https://app.lr-system.com/bi/encargado/getall').then(r => r.json()),
+                ]);
 
-            const { data: supervisors } = await supabase.from('Encargado').select('nombre, apellido, email');
-            if (supervisors) {
-                combined.push(...supervisors.filter(s => s.email).map(s => ({ name: `${s.nombre} ${s.apellido || ''}`.trim(), email: s.email!, type: 'supervisor' as const })));
+                const users = Array.isArray(userRes) ? userRes : (userRes.data || []);
+                combined.push(...users.filter((u: any) => u.email).map((u: any) => ({ name: u.nombres, email: u.email!, type: 'user' as const })));
+
+                const supervisors = Array.isArray(supervisorRes) ? supervisorRes : (supervisorRes.data || []);
+                combined.push(...supervisors.filter((s: any) => s.email).map((s: any) => ({ name: `${s.nombres} ${s.apellidos || ''}`.trim(), email: s.email!, type: 'supervisor' as const })));
+                
+                const uniqueRecipients = Array.from(new Map(combined.map(item => [item.email, item])).values());
+                setAllPossibleRecipients(uniqueRecipients);
+            } catch (err) {
+                console.error("Error fetching recipients:", err);
             }
-            
-            const uniqueRecipients = Array.from(new Map(combined.map(item => [item.email, item])).values());
-            setAllPossibleRecipients(uniqueRecipients);
         };
         fetchRecipients();
-    }, [supabase]);
+    }, []);
 
     // Main effect to load report data, generate PDF, and fetch email config when modal opens
     useEffect(() => {
-        if (!isOpen || !reportId || !supabase) {
-            // Reset state when modal is closed or not ready
+        if (!isOpen || !reportId) {
             setRecipients([]); setSubject(''); setBody(''); setAttachment(null); setIsLoadingPdf(false); setFeedback(null);
             return;
         }
@@ -89,53 +93,60 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
             setConfigLoaded(false);
 
             try {
-                // Fetch email settings, report data, and supervisors in parallel
-                const tableName = reportType === 'service' ? 'Reporte_Servicio' : 'Reporte_Visita';
-                const [emailSettingsRes, reportRes, supervisorsRes] = await Promise.all([
-                    supabase.from('Configuracion').select('value').eq('key', 'email_settings').is('id_usuario', null).maybeSingle(),
-                    supabase.from(tableName).select('*').eq('id', reportId).single(),
-                    supabase.from('Encargado').select('nombre, apellido, email'),
+                const reportEndpoint = reportType === 'service' ? 'reporte-servicio' : 'reporte-visita';
+                const [reportData, supervisorRes] = await Promise.all([
+                    fetch(`https://app.lr-system.com/bi/${reportEndpoint}/get/${reportId}`).then(r => r.json()),
+                    fetch('https://app.lr-system.com/bi/encargado/getall').then(r => r.json()),
                 ]);
 
-                // Process email settings
-                if (emailSettingsRes.error) {
-                    console.warn("Could not fetch email settings, using defaults.", emailSettingsRes.error.message);
-                    setFeedback({ type: 'info', message: 'Usando configuración de correo por defecto. Puede cambiarla en Ajustes > Integraciones.' });
-                } else if (emailSettingsRes.data?.value) {
-                    setEmailConfig({ ...DEFAULT_EMAIL_SETTINGS, ...JSON.parse(emailSettingsRes.data.value as string) });
-                } else {
-                     setFeedback({ type: 'info', message: 'No se encontró configuración de correo. Puede añadirla en Ajustes > Integraciones.' });
-                }
+                setEmailConfig(DEFAULT_EMAIL_SETTINGS); // Fallback to default
                 setConfigLoaded(true);
 
-                // Process report data
-                if (reportRes.error) throw new Error(`Error al cargar el reporte: ${reportRes.error.message}`);
-                const reportData = reportRes.data;
-
-                // Pre-fill recipient by finding a match in the supervisor list
-                if (reportData.encargado_nombre && supervisorsRes.data) {
-                    const matchingSupervisor = supervisorsRes.data.find(s => 
-                        `${s.nombre} ${s.apellido || ''}`.trim().toLowerCase() === reportData.encargado_nombre.trim().toLowerCase() && s.email
+                if (reportData.encargado_nombre && supervisorRes) {
+                    const supervisors = Array.isArray(supervisorRes) ? supervisorRes : (supervisorRes.data || []);
+                    const matchingSupervisor = supervisors.find((s: any) => 
+                        `${s.nombres} ${s.apellidos || ''}`.trim().toLowerCase() === reportData.encargado_nombre.trim().toLowerCase() && s.email
                     );
                     if (matchingSupervisor) {
-                        const supervisorRecipient: Recipient = {
+                        setRecipients([{
                             email: matchingSupervisor.email!,
                             name: reportData.encargado_nombre,
                             type: 'supervisor' as const,
-                        };
-                        setRecipients([supervisorRecipient]);
+                        }]);
                     }
                 }
 
-                // Generate PDF
-                const generator = reportType === 'service' ? generateServiceReport : generateVisitReport;
-                const pdfDataUri = await generator(reportData as any, logoUrl, 'datauristring');
-                
                 const reportCode = reportData.codigo || reportId;
                 const filename = `reporte-${reportType}-${reportCode}.pdf`;
 
-                if (pdfDataUri && (pdfDataUri as string).includes('base64,')) {
-                    const base64Content = (pdfDataUri as string).split('base64,')[1];
+                const pdfBlob = await pdf(
+                    reportType === 'service' ? (
+                        <ServiceReportPdf 
+                            report={reportData as ServiceReport} 
+                            logoUrl={logoUrl || undefined} 
+                            serial={String(reportCode)} 
+                        />
+                    ) : (
+                        <VisitReportPdf 
+                            report={reportData as VisitReport} 
+                            logoUrl={logoUrl || undefined} 
+                        />
+                    )
+                ).toBlob();
+                
+                const base64Promise = new Promise<string | null>((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const res = reader.result as string;
+                        resolve(res.split('base64,')[1]);
+                    };
+                    reader.onerror = () => resolve(null);
+                    reader.readAsDataURL(pdfBlob);
+                });
+                
+                const base64Content = await base64Promise;
+
+                if (base64Content) {
                     setAttachment({ filename, content: base64Content });
                     
                     const reportTitle = reportType === 'service' ? 'Servicio' : 'Visita';
@@ -143,7 +154,7 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
                     const reportDate = reportData.fecha || (reportData.created_at ? new Date(reportData.created_at).toLocaleDateString('es-ES') : 'N/A');
                     setBody(`Estimado(a),\n\nAdjunto encontrará el reporte de ${reportTitle} con código ${reportCode} realizado en la fecha ${reportDate}.\n\nSaludos cordiales.`);
                 } else {
-                    throw new Error("La generación del PDF no devolvió un Data URI válido.");
+                    throw new Error("La generación del PDF no pudo ser procesada.");
                 }
 
             } catch (err: any) {
@@ -154,7 +165,7 @@ const EmailModal: React.FC<EmailModalProps> = ({ isOpen, onClose, reportId, repo
         };
 
         loadModalData();
-    }, [isOpen, reportId, reportType, supabase, logoUrl]);
+    }, [isOpen, reportId, reportType, logoUrl]);
     
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
