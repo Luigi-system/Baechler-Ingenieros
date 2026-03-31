@@ -6,6 +6,7 @@ import type { VisitReport } from '../../types';
 const styles = StyleSheet.create({
   page: {
     padding: 15,
+    paddingBottom: 120, // Espacio para el footer absoluto
     fontSize: 9,
     fontFamily: 'Helvetica',
     lineHeight: 1.4,
@@ -128,12 +129,15 @@ const styles = StyleSheet.create({
 
   // Footer
   footer: {
-    marginTop: 20,
+    position: 'absolute',
+    bottom: 25,
+    left: 20,
+    right: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
-    borderTop: '0.5px solid #EEE',
-    paddingTop: 10,
+    borderTop: '0.5px solid #000',
+    paddingTop: 8,
   },
   footerCol: {
     width: '48%',
