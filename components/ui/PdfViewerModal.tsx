@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { XIcon } from './Icons';
+import PdfViewer from './PdfViewer';
 
 interface PdfViewerModalProps {
   pdfDataUri: string;
@@ -23,12 +24,8 @@ const PdfViewerModal: React.FC<PdfViewerModalProps> = ({ pdfDataUri, onClose }) 
             <XIcon className="h-6 w-6" />
           </button>
         </div>
-        <div className="p-2 flex-grow">
-            <iframe
-                src={pdfDataUri}
-                title="PDF Viewer"
-                className="w-full h-full border-0 rounded-b-lg"
-            />
+        <div className="p-2 flex-grow overflow-hidden">
+            <PdfViewer file={pdfDataUri} className="border-0 rounded-b-lg" />
         </div>
       </div>
     </div>

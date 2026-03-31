@@ -111,6 +111,9 @@ export interface VisitReport {
     encargado_nombre?: string;
     encargado_cel?: string;
     foto_firma?: string | null;
+    fecha?: string; // YYYY-MM-DD
+    hora_entrada?: string; // HH:MM
+    hora_salida?: string; // HH:MM
 
     // Datos técnicos
     maquinas?: string | string[];

@@ -19,10 +19,12 @@ import AiHeaderNotice from '../reports/AiHeaderNotice';
 import CustomizationSettings from '../settings/CustomizationSettings';
 import UserManagement from '../settings/UserManagement';
 import ProfileSettings from '../settings/ProfileSettings';
+import DomainQrModal from '../ui/DomainQrModal';
 
 const Layout: React.FC = () => {
   const [activePage, setActivePage] = useState('dashboard');
   const [editingReportId, setEditingReportId] = useState<number | null>(null);
+  const [isDomainQrModalOpen, setIsDomainQrModalOpen] = useState(false);
 
   // State for sidebars (mobile and desktop)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -134,20 +136,27 @@ const Layout: React.FC = () => {
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         isCollapsed={isDesktopSidebarCollapsed}
         setIsCollapsed={setIsDesktopSidebarCollapsed}
+        onShowDomainQr={() => setIsDomainQrModalOpen(true)}
       />
       <main className="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out">
         <Header 
             onNavigateToProfile={() => navigateTo('settings-profile')} 
             onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
+            onEditReport={handleEditReport}
             title={pageTitle}
             subtitle={pageSubtitle}
         >
             { (activePage.startsWith('create-report') || activePage.startsWith('edit-report')) && <AiHeaderNotice onFileSelected={handleAiFileSelected} isProcessing={isAiProcessing} /> }
         </Header>
-       <div className="flex-1 p-2 md:p-4 overflow-hidden">
+        <div className="flex-1 p-2 md:p-4 overflow-hidden">
           {renderContent()}
         </div>
       </main>
+
+      <DomainQrModal 
+        isOpen={isDomainQrModalOpen} 
+        onClose={() => setIsDomainQrModalOpen(false)} 
+      />
     </div>
   );
 };

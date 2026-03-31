@@ -12,6 +12,7 @@ import Modal from '../ui/Modal';
 import CompanyForm from '../management/companies/CompanyForm';
 import PlantForm from '../management/plants/PlantForm';
 import SupervisorForm from '../management/supervisors/SupervisorForm';
+import PdfViewer, { PdfViewerHandle } from '../ui/PdfViewer';
 import MachineForm from '../management/machines/MachineForm';
 
 interface ReportFormProps {
@@ -97,6 +98,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
 
     const [isDataLoading, setIsDataLoading] = useState(true);
     const [isSimulatorVisible, setIsSimulatorVisible] = useState(true);
+    const pdfViewerRef = useRef<PdfViewerHandle>(null);
     const [pdfPreviewUri, setPdfPreviewUri] = useState<string | null>(null);
     const [isPdfLoading, setIsPdfLoading] = useState(false);
     const debounceTimeout = useRef<number | null>(null);
@@ -196,27 +198,44 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
             setIsDataLoading(true);
             const { companies, plants, supervisors, machines } = await fetchDropdownData();
 
-            if (reportId) {
+            const cleanReportId = reportId ? String(reportId).replace('#', '') : null;
+            if (cleanReportId) {
                 try {
-                    const response = await fetch(`https://app.lr-system.com/bi/reporte-visita/get/${reportId}`);
+                    const response = await fetch(`https://app.lr-system.com/bi/reporte-visita/get/${cleanReportId}`);
                     if (!response.ok) throw new Error('Error al obtener reporte');
-                    const reportData = await response.json();
+                    const jsonResponse = await response.json();
+                    
+                    const reportData = Array.isArray(jsonResponse) ? jsonResponse[0] : (jsonResponse.data || jsonResponse);
                     
                     if (reportData) {
-                        const company = companies.find(c => (c.nombre || '').trim().toLowerCase() === (reportData.empresa_nombre || '').trim().toLowerCase());
-                        const plant = company ? plants.find(p => (p.nombre || '').trim().toLowerCase() === (reportData.planta_nombre || reportData.empresa_planta || '').trim().toLowerCase()) : undefined;
+                        // Normalize field names from API if needed
+                        const empresaNombre = reportData.empresa_nombre || reportData.empresa || reportData.nombre_empresa;
+                        const plantaNombre = reportData.empresa_planta || reportData.planta_nombre || reportData.planta || reportData.nombre_planta;
+                        const encargadoNombre = reportData.encargado_nombre || reportData.encargado || reportData.nombre_encargado;
+
+                        const company = companies.find(c => (c.nombre || '').trim().toLowerCase() === (empresaNombre || '').trim().toLowerCase());
+                        const plant = company ? plants.find(p => (p.nombre || '').trim().toLowerCase() === (plantaNombre || '').trim().toLowerCase()) : undefined;
                         const supervisor = (company && plant) ? supervisors.find(s => 
                             (s.nombreEmpresa || '').trim().toLowerCase() === (company.nombre || '').trim().toLowerCase() && 
                             (s.nombrePlanta || '').trim().toLowerCase() === (plant.nombre || '').trim().toLowerCase() &&
-                            `${s.nombres || ''} ${s.apellidos || ''}`.trim().toLowerCase() === (reportData.encargado_nombre || '').trim().toLowerCase()
+                            `${s.nombres || ''} ${s.apellidos || ''}`.trim().toLowerCase() === (encargadoNombre || '').trim().toLowerCase()
                         ) : undefined;
 
                         const formDataToSet: Partial<VisitReport> = {
                             ...reportData,
-                            estado: reportData.estado === 'Finalizado' || reportData.estado === 1 || reportData.estado === true ? 1 : 0,
+                            empresa_nombre: empresaNombre,
+                            empresa_planta: plantaNombre,
+                            encargado_nombre: encargadoNombre,
+                            estado: reportData.estado === 'Finalizado' || reportData.estado === 1 || reportData.estado === '1' || reportData.estado === true ? 1 : 0,
                             form_id_empresa: company?.id,
                             form_id_planta: plant?.id,
                             form_id_encargado: supervisor?.id,
+                            // Checklist normalization
+                            voltaje_establecido: Boolean(reportData.voltaje_establecido),
+                            linea_a_tierra: Boolean(reportData.linea_a_tierra || reportData.linea_tierra),
+                            presurizacion_de_cabezal: Boolean(reportData.presurizacion_de_cabezal),
+                            transformador_de_aislamiento: Boolean(reportData.transformador_de_aislamiento),
+                            limpieza_cabezal: Boolean(reportData.limpieza_cabezal),
                         };
                         
                         formDataToSet.fotos_observaciones = reportData.fotos_observaciones ? toDataURL(reportData.fotos_observaciones) : null;
@@ -225,13 +244,14 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
 
                         setFormData(formDataToSet);
 
-                        if (company) setCompanySearchText(company.nombre);
-                        if (plant) setPlantSearchText(plant.nombre);
-                        if (supervisor) setSupervisorSearchText(`${supervisor.nombres} ${supervisor.apellidos || ''}`);
+                        if (empresaNombre) setCompanySearchText(empresaNombre);
+                        if (plantaNombre) setPlantSearchText(plantaNombre);
+                        if (encargadoNombre) setSupervisorSearchText(encargadoNombre);
                         
                         if (reportData.maquinas) {
                             const maquinasList = Array.isArray(reportData.maquinas) ? reportData.maquinas : [reportData.maquinas];
                             const parsedMaquinas = maquinasList.map((maquinaString: string) => {
+                                if (typeof maquinaString !== 'string') return null;
                                 const [machinePart, ...obsParts] = maquinaString.split(': ');
                                 const observaciones = obsParts.join(': ');
                                 const serie = machinePart.split(' - ')[0];
@@ -663,7 +683,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                             <div onBlur={() => setTimeout(() => setShowCompanySuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="company-search" type="text" value={companySearchText} onChange={(e) => setCompanySearchText(e.target.value)} onFocus={() => setShowCompanySuggestions(true)} placeholder="Escribir o buscar empresa..." className="w-full input-style" autoComplete="off" />
+                                        <input id="company-search" type="text" value={companySearchText} onChange={(e) => { const val = e.target.value; setCompanySearchText(val); setFormData(prev => ({ ...prev, empresa_nombre: val })); }} onFocus={() => setShowCompanySuggestions(true)} placeholder="Escribir o buscar empresa..." className="w-full input-style" autoComplete="off" />
                                         {showCompanySuggestions && companySuggestions.length > 0 && (
                                             <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {companySuggestions.map(c => <li key={c.id} onMouseDown={() => handleSelectCompany(c)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}
@@ -680,7 +700,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                             <div onBlur={() => setTimeout(() => setShowPlantSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => setPlantSearchText(e.target.value)} onFocus={() => setShowPlantSuggestions(true)} disabled={!formData.form_id_empresa} placeholder="Seleccionar Planta" className="w-full input-style" autoComplete="off" />
+                                        <input id="plant-search" type="text" value={plantSearchText} onChange={(e) => { const val = e.target.value; setPlantSearchText(val); setFormData(prev => ({ ...prev, empresa_planta: val })); }} onFocus={() => setShowPlantSuggestions(true)} disabled={!formData.form_id_empresa} placeholder="Seleccionar Planta" className="w-full input-style" autoComplete="off" />
                                         {showPlantSuggestions && plantSuggestions.length > 0 && (
                                             <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {plantSuggestions.map(p => <li key={p.id} onMouseDown={() => handleSelectPlant(p)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{p.nombre}</li>)}
@@ -701,7 +721,7 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                             <div onBlur={() => setTimeout(() => setShowSupervisorSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formData.form_id_planta} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
+                                        <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => { const val = e.target.value; setSupervisorSearchText(val); setFormData(prev => ({ ...prev, encargado_nombre: val })); }} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formData.form_id_planta} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
                                         {showSupervisorSuggestions && supervisorSuggestions.length > 0 && (
                                             <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {supervisorSuggestions.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombres} {s.apellidos}</li>)}
@@ -818,11 +838,30 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                 {isSimulatorVisible ? (
                     <>
                         <div className="flex-shrink-0 p-4 bg-base-200 border-b border-base-border flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary lg:hidden">
-                                    <ViewIcon className="h-5 w-5" />
+                            <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary lg:hidden">
+                                        <ViewIcon className="h-5 w-5" />
+                                    </div>
+                                    <span className="font-bold text-base uppercase tracking-wider">Vista Previa PDF</span>
                                 </div>
-                                <span className="font-bold text-base uppercase tracking-wider">Vista Previa PDF</span>
+
+                                {/* Header PDF Controls - Externalized from PdfViewer */}
+                                {pdfPreviewUri && (
+                                    <div className="hidden sm:flex items-center gap-1.5 p-1 bg-base-300 rounded-xl border border-base-border">
+                                        <button type="button" onClick={() => pdfViewerRef.current?.zoomOut()} className="p-1 px-2 hover:bg-base-100 rounded-lg text-base-content transition-all border border-transparent hover:border-base-border shadow-sm active:scale-95" title="Reducir">
+                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M20 12H4" /></svg>
+                                        </button>
+                                        <button type="button" onClick={() => pdfViewerRef.current?.zoomIn()} className="p-1 px-2 hover:bg-base-100 rounded-lg text-base-content transition-all border border-transparent hover:border-base-border shadow-sm active:scale-95" title="Aumentar">
+                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg>
+                                        </button>
+                                        <div className="w-px h-6 bg-base-border mx-1"></div>
+                                        <button type="button" onClick={() => pdfViewerRef.current?.download()} className="flex items-center gap-2 px-3 py-1 bg-primary text-primary-content rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary-focus transition-all active:scale-95 shadow-lg shadow-primary/20" title="Descargar PDF">
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                            <span className="hidden lg:inline">Descargar</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <button 
                                 onClick={() => setIsSimulatorVisible(false)} 
@@ -833,9 +872,15 @@ const VisitReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialA
                             </button>
                         </div>
                         <div className="flex-grow p-1 md:p-3 relative bg-base-300">
-                            {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 backdrop-blur-sm"><Spinner className="h-10 w-10 text-primary" /></div>}
+                            {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 backdrop-blur-sm transition-all"><Spinner className="h-10 w-10 text-primary" /></div>}
                             {pdfPreviewUri ? (
-                                <iframe src={pdfPreviewUri} title="PDF Preview" className="w-full h-full border-0 rounded-lg shadow-inner bg-white"/>
+                                <PdfViewer 
+                                    ref={pdfViewerRef}
+                                    file={pdfPreviewUri} 
+                                    showAllPages={false}
+                                    hideToolbar={true}
+                                    className="rounded-lg shadow-inner bg-white" 
+                                />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center text-neutral p-10 text-center space-y-4">
                                     <div className="p-4 bg-base-200 rounded-full"><SparklesIcon className="h-10 w-10 opacity-30" /></div>

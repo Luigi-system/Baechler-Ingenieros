@@ -224,14 +224,17 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>DATOS DEL CLIENTE Y VISITA</Text>
         </View>
-        <View style={styles.tableRow}>
+        <View style={[styles.tableRow]}>
           <View style={styles.tableCol}>
             <Text style={styles.label}>CLIENTE:</Text>
             <Text style={styles.value}>{report.empresa_nombre || ''}</Text>
           </View>
           <View style={[styles.tableCol, styles.lastCol]}>
             <Text style={styles.label}>FECHA:</Text>
-            <Text style={styles.value}>{report.created_at ? new Date(report.created_at).toLocaleDateString() : ''}</Text>
+            <Text style={styles.value}>{
+              report.fecha ? report.fecha : 
+              report.created_at ? new Date(report.created_at).toLocaleDateString() : ''
+            }</Text>
           </View>
         </View>
         <View style={styles.tableRow}>
@@ -242,6 +245,35 @@ const VisitReportPdf = ({ report, logoUrl, serial }: Props) => {
           <View style={[styles.tableCol, styles.lastCol]}>
             <Text style={styles.label}>TÉCNICO:</Text>
             <Text style={styles.value}>{report.usuario_nombre || ''}</Text>
+          </View>
+        </View>
+
+        {/* CHECKLIST TECNICO */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>CONFORMIDAD TÉCNICA / CHECKLIST</Text>
+        </View>
+        <View style={styles.tableRow}>
+          <View style={[styles.tableCol, { borderRightWidth: 1 }]}>
+            <Text style={styles.label}>VOLTAJE:</Text>
+            <Text style={styles.value}>{report.voltaje_establecido ? ' [X] ' : ' [ ] '}</Text>
+          </View>
+          <View style={[styles.tableCol, { borderRightWidth: 1 }]}>
+            <Text style={styles.label}>LÍNEA TIERRA:</Text>
+            <Text style={styles.value}>{report.linea_a_tierra ? ' [X] ' : ' [ ] '}</Text>
+          </View>
+          <View style={[styles.tableCol, styles.lastCol]}>
+             <Text style={styles.label}>LIMPIEZA:</Text>
+             <Text style={styles.value}>{report.limpieza_cabezal ? ' [X] ' : ' [ ] '}</Text>
+          </View>
+        </View>
+        <View style={styles.tableRow}>
+          <View style={[styles.tableCol, { borderRightWidth: 1 }]}>
+            <Text style={styles.label}>PRESURIZACIÓN:</Text>
+            <Text style={styles.value}>{report.presurizacion_de_cabezal ? ' [X] ' : ' [ ] '}</Text>
+          </View>
+          <View style={[styles.tableCol, styles.lastCol, { flex: 2 }]}>
+            <Text style={styles.label}>TRANSF. AISLAMIENTO:</Text>
+            <Text style={styles.value}>{report.transformador_de_aislamiento ? ' [X] ' : ' [ ] '}</Text>
           </View>
         </View>
 

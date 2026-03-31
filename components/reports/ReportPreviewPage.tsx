@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { pdf, PDFViewer } from '@react-pdf/renderer';
+import { pdf, usePDF } from '@react-pdf/renderer';
 import VisitReportPdf from './VisitReportPdf';
 import ServiceReportPdf from './ServiceReportPdf';
 import SignaturePad from '../ui/SignaturePad';
 import Spinner from '../ui/Spinner';
+import PdfViewer from '../ui/PdfViewer';
 import { 
     UserIcon, IdCardIcon, PhoneIcon, CheckCircleIcon, 
     EditIcon, ViewIcon, SearchIcon, SparklesIcon, PlusIcon
@@ -28,6 +29,26 @@ const ReportPreviewPage: React.FC<ReportPreviewPageProps> = ({ type }) => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSigned, setIsSigned] = useState(false);
     
+    // PDF instance management
+    const [instance, updateInstance] = usePDF({ 
+        document: report ? (
+            type === 'visit' 
+                ? <VisitReportPdf report={{ ...report, id: Number(id) }} />
+                : <ServiceReportPdf report={{ ...report, id: Number(id) }} serial={report.codigo || String(id).padStart(4, '0')} />
+        ) : <></>
+    });
+
+    // Update PDF whenever report data changes
+    useEffect(() => {
+        if (report) {
+            updateInstance(
+                type === 'visit' 
+                    ? <VisitReportPdf report={{ ...report, id: Number(id) }} />
+                    : <ServiceReportPdf report={{ ...report, id: Number(id) }} serial={report.codigo || String(id).padStart(4, '0')} />
+            );
+        }
+    }, [report, type, id, updateInstance]);
+
     // Registration form state
     const [regData, setRegData] = useState({
         nombres: '',
@@ -349,12 +370,18 @@ const ReportPreviewPage: React.FC<ReportPreviewPageProps> = ({ type }) => {
                         </div>
 
                         <div className="flex-1 bg-base-300 rounded-2xl overflow-hidden border border-base-border shadow-inner">
-                            <PDFViewer width="100%" height="100%" showToolbar={true} className="border-none rounded-2xl">
-                                {type === 'visit' 
-                                    ? <VisitReportPdf report={{ ...report, id: Number(id) }} />
-                                    : <ServiceReportPdf report={{ ...report, id: Number(id) }} serial={report.codigo || String(id).padStart(4, '0')} />
-                                }
-                            </PDFViewer>
+                            {instance.loading ? (
+                                <div className="h-full w-full flex flex-col items-center justify-center p-20 gap-4">
+                                    <Spinner className="h-10 w-10 text-primary" />
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-neutral animate-pulse">Generando Documento...</p>
+                                </div>
+                            ) : instance.blob ? (
+                                <PdfViewer file={instance.blob} className="border-none rounded-2xl" />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center p-20 text-error font-bold uppercase text-xs">
+                                    Error al generar previsualización
+                                </div>
+                            )}
                         </div>
 
                         {pageState === 'SIGNING' && (

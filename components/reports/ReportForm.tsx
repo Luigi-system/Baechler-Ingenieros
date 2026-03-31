@@ -18,6 +18,7 @@ import { AuthContext } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { pdf } from '@react-pdf/renderer';
 import ServiceReportPdf from './ServiceReportPdf';
+import PdfViewer, { PdfViewerHandle } from '../ui/PdfViewer';
 import type { ServiceReport, Company, Plant, Machine, Supervisor } from '../../types';
 import { useFormDraft } from '../../hooks/useFormDraft';
 
@@ -132,6 +133,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
 
     // Simulator States
     const [isSimulatorVisible, setIsSimulatorVisible] = useState(true);
+    const pdfViewerRef = useRef<PdfViewerHandle>(null);
     const [pdfPreviewUri, setPdfPreviewUri] = useState<string | null>(null);
     const [isPdfLoading, setIsPdfLoading] = useState(false);
     const debounceTimeout = useRef<number | null>(null);
@@ -744,7 +746,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                             <div onBlur={() => setTimeout(() => setShowCompanySuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="company-search" type="text" value={companySearchText} onChange={(e) => setCompanySearchText(e.target.value)} onFocus={() => setShowCompanySuggestions(true)} placeholder="Escribir o buscar empresa..." className="w-full input-style" autoComplete="off" />
+                                        <input id="company-search" type="text" value={companySearchText} onChange={(e) => { const val = e.target.value; setCompanySearchText(val); setFormData(prev => ({ ...prev, empresa_nombre: val })); }} onFocus={() => setShowCompanySuggestions(true)} placeholder="Escribir o buscar empresa..." className="w-full input-style" autoComplete="off" />
                                         {showCompanySuggestions && companySuggestions.length > 0 && (
                                             <ul className="absolute z-20 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {companySuggestions.map(c => <li key={c.id} onMouseDown={() => handleSelectCompany(c)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{c.nombre}</li>)}
@@ -784,7 +786,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                             <div onBlur={() => setTimeout(() => setShowSupervisorSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => setSupervisorSearchText(e.target.value)} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formInternalState.selectedPlantId} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
+                                        <input id="supervisor-search" type="text" value={supervisorSearchText} onChange={(e) => { const val = e.target.value; setSupervisorSearchText(val); setFormData(prev => ({ ...prev, encargado_nombre: val })); }} onFocus={() => setShowSupervisorSuggestions(true)} disabled={!formInternalState.selectedPlantId} placeholder="Escribir o buscar encargado..." className="w-full input-style" autoComplete="off" />
                                         {showSupervisorSuggestions && supervisorSuggestions.length > 0 && (
                                             <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {supervisorSuggestions.map(s => <li key={s.id} onMouseDown={() => handleSelectSupervisor(s)} className="p-3 cursor-pointer hover:bg-base-300">{s.nombres} {s.apellidos}</li>)}
@@ -806,7 +808,7 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                             <div onBlur={() => setTimeout(() => setShowMachineSuggestions(false), 100)}>
                                 <div className="flex items-center gap-2 mt-1">
                                     <div className="relative flex-grow">
-                                        <input id="machine-search" type="text" value={machineSearchText} onChange={(e) => setMachineSearchText(e.target.value)} onFocus={() => setShowMachineSuggestions(true)} disabled={!formInternalState.selectedPlantId} placeholder="Escribir o buscar N° Serie..." className="w-full input-style" autoComplete="off" />
+                                        <input id="machine-search" type="text" value={machineSearchText} onChange={(e) => { const val = e.target.value; setMachineSearchText(val); setFormData(prev => ({ ...prev, maquina_serie: val })); }} onFocus={() => setShowMachineSuggestions(true)} disabled={!formInternalState.selectedPlantId} placeholder="Escribir o buscar N° Serie..." className="w-full input-style" autoComplete="off" />
                                         {showMachineSuggestions && machineSuggestions.length > 0 && (
                                             <ul className="absolute z-10 w-full bg-base-200 border border-base-border rounded-md mt-1 max-h-40 overflow-y-auto shadow-lg custom-scrollbar">
                                                 {machineSuggestions.map(m => <li key={m.id} onMouseDown={() => handleSelectMachine(m)} className="px-3 py-2 cursor-pointer hover:bg-base-300">{m.serie}</li>)}
@@ -893,11 +895,30 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                 {isSimulatorVisible ? (
                     <>
                         <div className="flex-shrink-0 p-4 bg-base-200 border-b border-base-border flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary lg:hidden">
-                                    <ViewIcon className="h-5 w-5" />
+                            <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-8 w-8 bg-primary/10 rounded-lg flex items-center justify-center text-primary lg:hidden">
+                                        <ViewIcon className="h-5 w-5" />
+                                    </div>
+                                    <span className="font-bold text-base uppercase tracking-wider">Vista Previa PDF</span>
                                 </div>
-                                <span className="font-bold text-base uppercase tracking-wider">Vista Previa PDF</span>
+
+                                {/* Header PDF Controls - Externalized from PdfViewer */}
+                                {pdfPreviewUri && (
+                                    <div className="hidden sm:flex items-center gap-1.5 p-1 bg-base-300 rounded-xl border border-base-border">
+                                        <button type="button" onClick={() => pdfViewerRef.current?.zoomOut()} className="p-1 px-2 hover:bg-base-100 rounded-lg text-base-content transition-all border border-transparent hover:border-base-border shadow-sm active:scale-95" title="Reducir">
+                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M20 12H4" /></svg>
+                                        </button>
+                                        <button type="button" onClick={() => pdfViewerRef.current?.zoomIn()} className="p-1 px-2 hover:bg-base-100 rounded-lg text-base-content transition-all border border-transparent hover:border-base-border shadow-sm active:scale-95" title="Aumentar">
+                                            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" /></svg>
+                                        </button>
+                                        <div className="w-px h-6 bg-base-border mx-1"></div>
+                                        <button type="button" onClick={() => pdfViewerRef.current?.download()} className="flex items-center gap-2 px-3 py-1 bg-primary text-primary-content rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-primary-focus transition-all active:scale-95 shadow-lg shadow-primary/20" title="Descargar PDF">
+                                            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                            <span className="hidden lg:inline">Descargar</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <button 
                                 onClick={() => setIsSimulatorVisible(false)} 
@@ -908,9 +929,15 @@ const ReportForm: React.FC<ReportFormProps> = ({ reportId, onBack, initialAiData
                             </button>
                         </div>
                         <div className="flex-grow p-1 md:p-3 relative bg-base-300">
-                            {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 backdrop-blur-sm"><Spinner className="h-10 w-10 text-primary" /></div>}
+                             {isPdfLoading && <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-10 backdrop-blur-sm transition-all"><Spinner className="h-10 w-10 text-primary" /></div>}
                             {pdfPreviewUri ? (
-                                <iframe src={pdfPreviewUri} title="PDF Preview" className="w-full h-full border-0 rounded-lg shadow-inner bg-white"/>
+                                <PdfViewer 
+                                    ref={pdfViewerRef}
+                                    file={pdfPreviewUri} 
+                                    showAllPages={false}
+                                    hideToolbar={true}
+                                    className="rounded-lg shadow-inner bg-white" 
+                                />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center text-neutral p-10 text-center space-y-4">
                                     <div className="p-4 bg-base-200 rounded-full"><SparklesIcon className="h-10 w-10 opacity-30" /></div>

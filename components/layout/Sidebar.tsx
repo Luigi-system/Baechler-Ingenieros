@@ -17,6 +17,7 @@ interface SidebarProps {
   onCloseMobile: () => void;
   isCollapsed: boolean;
   setIsCollapsed: (collapsed: boolean) => void;
+  onShowDomainQr?: () => void;
 }
 
 const navItems = [
@@ -55,10 +56,9 @@ const navItems = [
     },
 ];
 
-const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, isMobileOpen, onCloseMobile, isCollapsed, setIsCollapsed }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, isMobileOpen, onCloseMobile, isCollapsed, setIsCollapsed, onShowDomainQr }) => {
   const auth = useContext(AuthContext);
   const { logoUrl, appTitle, logoFontSize, logoFontFamily, logoColor, isLogoAnimated } = useTheme();
-  const [isDomainQrOpen, setIsDomainQrOpen] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>('reports');
 
   const handleItemClick = (item: (typeof navItems)[0]) => {
@@ -101,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, isMobileOp
           `}
       >
         <div 
-            onClick={() => setIsDomainQrOpen(true)}
+            onClick={onShowDomainQr}
             className={`flex items-center border-b border-base-border h-16 md:h-20 transition-all duration-300 cursor-pointer hover:bg-base-300/30 group ${!showExpanded ? 'justify-center' : 'px-4'}`}
         >
           <img 
@@ -124,55 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, setActivePage, isMobileOp
           )}
         </div>
 
-        {isDomainQrOpen && (
-            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300">
-                <div 
-                    className="bg-base-200 w-full max-w-sm rounded-[2.5rem] shadow-2xl border border-base-border p-8 py-10 relative animate-in zoom-in-95 duration-300"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <button 
-                        onClick={() => setIsDomainQrOpen(false)}
-                        className="absolute top-6 right-6 p-2 bg-base-300 hover:bg-error/10 hover:text-error rounded-full transition-all"
-                    >
-                        <ChevronLeftIcon className="h-5 w-5 rotate-180" />
-                    </button>
-
-                    <div className="flex flex-col items-center text-center space-y-6">
-                        <div className="bg-primary/10 p-4 rounded-3xl">
-                            <IndustryIcon className="h-10 w-10 text-primary" />
-                        </div>
-                        
-                        <div>
-                            <h3 className="text-2xl font-black uppercase tracking-tight text-base-content italic">
-                                Acceso Rápido
-                            </h3>
-                            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-neutral opacity-50 mt-1">DOMINIO INSTITUCIONAL</p>
-                        </div>
-
-                        <div className="bg-white p-6 rounded-[2rem] shadow-xl ring-8 ring-primary/5">
-                            <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(window.location.origin)}`} 
-                                alt="Domain QR"
-                                className="w-48 h-48"
-                            />
-                        </div>
-
-                        <div className="bg-base-300/50 p-4 rounded-2xl w-full border border-base-border">
-                            <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1 underline">SITIO OFICIAL</p>
-                            <p className="text-xs font-mono font-bold truncate opacity-70 break-all">{window.location.origin}</p>
-                        </div>
-
-                        <button 
-                            onClick={() => setIsDomainQrOpen(false)}
-                            className="w-full py-4 bg-primary text-primary-content rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-primary-focus transition-all shadow-lg active:scale-95"
-                        >
-                            Cerrar Vista
-                        </button>
-                    </div>
-                </div>
-                <div className="absolute inset-0 -z-10" onClick={() => setIsDomainQrOpen(false)}></div>
-            </div>
-        )}
+        {/* QR logic moved to Layout */}
 
         <nav className="flex-1 px-2 py-4 overflow-y-auto custom-scrollbar">
           <ul>
